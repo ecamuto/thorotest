@@ -13,7 +13,7 @@ Source-available test management platform. Organize, run, and track tests across
 | Database | SQLite (default) · PostgreSQL · MySQL / MariaDB (via `DATABASE_URL`) |
 | Realtime | WebSocket (native FastAPI) |
 | API | REST + GraphQL (Strawberry) |
-| Auth | JWT (python-jose), bcrypt |
+| Auth | JWT (python-jose), passlib (sha256_crypt) |
 | AI | Anthropic SDK (BYOK — optional) |
 | Export | PDF (fpdf2), CSV |
 | Tests | pytest, httpx, Playwright |
@@ -48,7 +48,7 @@ cp .env.example .env
 make docker-up-sqlite
 ```
 
-Database is created automatically on first run. Seed data: 17 test cases across 12 folders, 6 runs, 6 pipelines, 8 defects.
+Database is created automatically on first run. Seed data: 19 test cases across 12 folders, 11 runs, 6 pipelines, 9 defects.
 
 ---
 
@@ -87,6 +87,11 @@ cp .env.example .env
 |---|---|---|
 | `DATABASE_URL` | `sqlite:///./testhub.db` | Database connection string |
 | `SECRET_KEY` | `thorotest-dev-secret-...` | JWT signing key — **change in production** |
+| `TESTHUB_BASE_URL` | `http://localhost:8000` | Public base URL (OAuth callbacks, default CORS origin) |
+| `ALLOWED_ORIGINS` | = `TESTHUB_BASE_URL` | CORS origins — comma-separated list, or `*` for any (dev only) |
+| `ANTHROPIC_API_KEY` | _(unset)_ | Enables AI assistant (BYOK). No-op if absent |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | _(unset)_ | GitHub OAuth login (optional) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | _(unset)_ | Google OAuth login (optional) |
 
 Database URLs:
 
@@ -151,7 +156,7 @@ thorotest/
 │   ├── models.py           # ORM models
 │   ├── schemas.py          # Pydantic schemas
 │   ├── seed.py             # Demo seed data (runs on first boot if DB empty)
-│   ├── auth_utils.py       # JWT creation/validation, bcrypt
+│   ├── auth_utils.py       # JWT creation/validation, password hashing (passlib)
 │   ├── ws_manager.py       # WebSocket connection manager + run simulation
 │   ├── gql_schema.py       # Strawberry GraphQL schema
 │   └── routers/
@@ -171,7 +176,11 @@ thorotest/
 │       ├── favorites.py    # Favorite tests per user
 │       ├── import_.py      # Bulk import: CSV / YAML
 │       ├── pipelines.py    # GET /api/pipelines
-│       └── activity.py     # GET /api/activity, GET /api/defects
+│       ├── activity.py     # GET /api/activity, GET /api/defects
+│       ├── notifications.py # Notifications list/read + per-user config
+│       ├── audit_log.py    # Audit log query (admin)
+│       ├── oauth.py        # GitHub / Google OAuth login + account linking
+│       └── totp.py         # TOTP two-factor auth enable/verify
 │
 ├── e2e/
 │   ├── fixtures/                   # Shared Playwright fixtures
@@ -189,6 +198,8 @@ thorotest/
 │   ├── suite12-integrations/       # Integrations CRUD
 │   ├── suite13-docs/               # Documentation viewer
 │   ├── suite14-extra/              # Miscellaneous edge cases
+│   ├── suite15-favorites/          # Folder favorites (UI + API)
+│   ├── suite16-notifications/      # Notification bell + config API
 │   ├── suite-p1-steps/             # Structured test steps execution
 │   ├── suite-p2-rbac/              # Role-based access control
 │   ├── suite-p3-retest/            # Retest workflow
@@ -196,7 +207,10 @@ thorotest/
 │   ├── suite-p6-phase06-fixes/     # Phase 6 regression suite
 │   ├── suite-p7-tech-debt/         # Tech debt cleanup regression suite
 │   ├── suite-p9-bug-fixes/         # Phase 9 bug fix regression suite
-│   └── suite-p10-auth-header-fix/  # Auth header regression suite
+│   ├── suite-p10-auth-header-fix/  # Auth header regression suite
+│   ├── suite-p12-audit-log/        # Audit log
+│   ├── suite-p14-oauth-login/      # OAuth login (GitHub / Google)
+│   └── suite-p15-totp-2fa/         # TOTP two-factor auth
 │
 ├── .env.example
 ├── requirements.txt
@@ -232,16 +246,23 @@ All endpoints except `/auth/register`, `/auth/login`, and public pages require `
 | Admin | `/api/admin` |
 | Favorites | `/api/favorites` |
 | Import | `/api/import` |
+| Notifications | `/api/notifications`, `/api/notifications/config` |
+| Audit log | `/api/audit-log` |
+| OAuth | `/api/auth/oauth/{github,google}` |
+| TOTP 2FA | `/api/totp` |
 | Aggregated | `/api/initial-data`, `/api/insights` |
 | GraphQL | `/graphql` |
 
-WebSocket: `ws://localhost:8000/ws/runs/{run_id}` — emits `state`, `step`, and `complete` events during a live run.
+WebSocket:
+
+- `ws://localhost:8000/ws/runs/{run_id}` — emits `state`, `step`, `complete` events during a live run.
+- `ws://localhost:8000/ws/notifications?token=<jwt>` — per-user notification push channel.
 
 ---
 
 ## Tests
 
-### Backend unit tests (238 tests)
+### Backend unit tests (311 tests)
 
 ```bash
 source venv/bin/activate
@@ -277,7 +298,7 @@ make test-e2e-auth      # auth suite only
 make test-report        # open HTML report
 ```
 
-22 suites covering all major user flows, feature phases, and regression scenarios.
+27 suites covering all major user flows, feature phases, and regression scenarios.
 
 ---
 
