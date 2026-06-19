@@ -1,0 +1,34 @@
+# Python
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+
+# Secrets / local config
+.env
+.env.local
+*.env
+!.env.example
+
+# Databases & runtime data
+*.db
+*.db-shm
+*.db-wal
+uploads/
+
+# Node
+node_modules/
+
+# Test artifacts
+playwright-report/
+test-results/
+
+# OS
+.DS_Store
+
+# Local-only notes (never commit)
+*.local.md

@@ -1,0 +1,256 @@
+import uuid
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from sqlalchemy.orm import Session
+from typing import Optional
+
+from ..db import get_db
+from .. import models
+from ..importers import (
+    detect_format, parse_csv, parse_testrail_xml, parse_junit_xml, parse_json,
+    ImportResult,
+)
+from ..importers.csv_importer import get_csv_columns
+
+router = APIRouter(tags=["import"])
+
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+def _run_parser(fmt: str, content: bytes, column_mapping: dict | None) -> ImportResult:
+    if fmt == "csv":
+        return parse_csv(content, column_mapping)
+    if fmt == "testrail_xml":
+        return parse_testrail_xml(content)
+    if fmt == "junit_xml":
+        return parse_junit_xml(content)
+    if fmt == "json":
+        return parse_json(content)
+    raise HTTPException(status_code=400, detail=f"Unknown format: {fmt}")
+
+
+@router.post("/import/detect")
+async def detect_file(file: UploadFile = File(...)):
+    """Return detected format and (for CSV) the column headers for mapping UI."""
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File too large (max 10 MB)")
+
+    fmt = detect_format(file.filename or "", content)
+    result = {"format": fmt, "filename": file.filename}
+
+    if fmt == "csv":
+        result["csv_meta"] = get_csv_columns(content)
+
+    return result
+
+
+@router.post("/import/preview")
+async def preview_import(
+    file: UploadFile = File(...),
+    format: Optional[str] = Form(None),
+    column_mapping: Optional[str] = Form(None),
+):
+    """Parse file and return summary + sample rows without writing to DB."""
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File too large (max 10 MB)")
+
+    fmt = format or detect_format(file.filename or "", content)
+
+    mapping = None
+    if column_mapping:
+        import json
+        try:
+            mapping = json.loads(column_mapping)
+        except Exception:
+            raise HTTPException(status_code=400, detail="column_mapping must be valid JSON")
+
+    result = _run_parser(fmt, content, mapping)
+    summary = result.summary()
+
+    # Include first 5 tests as preview sample
+    sample_tests = [
+        {
+            "title": t.title,
+            "folder_path": t.folder_path,
+            "type": t.type,
+            "priority": t.priority,
+            "tags": t.tags,
+        }
+        for t in result.tests[:5]
+    ]
+
+    sample_runs = [
+        {"name": r.name, "cases": len(r.cases)}
+        for r in result.runs[:3]
+    ]
+
+    return {**summary, "sample_tests": sample_tests, "sample_runs": sample_runs}
+
+
+@router.post("/import/execute")
+async def execute_import(
+    file: UploadFile = File(...),
+    format: Optional[str] = Form(None),
+    column_mapping: Optional[str] = Form(None),
+    conflict: str = Form("skip"),   # skip | overwrite | rename
+    db: Session = Depends(get_db),
+):
+    """Parse file and persist data to DB."""
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File too large (max 10 MB)")
+
+    fmt = format or detect_format(file.filename or "", content)
+
+    mapping = None
+    if column_mapping:
+        import json
+        try:
+            mapping = json.loads(column_mapping)
+        except Exception:
+            raise HTTPException(status_code=400, detail="column_mapping must be valid JSON")
+
+    result = _run_parser(fmt, content, mapping)
+
+    now = datetime.now(timezone.utc).isoformat()
+    stats = {"folders": 0, "tests": 0, "runs": 0, "defects": 0, "skipped": 0}
+
+    # ── Folders ────────────────────────────────────────────────
+    folder_cache: dict[str, str] = {}  # path → folder.id
+
+    def _get_or_create_folder(path: str) -> str:
+        if not path:
+            return ""
+        if path in folder_cache:
+            return folder_cache[path]
+
+        parts = [p.strip() for p in path.split("/") if p.strip()]
+        parent_id = None
+        current_path = ""
+
+        for part in parts:
+            current_path = f"{current_path}/{part}" if current_path else part
+            if current_path in folder_cache:
+                parent_id = folder_cache[current_path]
+                continue
+
+            existing = db.query(models.Folder).filter(
+                models.Folder.name == part,
+                models.Folder.parent_id == parent_id,
+            ).first()
+
+            if existing:
+                folder_cache[current_path] = existing.id
+                parent_id = existing.id
+            else:
+                fid = f"F-{uuid.uuid4().hex[:8].upper()}"
+                folder = models.Folder(id=fid, name=part, parent_id=parent_id)
+                db.add(folder)
+                db.flush()
+                folder_cache[current_path] = fid
+                parent_id = fid
+                stats["folders"] += 1
+
+        return folder_cache[path]
+
+    # ── Tests ──────────────────────────────────────────────────
+    title_to_id: dict[str, str] = {}  # for run case linking
+
+    for t in result.tests:
+        folder_id = _get_or_create_folder(t.folder_path) if t.folder_path else None
+
+        existing = db.query(models.Test).filter(models.Test.title == t.title).first()
+
+        if existing:
+            if conflict == "skip":
+                title_to_id[t.title] = existing.id
+                stats["skipped"] += 1
+                continue
+            elif conflict == "overwrite":
+                existing.folder_id = folder_id
+                existing.type = t.type
+                existing.priority = t.priority
+                existing.tags = t.tags
+                existing.owner = t.owner or existing.owner
+                existing.updated_at = now
+                title_to_id[t.title] = existing.id
+                db.flush()
+                stats["tests"] += 1
+                continue
+            elif conflict == "rename":
+                t.title = f"{t.title} (imported)"
+
+        tid = f"TC-{uuid.uuid4().hex[:6].upper()}"
+        test = models.Test(
+            id=tid,
+            title=t.title,
+            folder_id=folder_id,
+            type=t.type,
+            status=t.status,
+            priority=t.priority,
+            owner=t.owner or "",
+            tags=t.tags,
+            auto=t.type == "automated",
+            updated_at=now,
+        )
+        db.add(test)
+        db.flush()
+        title_to_id[t.title] = tid
+        stats["tests"] += 1
+
+    # ── Runs ──────────────────────────────────────────────────
+    for run_data in result.runs:
+        rid = f"R-{uuid.uuid4().hex[:6].upper()}"
+        total = len(run_data.cases)
+        passed = sum(1 for c in run_data.cases if c.status == "pass")
+        failed = sum(1 for c in run_data.cases if c.status == "fail")
+        blocked = sum(1 for c in run_data.cases if c.status == "blocked")
+
+        run = models.Run(
+            id=rid,
+            name=run_data.name,
+            status=run_data.status,
+            total=total,
+            passed=passed,
+            failed=failed,
+            blocked=blocked,
+            progress=100 if total > 0 else 0,
+            started=now,
+        )
+        db.add(run)
+        db.flush()
+
+        for case in run_data.cases:
+            test_id = title_to_id.get(case.test_title)
+            if not test_id:
+                continue
+            db.add(models.RunCase(run_id=rid, test_id=test_id, status=case.status))
+
+        stats["runs"] += 1
+
+    # ── Defects ───────────────────────────────────────────────
+    for d in result.defects:
+        did = f"D-{uuid.uuid4().hex[:6].upper()}"
+        test_id = title_to_id.get(d.test_title) if d.test_title else None
+        defect = models.Defect(
+            id=did,
+            title=d.title,
+            status=d.status,
+            severity=d.severity,
+            description=d.description,
+            test_id=test_id,
+            created_at=now,
+        )
+        db.add(defect)
+        stats["defects"] += 1
+
+    db.commit()
+
+    return {
+        "ok": True,
+        "format": fmt,
+        "imported": stats,
+        "warnings": result.warnings,
+    }

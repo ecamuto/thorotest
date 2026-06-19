@@ -1,0 +1,330 @@
+from sqlalchemy import Column, String, Text, Integer, Boolean, ForeignKey, JSON, Table, UniqueConstraint
+from sqlalchemy.orm import relationship, backref
+from .db import Base
+
+
+test_categories = Table(
+    "test_categories",
+    Base.metadata,
+    Column("test_id", String(255), ForeignKey("tests.id", ondelete="CASCADE")),
+    Column("category_id", String(255), ForeignKey("categories.id", ondelete="CASCADE")),
+)
+
+
+class Project(Base):
+    __tablename__ = "projects"
+    id = Column(String(255), primary_key=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    created_at = Column(String(64), nullable=True)
+
+    folders = relationship("Folder", back_populates="project_rel")
+    tests = relationship("Test", back_populates="project_rel")
+
+
+class Category(Base):
+    __tablename__ = "categories"
+    id = Column(String(255), primary_key=True)
+    name = Column(String(255), nullable=False)
+    color = Column(String(32), default="#6366f1")
+
+    tests = relationship("Test", secondary=test_categories, back_populates="categories")
+
+
+class Folder(Base):
+    __tablename__ = "folders"
+    id = Column(String(255), primary_key=True)
+    name = Column(String(255), nullable=False)
+    parent_id = Column(String(255), ForeignKey("folders.id"), nullable=True)
+    project_id = Column(String(255), ForeignKey("projects.id"), nullable=True)
+    count = Column(Integer, default=0)
+
+    children = relationship("Folder", backref=backref("parent", remote_side="Folder.id"))
+    tests = relationship("Test", back_populates="folder_rel", foreign_keys="Test.folder_id")
+    project_rel = relationship("Project", back_populates="folders")
+
+
+class Test(Base):
+    __tablename__ = "tests"
+    id = Column(String(255), primary_key=True)
+    title = Column(String(512), nullable=False)
+    folder_id = Column(String(255), ForeignKey("folders.id"), nullable=True)
+    project_id = Column(String(255), ForeignKey("projects.id"), nullable=True)
+    type = Column(String(32), default="manual")
+    status = Column(String(32), default="pending")
+    priority = Column(String(32), default="med")
+    owner = Column(String(255), nullable=True)
+    tags = Column(JSON, default=list)
+    auto = Column(Boolean, default=False)
+    runner = Column(String(255), nullable=True)
+    updated_at = Column(String(64), nullable=True)
+    last_run_at = Column(String(64), nullable=True)
+    duration = Column(String(64), nullable=True)
+
+    folder_rel = relationship("Folder", back_populates="tests")
+    project_rel = relationship("Project", back_populates="tests")
+    categories = relationship("Category", secondary=test_categories, back_populates="tests")
+    run_cases = relationship("RunCase", back_populates="test")
+    defects = relationship("Defect", back_populates="test_rel")
+    comments = relationship("Comment", back_populates="test_rel")
+    steps = relationship("TestStep", back_populates="test", cascade="all, delete-orphan", order_by="TestStep.order")
+
+    @property
+    def category_ids(self):
+        return [c.id for c in self.categories]
+
+
+class Run(Base):
+    __tablename__ = "runs"
+    id = Column(String(255), primary_key=True)
+    name = Column(String(512), nullable=False)
+    status = Column(String(32), default="pending")
+    progress = Column(Integer, default=0)
+    total = Column(Integer, default=0)
+    passed = Column(Integer, default=0)
+    failed = Column(Integer, default=0)
+    blocked = Column(Integer, default=0)
+    started = Column(String(64), nullable=True)
+    owner = Column(String(255), nullable=True)
+    env = Column(String(255), nullable=True)
+    branch = Column(String(255), nullable=True)
+    source_run_id = Column(String(255), nullable=True)
+
+    cases = relationship("RunCase", back_populates="run")
+
+
+class RunCase(Base):
+    __tablename__ = "run_cases"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_id = Column(String(255), ForeignKey("runs.id"))
+    test_id = Column(String(255), ForeignKey("tests.id"))
+    status = Column(String(32), default="pending")
+
+    actual_result = Column(Text, nullable=True)
+    assigned_to = Column(String(255), nullable=True)
+
+    run = relationship("Run", back_populates="cases")
+    test = relationship("Test", back_populates="run_cases")
+    step_results = relationship("StepResult", back_populates="run_case", cascade="all, delete-orphan")
+
+
+class Pipeline(Base):
+    __tablename__ = "pipelines"
+    id = Column(String(255), primary_key=True)
+    name = Column(String(512))
+    platform = Column(String(64))
+    status = Column(String(32))
+    duration = Column(String(64), nullable=True)
+    commit = Column(String(255), nullable=True)
+    author = Column(String(255), nullable=True)
+    branch = Column(String(255), nullable=True)
+    when = Column(String(64), nullable=True)
+
+
+class Activity(Base):
+    __tablename__ = "activity"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    who = Column(String(255))
+    what = Column(String(255))
+    target = Column(String(255))
+    detail = Column(Text)
+    when = Column(String(64))
+
+
+class Defect(Base):
+    __tablename__ = "defects"
+    id = Column(String(255), primary_key=True)
+    title = Column(String(512))
+    status = Column(String(32), default="open")
+    severity = Column(String(32), default="med")
+    description = Column(Text, nullable=True)
+    created_at = Column(String(64), nullable=True)
+    created_by = Column(String(255), nullable=True)
+    test_id = Column(String(255), ForeignKey("tests.id"), nullable=True)
+    run_id = Column(String(255), ForeignKey("runs.id"), nullable=True)
+
+    test_rel = relationship("Test", back_populates="defects")
+
+
+class Comment(Base):
+    __tablename__ = "comments"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    test_id = Column(String(255), ForeignKey("tests.id"), nullable=True)
+    who = Column(String(255), nullable=False)
+    text = Column(Text, nullable=False)
+    when = Column(String(64), nullable=False)
+
+    test_rel = relationship("Test", back_populates="comments")
+
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(255), unique=True, nullable=False)
+    email = Column(String(255), unique=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    display_name = Column(String(255), nullable=True)
+    role = Column(String(32), default="tester")
+    language = Column(String(8), default="en")
+    totp_secret = Column(String(255), nullable=True)
+    totp_enabled = Column(Boolean, default=False)
+
+
+class Integration(Base):
+    __tablename__ = "integrations"
+    id = Column(String(255), primary_key=True)
+    name = Column(String(255), nullable=False)
+    type = Column(String(64), nullable=False)
+    icon = Column(String(64), default="plug")
+    status = Column(String(32), default="active")
+    configured_by = Column(String(255), nullable=True)
+    last_sync = Column(String(64), nullable=True)
+
+
+class ApiToken(Base):
+    __tablename__ = "api_tokens"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), nullable=False)
+    token_hash = Column(String(255), nullable=False)
+    token_prefix = Column(String(64), nullable=False)
+    scope = Column(String(512), default="")
+    created_at = Column(String(64), nullable=True)
+    last_used_at = Column(String(64), nullable=True)
+
+
+class Webhook(Base):
+    __tablename__ = "webhooks"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    url = Column(String(512), nullable=False)
+    events = Column(JSON, default=list)
+    status = Column(String(32), default="active")
+    last_status_code = Column(Integer, nullable=True)
+    last_delivery_at = Column(String(64), nullable=True)
+    hmac_secret = Column(String(255), nullable=True)
+
+
+class UserFavorite(Base):
+    __tablename__ = "user_favorites"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    folder_id = Column(String(255), ForeignKey("folders.id", ondelete="CASCADE"), nullable=False)
+
+
+class TestStep(Base):
+    __tablename__ = "test_steps"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    test_id = Column(String(255), ForeignKey("tests.id", ondelete="CASCADE"), nullable=False)
+    order = Column(Integer, nullable=False)        # 1-based display order
+    action = Column(Text, nullable=False)          # "Click Add to cart"
+    expected_result = Column(Text, nullable=True)  # "Cart shows 1 item"
+
+    test = relationship("Test", back_populates="steps")
+
+
+class Attachment(Base):
+    __tablename__ = "attachments"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    entity_type = Column(String(32), nullable=False)   # "test" | "step" | "run_case"
+    entity_id = Column(String(255), nullable=False)    # ID as string (int or str)
+    filename = Column(String(512), nullable=False)
+    mime_type = Column(String(255), nullable=True)
+    storage_path = Column(String(512), nullable=False)  # relative path under UPLOAD_DIR
+    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(String(64), nullable=True)
+
+
+class StepResult(Base):
+    __tablename__ = "step_results"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_case_id = Column(Integer, ForeignKey("run_cases.id", ondelete="CASCADE"), nullable=False)
+    test_step_id = Column(Integer, ForeignKey("test_steps.id", ondelete="CASCADE"), nullable=False)
+    status = Column(String(32), default="pending")     # pending|pass|fail|skip|blocked
+    actual_result = Column(Text, nullable=True)
+
+    run_case = relationship("RunCase", back_populates="step_results")
+    test_step = relationship("TestStep")
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    event_type = Column(String(64), nullable=False)   # "run_complete" | "consecutive_fail" | "comment"
+    title = Column(String(512), nullable=False)
+    link = Column(String(512), nullable=True)          # Hash route e.g. "#/runs/R-XYZ"
+    read = Column(Boolean, default=False)
+    created_at = Column(String(64), nullable=False)    # ISO string (same pattern as other models)
+
+
+class NotificationConfig(Base):
+    __tablename__ = "notification_configs"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    email_enabled = Column(Boolean, default=False)
+    slack_enabled = Column(Boolean, default=False)
+    smtp_host = Column(String(255), nullable=True)
+    smtp_port = Column(Integer, default=587)
+    smtp_user = Column(String(255), nullable=True)
+    smtp_pass = Column(String(255), nullable=True)
+    smtp_from = Column(String(255), nullable=True)
+    slack_webhook_url = Column(String(512), nullable=True)
+    notify_run_complete = Column(Boolean, default=True)
+    notify_consecutive_fail = Column(Boolean, default=True)
+    consecutive_fail_threshold = Column(Integer, default=3)
+    notify_comment = Column(Boolean, default=True)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    event_type = Column(String(64), nullable=False)
+    actor_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    actor_email = Column(String(255), nullable=False)
+    description = Column(Text, nullable=False)
+    outcome = Column(String(16), nullable=False, default="success")   # "success" | "fail"
+    ip_address = Column(String(64), nullable=True)                    # auth events only
+    target_type = Column(String(64), nullable=True)
+    target_id = Column(String(255), nullable=True)
+    occurred_at = Column(String(64), nullable=False)                  # ISO UTC string
+
+
+class OAuthState(Base):
+    __tablename__ = "oauth_states"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    state_token = Column(String(255), unique=True, nullable=False)
+    provider = Column(String(32), nullable=False)
+    created_at = Column(String(64), nullable=False)
+    expires_at = Column(String(64), nullable=False)
+
+
+class OAuthIdentity(Base):
+    __tablename__ = "oauth_identities"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    provider = Column(String(32), nullable=False)   # "github" | "google"
+    oauth_id = Column(String(255), nullable=False)  # provider user id, stored as str
+    email = Column(String(255), nullable=True)
+    created_at = Column(String(64), nullable=False)
+    __table_args__ = (UniqueConstraint("provider", "oauth_id", name="uq_provider_oauth_id"),)
+
+
+class OAuthPendingLink(Base):
+    __tablename__ = "oauth_pending_links"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    state_token = Column(String(255), unique=True, nullable=False)
+    provider = Column(String(32), nullable=False)
+    oauth_id = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=False)
+    display_name = Column(String(255), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(String(64), nullable=False)
+    expires_at = Column(String(64), nullable=False)
+
+
+class TotpRecoveryCode(Base):
+    __tablename__ = "totp_recovery_codes"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    code_hash = Column(String(255), nullable=False)
+    used = Column(Boolean, default=False)
+    created_at = Column(String(64), nullable=False)

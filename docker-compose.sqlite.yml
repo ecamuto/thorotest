@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: sqlite:///./testhub.db
+    volumes:
+      - ./testhub.db:/app/testhub.db
+    restart: unless-stopped

@@ -1,0 +1,39 @@
+{
+  "name": "thorotest",
+  "version": "1.0.0",
+  "description": "Source-available test management platform. Organize, run, and track tests across manual and automated suites — one timeline for both.",
+  "main": "index.js",
+  "scripts": {
+    "test": "playwright test",
+    "test:auth": "playwright test e2e/suite1-auth/",
+    "test:nav": "playwright test e2e/suite2-navigation/",
+    "test:library": "playwright test e2e/suite3-library/",
+    "test:detail": "playwright test e2e/suite4-test-detail/",
+    "test:runs": "playwright test e2e/suite5-runs/",
+    "test:overview": "playwright test e2e/suite6-overview/",
+    "test:pipelines": "playwright test e2e/suite7-pipelines/",
+    "test:tweaks": "playwright test e2e/suite8-tweaks/",
+    "test:security": "playwright test e2e/suite9-security/",
+    "test:p1-steps": "playwright test e2e/suite-p1-steps/",
+    "test:p3-retest": "playwright test e2e/suite-p3-retest/",
+    "test:p14-oauth": "playwright test e2e/suite-p14-oauth-login/",
+    "test:report": "playwright show-report"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ecamuto/thorotest.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "SEE LICENSE IN LICENSE",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/ecamuto/thorotest/issues"
+  },
+  "homepage": "https://github.com/ecamuto/thorotest#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3"
+  }
+}

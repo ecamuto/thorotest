@@ -1,0 +1,18 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+sqlalchemy>=2.0.0
+strawberry-graphql[fastapi]>=0.243.0
+python-multipart>=0.0.12
+aiofiles>=24.1.0
+pytest>=8.0.0
+httpx>=0.27.0
+python-jose[cryptography]>=3.3.0
+passlib>=1.7.4
+python-dotenv>=1.0.0
+anthropic>=0.105.0
+fpdf2>=2.8.0
+pyotp>=2.9.0
+qrcode[pil]>=8.2
+# Optional DB drivers — install the one matching your DATABASE_URL
+psycopg2-binary>=2.9.0   # PostgreSQL
+pymysql>=1.1.0            # MySQL / MariaDB
