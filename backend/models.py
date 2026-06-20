@@ -60,6 +60,12 @@ class Test(Base):
     updated_at = Column(String(64), nullable=True)
     last_run_at = Column(String(64), nullable=True)
     duration = Column(String(64), nullable=True)
+    # "Tests as Code" — git source tracking (populated by GitHub sync)
+    repo_url = Column(String(512), nullable=True)        # https://github.com/org/repo
+    source_path = Column(String(512), nullable=True)     # tests/checkout/payment/stripe-charge.yml
+    source_ref = Column(String(255), nullable=True)      # commit sha the file was synced at
+    source_body = Column(Text, nullable=True)            # raw YAML content
+    source_synced_at = Column(String(64), nullable=True) # ISO timestamp of last sync
 
     folder_rel = relationship("Folder", back_populates="tests")
     project_rel = relationship("Project", back_populates="tests")
@@ -179,6 +185,8 @@ class Integration(Base):
     status = Column(String(32), default="active")
     configured_by = Column(String(255), nullable=True)
     last_sync = Column(String(64), nullable=True)
+    # For github type: {"repo_url", "branch", "path", "token"}
+    config = Column(JSON, default=dict)
 
 
 class ApiToken(Base):

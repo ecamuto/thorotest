@@ -29,9 +29,50 @@ const MODAL_BOX = {
   maxHeight: "90vh", overflowY: "auto",
 };
 
-function IntRow({ intg, onEdit, onDelete }) {
+function GithubConfigFields({ form, setForm, tokenSet }) {
+  const fld = { marginBottom:12 };
+  const lbl = { display:"block", fontSize:12, fontWeight:500, color:"var(--text-muted)", marginBottom:6 };
+  const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
+  return (
+    <>
+      <div style={fld}>
+        <label style={lbl}>Repository URL</label>
+        <input className="login-input" value={form.repo_url} onChange={set("repo_url")} placeholder="https://github.com/acme/web" style={{width:"100%"}} />
+      </div>
+      <div style={{display:"flex", gap:8}}>
+        <div style={{...fld, flex:1}}>
+          <label style={lbl}>Branch</label>
+          <input className="login-input" value={form.branch} onChange={set("branch")} placeholder="main" style={{width:"100%"}} />
+        </div>
+        <div style={{...fld, flex:2}}>
+          <label style={lbl}>Path (folder of YAML tests)</label>
+          <input className="login-input" value={form.path} onChange={set("path")} placeholder="tests/" style={{width:"100%"}} />
+        </div>
+      </div>
+      <div style={fld}>
+        <label style={lbl}>Personal access token {tokenSet ? "(leave blank to keep current)" : "(only for private repos)"}</label>
+        <input className="login-input" type="password" value={form.token} onChange={set("token")} placeholder={tokenSet ? "••••••••" : "ghp_…"} autoComplete="off" style={{width:"100%"}} />
+      </div>
+    </>
+  );
+}
+
+function IntRow({ intg, onEdit, onDelete, onSync }) {
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [syncing, setSyncing] = React.useState(false);
+  const [syncMsg, setSyncMsg] = React.useState(null);
   const menuRef = React.useRef(null);
+  const canSync = !!(intg.config && intg.config.repo_url);
+
+  const doSync = async () => {
+    setSyncing(true); setSyncMsg(null);
+    try {
+      const r = await onSync(intg);
+      setSyncMsg({ ok: true, text: `${r.created} new · ${r.updated} updated` + (r.skipped ? ` · ${r.skipped} skipped` : "") });
+    } catch (e) {
+      setSyncMsg({ ok: false, text: e.message });
+    } finally { setSyncing(false); }
+  };
 
   React.useEffect(() => {
     if (!menuOpen) return;
@@ -55,8 +96,16 @@ function IntRow({ intg, onEdit, onDelete }) {
          <StatusBadge s="skip" />}
       </td>
       <td className="mono dim">{intg.configured_by || "—"}</td>
-      <td className="mono dim">{intg.last_sync || "—"}</td>
-      <td style={{position:"relative"}} ref={menuRef}>
+      <td className="mono dim">
+        {intg.last_sync || "—"}
+        {syncMsg && <div style={{fontSize:10.5, color: syncMsg.ok ? "var(--pass)" : "var(--fail)"}}>{syncMsg.text}</div>}
+      </td>
+      <td style={{position:"relative", textAlign:"right", whiteSpace:"nowrap"}} ref={menuRef}>
+        {canSync && (
+          <button className="btn sm" style={{marginRight:6}} disabled={syncing} onClick={doSync}>
+            {syncing ? "Syncing…" : "Sync"}
+          </button>
+        )}
         <button className="btn ghost icon sm" onClick={() => setMenuOpen(o => !o)}><Icon name="more" /></button>
         {menuOpen && (
           <div style={{
@@ -95,9 +144,11 @@ function AddIntegrationModal({ onClose, onSaved, existingIds }) {
   const [err, setErr] = React.useState(null);
   useEscapeClose(onClose);
 
+  const isGithub = provider?.id === "github";
+
   const pick = (p) => {
     setProvider(p);
-    setForm({ configured_by: p.configuredBy });
+    setForm({ configured_by: p.configuredBy, repo_url: "", branch: "main", path: "", token: "" });
     setStep("configure");
   };
 
@@ -105,10 +156,19 @@ function AddIntegrationModal({ onClose, onSaved, existingIds }) {
     setSaving(true); setErr(null);
     try {
       const id = `int-${provider.id}-${Date.now()}`;
-      const created = await TH_API.createIntegration({
+      const payload = {
         id, name: provider.name, type: provider.type, icon: provider.icon,
-        configured_by: form.configured_by || null, last_sync: "just now",
-      });
+        configured_by: form.configured_by || null, last_sync: null,
+      };
+      if (isGithub) {
+        payload.config = {
+          repo_url: form.repo_url.trim(),
+          branch: form.branch.trim() || "main",
+          path: form.path.trim(),
+          token: form.token.trim(),
+        };
+      }
+      const created = await TH_API.createIntegration(payload);
       onSaved(created);
     } catch(e) { setErr(e.message); }
     finally { setSaving(false); }
@@ -156,6 +216,7 @@ function AddIntegrationModal({ onClose, onSaved, existingIds }) {
                 style={{width:"100%"}}
               />
             </div>
+            {isGithub && <GithubConfigFields form={form} setForm={setForm} tokenSet={false} />}
             {err && <div style={{fontSize:12, color:"var(--fail)", marginBottom:8}}>{err}</div>}
             <div style={{display:"flex", gap:8}}>
               <button className="btn primary" onClick={save} disabled={saving}>{saving ? "Connecting…" : "Connect"}</button>
@@ -170,8 +231,12 @@ function AddIntegrationModal({ onClose, onSaved, existingIds }) {
 
 function EditIntegrationModal({ intg, onClose, onSaved }) {
   useEscapeClose(onClose);
+  const cfg = intg.config || {};
+  const isGithub = intg.icon === "github" || !!cfg.repo_url;
+  const tokenSet = !!cfg.token_set;
   const [form, setForm] = React.useState({
     name: intg.name, configured_by: intg.configured_by || "", status: intg.status,
+    repo_url: cfg.repo_url || "", branch: cfg.branch || "main", path: cfg.path || "", token: "",
   });
   const [saving, setSaving] = React.useState(false);
   const [err, setErr] = React.useState(null);
@@ -179,9 +244,19 @@ function EditIntegrationModal({ intg, onClose, onSaved }) {
   const save = async () => {
     setSaving(true); setErr(null);
     try {
-      const updated = await TH_API.updateIntegration(intg.id, {
+      const payload = {
         name: form.name, configured_by: form.configured_by || null, status: form.status,
-      });
+      };
+      if (isGithub) {
+        // Empty token is preserved server-side (token is never wiped by a blank field).
+        payload.config = {
+          repo_url: form.repo_url.trim(),
+          branch: form.branch.trim() || "main",
+          path: form.path.trim(),
+          token: form.token.trim(),
+        };
+      }
+      const updated = await TH_API.updateIntegration(intg.id, payload);
       onSaved(updated);
     } catch(e) { setErr(e.message); }
     finally { setSaving(false); }
@@ -207,6 +282,7 @@ function EditIntegrationModal({ intg, onClose, onSaved }) {
             <option value="error">Error</option>
           </select>
         </div>
+        {isGithub && <GithubConfigFields form={form} setForm={setForm} tokenSet={tokenSet} />}
         {err && <div style={{fontSize:12, color:"var(--fail)", marginBottom:8}}>{err}</div>}
         <div style={{display:"flex", gap:8}}>
           <button className="btn primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</button>
@@ -386,6 +462,12 @@ function Integrations() {
     } catch(e) { alert(e.message); }
   };
 
+  const handleSyncInt = async (intg) => {
+    const r = await TH_API.syncIntegration(intg.id);
+    setIntegrations(prev => prev.map(i => i.id === intg.id ? { ...i, last_sync: r.last_sync, status: "active" } : i));
+    return r;
+  };
+
   const handleRevokeToken = async (tok) => {
     if (!window.confirm(`Revoke token "${tok.name}"?`)) return;
     try {
@@ -504,6 +586,7 @@ function Integrations() {
                   intg={intg}
                   onEdit={setEditingInt}
                   onDelete={handleDeleteInt}
+                  onSync={handleSyncInt}
                 />
               ))}
             </tbody>

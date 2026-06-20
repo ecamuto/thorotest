@@ -460,6 +460,12 @@
       if (!res.ok && res.status !== 204) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "Delete failed"); }
     },
 
+    async syncIntegration(id) {
+      const res = await fetch(BASE + `/api/integrations/${id}/sync`, { method: "POST", headers: authHeaders() });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "Sync failed"); }
+      return res.json();
+    },
+
     async getTokens() {
       const res = await fetch(BASE + "/api/tokens", { headers: authHeaders() });
       if (!res.ok) throw new Error("Failed to load tokens");

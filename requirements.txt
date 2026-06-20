@@ -13,6 +13,7 @@ anthropic>=0.105.0
 fpdf2>=2.8.0
 pyotp>=2.9.0
 qrcode[pil]>=8.2
+pyyaml>=6.0
 # Optional DB drivers — install the one matching your DATABASE_URL
 psycopg2-binary>=2.9.0   # PostgreSQL
 pymysql>=1.1.0            # MySQL / MariaDB

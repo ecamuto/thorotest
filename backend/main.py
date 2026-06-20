@@ -74,6 +74,16 @@ def _run_migrations():
         if "runs" in tables:
             _add_column("runs", "source_run_id")
 
+        # Tests-as-Code: git source tracking on tests + integration config blob
+        if "tests" in tables:
+            _add_column("tests", "repo_url", ddl_type="VARCHAR(512)")
+            _add_column("tests", "source_path", ddl_type="VARCHAR(512)")
+            _add_column("tests", "source_ref")
+            _add_column("tests", "source_body", ddl_type="TEXT")
+            _add_column("tests", "source_synced_at", ddl_type="VARCHAR(64)")
+        if "integrations" in tables:
+            _add_column("integrations", "config", ddl_type="TEXT")
+
         # v1.1 Enterprise Auth columns
         if "users" in tables:
             _add_column("users", "totp_secret")

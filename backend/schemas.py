@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List, Any
 
 
@@ -32,6 +32,11 @@ class TestOut(BaseModel):
     last_run_at: Optional[str] = None
     duration: Optional[str] = None
     category_ids: List[str] = []
+    repo_url: Optional[str] = None
+    source_path: Optional[str] = None
+    source_ref: Optional[str] = None
+    source_body: Optional[str] = None
+    source_synced_at: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -307,8 +312,21 @@ class IntegrationOut(BaseModel):
     status: str = "active"
     configured_by: Optional[str] = None
     last_sync: Optional[str] = None
+    config: dict = {}
 
     model_config = {"from_attributes": True}
+
+    @field_validator("config", mode="before")
+    @classmethod
+    def _redact_token(cls, v):
+        """Never expose the stored PAT to clients; report only whether it is set."""
+        if not isinstance(v, dict):
+            return {}
+        out = dict(v)
+        if out.get("token"):
+            out["token"] = ""
+            out["token_set"] = True
+        return out
 
 
 class IntegrationCreate(BaseModel):
@@ -318,6 +336,7 @@ class IntegrationCreate(BaseModel):
     icon: str = "plug"
     configured_by: Optional[str] = None
     last_sync: Optional[str] = None
+    config: dict = {}
 
 
 class IntegrationUpdate(BaseModel):
@@ -326,6 +345,7 @@ class IntegrationUpdate(BaseModel):
     status: Optional[str] = None
     configured_by: Optional[str] = None
     last_sync: Optional[str] = None
+    config: Optional[dict] = None
 
 
 class ApiTokenOut(BaseModel):

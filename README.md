@@ -114,6 +114,44 @@ python3 -c "import secrets; print(secrets.token_hex(32))"
 
 ---
 
+## Tests as Code (GitHub sync)
+
+Keep automated tests defined as YAML in a Git repo and mirror them into ThoroTest, read-only (Git is the source of truth). The test-detail page then shows the real file path, synced commit, raw YAML, and a **View on GitHub** link that points to the exact file at the synced commit.
+
+### Setup
+
+1. **Settings → Integrations → Add → GitHub**
+2. Fill in:
+   - **Repository URL** — `https://github.com/acme/web`
+   - **Branch** — e.g. `main`
+   - **Path** — folder holding the YAML tests, e.g. `tests/`
+   - **Personal access token** — only needed for private repos (`contents: read` scope). Stored in the integration config; never returned to clients (the API reports only `token_set: true`).
+3. Click **Sync** on the integration row. ThoroTest reads every `*.yml` / `*.yaml` under the path at the latest commit, then creates/updates the matching tests and caches the file contents + commit sha.
+
+Re-syncing is idempotent: tests are matched by their YAML `id` (or, when absent, by repo + file path), so a second sync updates in place instead of duplicating.
+
+### YAML test format
+
+```yaml
+id: TC-2301                       # stable id, reused as the test's primary key (optional)
+title: "Stripe card charge succeeds on test card"
+type: automated                   # automated | manual  (aliases: e2e/auto/unit → automated)
+runner: playwright
+status: pending                   # pass/passed → pass, etc.
+priority: high                    # low | med | high | critical  (aliases: P0–P3)
+owner: anna@example.com
+tags: [smoke, payment]
+folder: Checkout/Payment          # "/"-separated folder hierarchy, auto-created
+```
+
+Only `title` is required. Malformed files are skipped and reported in the sync result (`warnings`), not fatal.
+
+### Endpoint
+
+`POST /api/integrations/{id}/sync` (admin/manager) → `{ created, updated, skipped, commit, files, warnings, last_sync }`. Sync is restricted to `github.com` repos.
+
+---
+
 ## Project structure
 
 ```
@@ -159,6 +197,7 @@ thorotest/
 │   ├── auth_utils.py       # JWT creation/validation, password hashing (passlib)
 │   ├── ws_manager.py       # WebSocket connection manager + run simulation
 │   ├── gql_schema.py       # Strawberry GraphQL schema
+│   ├── github_sync.py      # Tests-as-Code: read YAML tests from a GitHub repo
 │   └── routers/
 │       ├── auth.py         # /auth/register, /auth/login, /me, /users
 │       ├── tests.py        # CRUD /api/tests + bulk + history + comments + defects
@@ -167,7 +206,7 @@ thorotest/
 │       ├── defects.py      # CRUD /api/defects (filters: status, severity, test, run)
 │       ├── projects.py     # CRUD /api/projects
 │       ├── categories.py   # CRUD /api/categories
-│       ├── integrations.py # CRUD /api/integrations
+│       ├── integrations.py # CRUD /api/integrations + GitHub YAML sync
 │       ├── tokens.py       # GET/POST/DELETE /api/tokens
 │       ├── webhooks.py     # CRUD /api/webhooks + test endpoint
 │       ├── attachments.py  # Upload/download file attachments per test or run
@@ -262,7 +301,7 @@ WebSocket:
 
 ## Tests
 
-### Backend unit tests (311 tests)
+### Backend unit tests (329 tests)
 
 ```bash
 source venv/bin/activate
@@ -287,7 +326,8 @@ backend/tests/
 ├── test_roles.py             # RBAC — access control by role
 ├── test_retest.py            # Retest workflow
 ├── test_assignment.py        # Test assignment to users
-└── test_export.py            # CSV / PDF export
+├── test_export.py            # CSV / PDF export
+└── test_github_sync.py       # Tests-as-Code: YAML parse, repo sync upsert, token redaction
 ```
 
 ### E2E tests (Playwright)

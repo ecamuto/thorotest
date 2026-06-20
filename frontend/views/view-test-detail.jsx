@@ -322,25 +322,8 @@ function DefinitionTab({ test, currentUser }) {
           )}
         </div>
 
-        {/* YAML source — keep unchanged */}
-        <div className="card">
-          <div className="card-h">
-            <div className="card-title">tests/checkout/payment/stripe-charge.yml</div>
-            <div className="card-sub">synced from git · a3c9f1d</div>
-            <div className="spacer" />
-            <button className="btn sm ghost">Open in editor</button>
-            <button className="btn sm"><Icon name="github" /> View on GitHub</button>
-          </div>
-          <div style={{padding:14}}>
-            <pre className="code"><code>
-{`# `}<span className="c">ThoroTest — Tests as Code</span>{`
-`}<span className="k">id</span>{`: TC-2301
-`}<span className="k">title</span>{`: `}<span className="s">"Stripe card charge succeeds on test card"</span>{`
-`}<span className="k">type</span>{`: `}<span className="t">automated</span>{`
-`}<span className="k">runner</span>{`: `}<span className="t">playwright</span>
-            </code></pre>
-          </div>
-        </div>
+        {/* YAML source — rendered only when this test is synced from git */}
+        {test.source_path && <YamlSourceCard test={test} />}
       </div>
 
       {/* Side column — keep unchanged from original */}
@@ -424,6 +407,39 @@ function FileRow({path, hits}) {
     <div style={{display:"flex", alignItems:"center", gap:8, padding:"6px 14px", fontSize:11.5, color:"var(--text-muted)"}}>
       <span className="mono" style={{color:"var(--text)"}}>{path}</span>
       <span className="dim mono" style={{marginLeft:"auto", fontSize:10.5}}>{hits}</span>
+    </div>
+  );
+}
+
+function YamlSourceCard({test}) {
+  const ref = test.source_ref || "";
+  const shortRef = ref.slice(0, 7);
+  // {repo_url}/blob/{ref}/{path} → exact file at the synced commit on GitHub.
+  const ghUrl = test.repo_url && ref
+    ? `${test.repo_url.replace(/\.git$/, "").replace(/\/$/, "")}/blob/${ref}/${test.source_path}`
+    : null;
+  const synced = test.source_synced_at
+    ? new Date(test.source_synced_at).toLocaleString()
+    : null;
+  return (
+    <div className="card">
+      <div className="card-h">
+        <div className="card-title mono">{test.source_path}</div>
+        <div className="card-sub">
+          synced from git{shortRef ? ` · ${shortRef}` : ""}{synced ? ` · ${synced}` : ""}
+        </div>
+        <div className="spacer" />
+        {ghUrl && (
+          <a className="btn sm" href={ghUrl} target="_blank" rel="noopener noreferrer">
+            <Icon name="github" /> View on GitHub
+          </a>
+        )}
+      </div>
+      <div style={{padding:14}}>
+        {test.source_body
+          ? <pre className="code"><code>{test.source_body}</code></pre>
+          : <div className="mono dim" style={{fontSize:11.5}}>No file contents cached. Re-run sync.</div>}
+      </div>
     </div>
   );
 }
