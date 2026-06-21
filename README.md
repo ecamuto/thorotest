@@ -249,7 +249,8 @@ thorotest/
 │   ├── suite-p10-auth-header-fix/  # Auth header regression suite
 │   ├── suite-p12-audit-log/        # Audit log
 │   ├── suite-p14-oauth-login/      # OAuth login (GitHub / Google)
-│   └── suite-p15-totp-2fa/         # TOTP two-factor auth
+│   ├── suite-p15-totp-2fa/         # TOTP two-factor auth
+│   └── suite-p16-github-sync/      # Tests-as-Code GitHub sync (config, token redaction, sync)
 │
 ├── .env.example
 ├── requirements.txt
@@ -338,7 +339,7 @@ make test-e2e-auth      # auth suite only
 make test-report        # open HTML report
 ```
 
-27 suites covering all major user flows, feature phases, and regression scenarios.
+28 suites covering all major user flows, feature phases, and regression scenarios.
 
 ---
 
