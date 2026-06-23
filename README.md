@@ -169,6 +169,7 @@ thorotest/
 │   │   ├── hooks.jsx           # Shared React hooks (useInitialData)
 │   │   ├── icons.jsx           # SVG icon components
 │   │   ├── i18n-context.jsx    # React context for active language
+│   │   ├── notification-bell.jsx # Notification bell + dropdown (WebSocket push)
 │   │   └── tweaks-panel.jsx    # Developer panel (theme, density)
 │   │
 │   ├── locales/                # i18n string files (en, it, …)
@@ -328,7 +329,13 @@ backend/tests/
 ├── test_retest.py            # Retest workflow
 ├── test_assignment.py        # Test assignment to users
 ├── test_export.py            # CSV / PDF export
-└── test_github_sync.py       # Tests-as-Code: YAML parse, repo sync upsert, token redaction
+├── test_github_sync.py       # Tests-as-Code: YAML parse, repo sync upsert, token redaction
+├── test_audit_log.py         # Audit log query, filters, admin gating
+├── test_notifications.py     # Notifications list/read + per-user config
+├── test_oauth.py             # OAuth login + account linking (GitHub)
+├── test_oauth_google.py      # OAuth login (Google)
+├── test_totp.py              # TOTP two-factor enable/verify/disable
+└── test_webhooks_hmac.py     # Webhook delivery + HMAC signature
 ```
 
 ### E2E tests (Playwright)
