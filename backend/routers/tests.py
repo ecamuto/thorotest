@@ -9,7 +9,7 @@ from typing import List, Optional
 from ..db import get_db
 from .. import models
 from ..schemas import TestOut, TestCreate, TestUpdate, BulkAction, DefectOut, CommentOut, CommentCreate, TestStepOut, TestStepIn
-from ..auth_utils import require_role
+from ..auth_utils import require_role, get_current_user
 from ..notifications import _notify_comment_event
 from ..audit_utils import log_event, EVT_TEST_CREATED, EVT_TEST_UPDATED, EVT_TEST_DELETED
 
@@ -26,6 +26,7 @@ def list_tests(
     status: Optional[str] = None,
     type: Optional[str] = None,
     db: Session = Depends(get_db),
+    _: models.User = Depends(get_current_user),
 ):
     q = db.query(models.Test)
     if folder_id:
@@ -99,7 +100,7 @@ def export_tests(
 
 
 @router.get("/tests/{test_id}", response_model=TestOut)
-def get_test(test_id: str, db: Session = Depends(get_db)):
+def get_test(test_id: str, db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
     t = db.query(models.Test).filter(models.Test.id == test_id).first()
     if not t:
         raise HTTPException(status_code=404, detail="Test not found")
@@ -171,7 +172,7 @@ def delete_test(test_id: str, db: Session = Depends(get_db), current_user: model
 
 
 @router.get("/tests/{test_id}/history")
-def get_test_history(test_id: str, db: Session = Depends(get_db)):
+def get_test_history(test_id: str, db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
     cases = (
         db.query(models.RunCase)
         .filter(models.RunCase.test_id == test_id)
@@ -193,13 +194,13 @@ def get_test_history(test_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/tests/{test_id}/defects", response_model=List[DefectOut])
-def get_test_defects(test_id: str, db: Session = Depends(get_db)):
+def get_test_defects(test_id: str, db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
     return db.query(models.Defect).filter(models.Defect.test_id == test_id).all()
 
 
 
 @router.get("/tests/{test_id}/comments", response_model=List[CommentOut])
-def get_comments(test_id: str, db: Session = Depends(get_db)):
+def get_comments(test_id: str, db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
     return db.query(models.Comment).filter(models.Comment.test_id == test_id).all()
 
 
@@ -230,7 +231,7 @@ def add_comment(
 
 
 @router.get("/tests/{test_id}/steps", response_model=List[TestStepOut])
-def list_steps(test_id: str, db: Session = Depends(get_db)):
+def list_steps(test_id: str, db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
     if not db.query(models.Test).filter(models.Test.id == test_id).first():
         raise HTTPException(status_code=404, detail="Test not found")
     return (

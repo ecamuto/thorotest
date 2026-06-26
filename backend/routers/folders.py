@@ -4,7 +4,7 @@ from typing import List
 from ..db import get_db
 from .. import models
 from ..schemas import FolderOut, FolderCreate, FolderUpdate
-from ..auth_utils import require_role
+from ..auth_utils import require_role, get_current_user
 
 router = APIRouter(tags=["folders"])
 
@@ -25,7 +25,7 @@ def _build_tree(folders: list, parent_id=None) -> list:
 
 
 @router.get("/folders", response_model=List[FolderOut])
-def get_folders(db: Session = Depends(get_db)):
+def get_folders(db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
     folders = db.query(models.Folder).all()
     return _build_tree(folders)
 

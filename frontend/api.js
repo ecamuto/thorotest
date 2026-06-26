@@ -19,8 +19,13 @@
     return res.json();
   }
 
+  // Exposed so views making raw fetch() calls can attach the bearer token
+  // without each one re-reading localStorage. GET endpoints now require auth.
+  window.authHeaders = authHeaders;
+
   window.TH_API = {
     setToken,
+    authHeaders,
 
     async confirmOAuthLink(pendingToken, password) {
       const res = await fetch(BASE + "/api/auth/oauth/confirm-link", {

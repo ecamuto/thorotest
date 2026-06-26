@@ -5,7 +5,7 @@ from typing import List
 from ..db import get_db
 from .. import models
 from ..schemas import ProjectOut, ProjectCreate, ProjectUpdate
-from ..auth_utils import require_role
+from ..auth_utils import require_role, get_current_user
 
 router = APIRouter(tags=["projects"])
 
@@ -13,7 +13,7 @@ ADMIN_ONLY = require_role("admin")
 
 
 @router.get("/projects", response_model=List[ProjectOut])
-def list_projects(db: Session = Depends(get_db)):
+def list_projects(db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
     return db.query(models.Project).all()
 
 

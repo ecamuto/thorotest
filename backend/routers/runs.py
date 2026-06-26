@@ -20,7 +20,7 @@ LEAD_ROLES = require_role("admin", "manager")
 
 
 @router.get("/runs", response_model=List[RunOut])
-def list_runs(db: Session = Depends(get_db)):
+def list_runs(db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
     return db.query(models.Run).all()
 
 
@@ -62,7 +62,7 @@ def get_my_cases(
 
 
 @router.get("/runs/{run_id}")
-def get_run(run_id: str, db: Session = Depends(get_db)):
+def get_run(run_id: str, db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
     from sqlalchemy.orm import joinedload
     r = (
         db.query(models.Run)
@@ -174,7 +174,7 @@ def update_run_case(
 
 
 @router.get("/runs/{run_id}/defects", response_model=List[DefectOut])
-def get_run_defects(run_id: str, db: Session = Depends(get_db)):
+def get_run_defects(run_id: str, db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
     if not db.query(models.Run).filter(models.Run.id == run_id).first():
         raise HTTPException(status_code=404, detail="Run not found")
     return db.query(models.Defect).filter(models.Defect.run_id == run_id).all()
@@ -310,7 +310,7 @@ def export_run(
 
 
 @router.get("/runs/{run_id}/cases/{case_id}/steps", response_model=List[StepResultOut])
-def list_step_results(run_id: str, case_id: int, db: Session = Depends(get_db)):
+def list_step_results(run_id: str, case_id: int, db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
     """Return step results for a run case, creating pending records if none exist yet."""
     rc = db.query(models.RunCase).filter(
         models.RunCase.id == case_id,

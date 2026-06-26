@@ -8,7 +8,7 @@ from typing import List, Optional
 from ..db import get_db
 from .. import models
 from ..schemas import DefectOut, DefectCreate, DefectUpdate
-from ..auth_utils import require_role
+from ..auth_utils import require_role, get_current_user
 
 router = APIRouter(tags=["defects"])
 
@@ -23,6 +23,7 @@ def list_defects(
     test_id: Optional[str] = None,
     search: Optional[str] = None,
     db: Session = Depends(get_db),
+    _: models.User = Depends(get_current_user),
 ):
     q = db.query(models.Defect)
     if status and status != "all":
@@ -42,7 +43,7 @@ def list_defects(
 
 
 @router.get("/defects/{defect_id}", response_model=DefectOut)
-def get_defect(defect_id: str, db: Session = Depends(get_db)):
+def get_defect(defect_id: str, db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
     d = db.query(models.Defect).filter(models.Defect.id == defect_id).first()
     if not d:
         raise HTTPException(status_code=404, detail="Defect not found")

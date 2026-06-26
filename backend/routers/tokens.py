@@ -7,8 +7,12 @@ from typing import List
 from ..db import get_db
 from .. import models
 from ..schemas import ApiTokenOut, ApiTokenCreate, ApiTokenCreated
+from ..auth_utils import require_role
 
 router = APIRouter(tags=["tokens"])
+
+# API tokens grant programmatic access — restrict all management to admins.
+ADMIN_ONLY = require_role("admin")
 
 
 def _hash_token(raw: str) -> str:
@@ -16,12 +20,12 @@ def _hash_token(raw: str) -> str:
 
 
 @router.get("/tokens", response_model=List[ApiTokenOut])
-def list_tokens(db: Session = Depends(get_db)):
+def list_tokens(db: Session = Depends(get_db), _: models.User = ADMIN_ONLY):
     return db.query(models.ApiToken).all()
 
 
 @router.post("/tokens", response_model=ApiTokenCreated, status_code=201)
-def create_token(payload: ApiTokenCreate, db: Session = Depends(get_db)):
+def create_token(payload: ApiTokenCreate, db: Session = Depends(get_db), _: models.User = ADMIN_ONLY):
     raw = "th_" + secrets.token_urlsafe(32)
     prefix = raw[:12]
     token_hash = _hash_token(raw)
@@ -48,7 +52,7 @@ def create_token(payload: ApiTokenCreate, db: Session = Depends(get_db)):
 
 
 @router.delete("/tokens/{token_id}", status_code=204)
-def revoke_token(token_id: int, db: Session = Depends(get_db)):
+def revoke_token(token_id: int, db: Session = Depends(get_db), _: models.User = ADMIN_ONLY):
     tok = db.query(models.ApiToken).filter(models.ApiToken.id == token_id).first()
     if not tok:
         raise HTTPException(status_code=404, detail="Token not found")

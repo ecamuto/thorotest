@@ -1,10 +1,30 @@
 import strawberry
 from strawberry.fastapi import GraphQLRouter
 from typing import List, Optional
-from fastapi import Depends
+from fastapi import Depends, Request
+from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 from .db import get_db
 from . import models
+from .auth_utils import SECRET_KEY, ALGORITHM
+
+_WRITE_ROLES = {"admin", "manager", "tester"}
+
+
+def _require_user(info) -> models.User:
+    """Reject the operation unless the request carried a valid bearer token."""
+    user = info.context.get("user")
+    if user is None:
+        raise Exception("Not authenticated")
+    return user
+
+
+def _require_write(info) -> models.User:
+    """Require an authenticated user whose role may create/modify data."""
+    user = _require_user(info)
+    if user.role not in _WRITE_ROLES:
+        raise Exception("Insufficient permissions")
+    return user
 
 
 @strawberry.type
@@ -120,12 +140,14 @@ def _run_to_gql(r: models.Run) -> RunGQL:
 class Query:
     @strawberry.field
     def folders(self, info: strawberry.types.Info) -> List[FolderGQL]:
+        _require_user(info)
         db: Session = info.context["db"]
         return [FolderGQL(id=f.id, name=f.name, count=f.count, parent_id=f.parent_id)
                 for f in db.query(models.Folder).all()]
 
     @strawberry.field
     def tests(self, info: strawberry.types.Info, folder_id: Optional[str] = None) -> List[TestGQL]:
+        _require_user(info)
         db: Session = info.context["db"]
         q = db.query(models.Test)
         if folder_id:
@@ -134,17 +156,20 @@ class Query:
 
     @strawberry.field
     def test(self, info: strawberry.types.Info, id: str) -> Optional[TestGQL]:
+        _require_user(info)
         db: Session = info.context["db"]
         t = db.query(models.Test).filter(models.Test.id == id).first()
         return _test_to_gql(t) if t else None
 
     @strawberry.field
     def runs(self, info: strawberry.types.Info) -> List[RunGQL]:
+        _require_user(info)
         db: Session = info.context["db"]
         return [_run_to_gql(r) for r in db.query(models.Run).all()]
 
     @strawberry.field
     def run(self, info: strawberry.types.Info, id: str) -> Optional[RunDetailGQL]:
+        _require_user(info)
         db: Session = info.context["db"]
         r = db.query(models.Run).filter(models.Run.id == id).first()
         if not r:
@@ -160,6 +185,7 @@ class Query:
 
     @strawberry.field
     def defects(self, info: strawberry.types.Info) -> List[DefectGQL]:
+        _require_user(info)
         db: Session = info.context["db"]
         return [DefectGQL(id=d.id, title=d.title, status=d.status, severity=d.severity,
                           test_id=d.test_id, run_id=d.run_id)
@@ -167,6 +193,7 @@ class Query:
 
     @strawberry.field
     def insights(self, info: strawberry.types.Info) -> InsightsGQL:
+        _require_user(info)
         db: Session = info.context["db"]
         folders = db.query(models.Folder).filter(models.Folder.parent_id.isnot(None)).all()
         coverage = []
@@ -207,6 +234,7 @@ class CreateTestInput:
 class Mutation:
     @strawberry.mutation
     def update_test_status(self, info: strawberry.types.Info, input: UpdateTestStatusInput) -> Optional[TestGQL]:
+        _require_write(info)
         db: Session = info.context["db"]
         t = db.query(models.Test).filter(models.Test.id == input.id).first()
         if t:
@@ -217,6 +245,7 @@ class Mutation:
 
     @strawberry.mutation
     def create_test(self, info: strawberry.types.Info, input: CreateTestInput) -> TestGQL:
+        _require_write(info)
         db: Session = info.context["db"]
         t = models.Test(
             id=input.id, title=input.title, folder_id=input.folder_id,
@@ -230,8 +259,24 @@ class Mutation:
         return _test_to_gql(t)
 
 
-async def get_context(db: Session = Depends(get_db)):
-    return {"db": db}
+async def get_context(request: Request, db: Session = Depends(get_db)):
+    """Resolve the bearer token (if any) to a User and expose it to resolvers.
+
+    Mirrors auth_utils.get_optional_user, including the token_version revocation
+    check, so GraphQL honours the same auth/revocation rules as the REST API.
+    """
+    user = None
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        try:
+            payload = jwt.decode(auth[7:], SECRET_KEY, algorithms=[ALGORITHM])
+            uid = int(payload.get("sub"))
+            candidate = db.query(models.User).filter(models.User.id == uid).first()
+            if candidate and int(payload.get("tv", 0)) == int(candidate.token_version or 0):
+                user = candidate
+        except (JWTError, ValueError, TypeError):
+            user = None
+    return {"db": db, "user": user}
 
 
 schema = strawberry.Schema(query=Query, mutation=Mutation)

@@ -4,7 +4,7 @@ from typing import List
 from ..db import get_db
 from .. import models
 from ..schemas import IntegrationOut, IntegrationCreate, IntegrationUpdate
-from ..auth_utils import require_role
+from ..auth_utils import require_role, get_current_user
 from ..github_sync import sync_integration
 
 router = APIRouter(tags=["integrations"])
@@ -13,7 +13,7 @@ WRITE_ROLES = require_role("admin", "manager")
 
 
 @router.get("/integrations", response_model=List[IntegrationOut])
-def list_integrations(db: Session = Depends(get_db)):
+def list_integrations(db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
     return db.query(models.Integration).all()
 
 

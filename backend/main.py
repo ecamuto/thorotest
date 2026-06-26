@@ -23,7 +23,7 @@ def _set_sqlite_pragmas(dbapi_conn, connection_record):
 from .seed import init_db, seed_db
 from .ws_manager import manager
 from .notifications import notif_manager
-from .auth_utils import SECRET_KEY, ALGORITHM
+from .auth_utils import SECRET_KEY, ALGORITHM, get_current_user
 from .gql_schema import graphql_router
 from .routers import folders, tests, runs, pipelines, activity, auth, projects, categories, defects, integrations, tokens, webhooks, favorites, import_, attachments, admin, ai, notifications, audit_log, oauth, totp
 
@@ -153,7 +153,7 @@ app.include_router(graphql_router, prefix="/graphql")
 
 
 @app.get("/api/insights")
-async def insights(db: Session = Depends(get_db)):
+async def insights(db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
     tests = db.query(models.Test).all()
     total = len(tests)
     pass_count = sum(1 for t in tests if t.status == "pass")
@@ -220,7 +220,7 @@ async def insights(db: Session = Depends(get_db)):
 
 # Aggregated initial-data endpoint (replaces window.TH_DATA)
 @app.get("/api/initial-data")
-async def initial_data(db: Session = Depends(get_db)):
+async def initial_data(db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
     from .routers.folders import _build_tree
 
     all_folders = db.query(models.Folder).all()

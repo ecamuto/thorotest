@@ -11,8 +11,12 @@ from ..importers import (
     ImportResult,
 )
 from ..importers.csv_importer import get_csv_columns
+from ..auth_utils import require_role
 
 router = APIRouter(tags=["import"])
+
+# Importing creates folders/tests/runs — same write roles as manual creation.
+WRITE_ROLES = require_role("admin", "manager", "tester")
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
@@ -30,7 +34,7 @@ def _run_parser(fmt: str, content: bytes, column_mapping: dict | None) -> Import
 
 
 @router.post("/import/detect")
-async def detect_file(file: UploadFile = File(...)):
+async def detect_file(file: UploadFile = File(...), _: models.User = WRITE_ROLES):
     """Return detected format and (for CSV) the column headers for mapping UI."""
     content = await file.read()
     if len(content) > MAX_FILE_SIZE:
@@ -50,6 +54,7 @@ async def preview_import(
     file: UploadFile = File(...),
     format: Optional[str] = Form(None),
     column_mapping: Optional[str] = Form(None),
+    _: models.User = WRITE_ROLES,
 ):
     """Parse file and return summary + sample rows without writing to DB."""
     content = await file.read()
@@ -96,6 +101,7 @@ async def execute_import(
     column_mapping: Optional[str] = Form(None),
     conflict: str = Form("skip"),   # skip | overwrite | rename
     db: Session = Depends(get_db),
+    _: models.User = WRITE_ROLES,
 ):
     """Parse file and persist data to DB."""
     content = await file.read()
