@@ -174,6 +174,9 @@ class User(Base):
     language = Column(String(8), default="en")
     totp_secret = Column(String(255), nullable=True)
     totp_enabled = Column(Boolean, default=False)
+    # Incremented on logout / forced revocation; JWTs carry the version at issue
+    # time and are rejected once it no longer matches (see auth_utils).
+    token_version = Column(Integer, default=0, nullable=False)
 
 
 class Integration(Base):

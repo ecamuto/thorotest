@@ -144,7 +144,7 @@ def complete_2fa_login(
         description=f"{user.email} completed 2FA login",
         ip_address=ip,
     )
-    token = create_access_token(user.id)
+    token = create_access_token(user.id, user.token_version)
     return {
         "access_token": token,
         "token_type": "bearer",

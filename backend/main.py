@@ -88,6 +88,7 @@ def _run_migrations():
         if "users" in tables:
             _add_column("users", "totp_secret")
             _add_column("users", "totp_enabled", ddl_type="BOOLEAN", default="FALSE")
+            _add_column("users", "token_version", ddl_type="INTEGER", default="0")
 
         if "webhooks" in tables:
             _add_column("webhooks", "hmac_secret")

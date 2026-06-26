@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from .. import models
 from ..schemas import UserCreate, UserLogin, UserOut, UserListItem, UserUpdate, PasswordChange
-from ..auth_utils import hash_password, verify_password, create_access_token, get_current_user
+from ..auth_utils import hash_password, verify_password, verify_and_update, create_access_token, get_current_user
 from ..totp_utils import create_partial_token
 from ..audit_utils import (
     log_event,
@@ -79,7 +79,10 @@ def login(request: Request, payload: UserLogin, db: Session = Depends(get_db)):
     ip = request.client.host if request.client else None
     rate_key = _login_key(ip, payload.email)
     _check_login_rate(rate_key)
-    if not user or not verify_password(payload.password, user.hashed_password):
+    ok, new_hash = (False, None)
+    if user:
+        ok, new_hash = verify_and_update(payload.password, user.hashed_password)
+    if not user or not ok:
         _record_login_failure(rate_key)
         log_event(
             EVT_LOGIN_FAIL,
@@ -89,6 +92,10 @@ def login(request: Request, payload: UserLogin, db: Session = Depends(get_db)):
             ip_address=ip,
         )
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    # Transparently upgrade legacy sha256_crypt hashes to argon2 on login.
+    if new_hash:
+        user.hashed_password = new_hash
+        db.commit()
     _clear_login_failures(rate_key)
     log_event(
         EVT_LOGIN_SUCCESS,
@@ -102,7 +109,7 @@ def login(request: Request, payload: UserLogin, db: Session = Depends(get_db)):
         partial = create_partial_token(user.id)
         return {"status": "2fa_required", "partial_token": partial}
 
-    token = create_access_token(user.id)
+    token = create_access_token(user.id, user.token_version)
     return {
         "access_token": token,
         "token_type": "bearer",
@@ -118,8 +125,12 @@ def login(request: Request, payload: UserLogin, db: Session = Depends(get_db)):
 
 
 @router.post("/auth/logout", status_code=204)
-def logout(request: Request, current_user: models.User = Depends(get_current_user)):
+def logout(request: Request, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     ip = request.client.host if request.client else None
+    # Bump token_version so every JWT issued to this user is rejected from now on
+    # (revocation without a per-token denylist; effectively "log out everywhere").
+    current_user.token_version = (current_user.token_version or 0) + 1
+    db.commit()
     log_event(
         EVT_LOGOUT,
         actor_id=current_user.id,

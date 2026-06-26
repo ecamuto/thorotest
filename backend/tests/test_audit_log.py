@@ -51,8 +51,12 @@ class TestAuthEvents:
         admin = auth_client("admin")
         resp = admin.post("/api/auth/logout")
         assert resp.status_code == 204
-        # Reuse the same admin client — calling auth_client("admin") a second time
-        # would try to create another user with the same email and hit a UNIQUE constraint
+        # Logout bumps token_version, revoking the token we just used. Re-login the
+        # same admin (calling auth_client("admin") again would hit a UNIQUE email
+        # constraint) to obtain a fresh token before reading the audit log.
+        relog = admin.post("/api/auth/login", json={"email": "admin@test.com", "password": "pass123"})
+        assert relog.status_code == 200
+        admin.headers["Authorization"] = f"Bearer {relog.json()['access_token']}"
         entries = _audit_entries(admin)
         assert any(e["event_type"] == "logout" for e in entries)
 

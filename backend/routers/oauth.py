@@ -124,7 +124,7 @@ def issue_session_or_2fa(user: models.User, ip: str | None) -> dict:
     if user.totp_enabled:
         from ..totp_utils import create_partial_token
         return {"status": "2fa_required", "partial_token": create_partial_token(user.id)}
-    return {"status": "ok", "token": create_access_token(user.id), "user": _user_dict(user)}
+    return {"status": "ok", "token": create_access_token(user.id, user.token_version), "user": _user_dict(user)}
 
 
 def upsert_oauth_user(
@@ -509,7 +509,7 @@ def confirm_link(payload: ConfirmLinkPayload, db: Session = Depends(get_db), req
         return {"status": "2fa_required", "partial_token": create_partial_token(user.id)}
 
     return {
-        "access_token": create_access_token(user.id),
+        "access_token": create_access_token(user.id, user.token_version),
         "token_type": "bearer",
         "user": _user_dict(user),
     }
