@@ -1,3 +1,4 @@
+import os
 import time
 import threading
 from collections import defaultdict, deque
@@ -22,8 +23,12 @@ router = APIRouter(tags=["auth"])
 # Counts only FAILED attempts per (ip, email); a successful login clears the
 # counter. Successful logins are never throttled, so legitimate traffic and
 # automated test logins are unaffected.
-_LOGIN_MAX_FAILURES = 10
-_LOGIN_WINDOW_SECONDS = 300
+_LOGIN_MAX_FAILURES = int(os.getenv("LOGIN_MAX_FAILURES", "10"))
+_LOGIN_WINDOW_SECONDS = int(os.getenv("LOGIN_WINDOW_SECONDS", "300"))
+# Escape hatch for automated end-to-end suites, which intentionally drive many
+# failed/repeated logins from a single host and would otherwise self-throttle.
+# Never set this in production.
+_LOGIN_RATELIMIT_DISABLED = os.getenv("LOGIN_RATELIMIT_DISABLED", "").strip().lower() in ("1", "true", "yes")
 _login_failures: dict = defaultdict(deque)
 _login_lock = threading.Lock()
 
@@ -33,6 +38,8 @@ def _login_key(ip, email):
 
 
 def _check_login_rate(key: str) -> None:
+    if _LOGIN_RATELIMIT_DISABLED:
+        return
     now = time.time()
     with _login_lock:
         dq = _login_failures[key]

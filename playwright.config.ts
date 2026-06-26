@@ -20,4 +20,22 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
+  // Isolated backend for e2e: a dedicated SQLite DB (reset + demo-seeded on each
+  // launch) and login rate-limiting disabled so the suite's intentional bad-login
+  // and high-volume login tests don't self-throttle. reuseExistingServer lets a
+  // manually-started `make dev` be reused locally; CI always boots a clean one.
+  webServer: {
+    command:
+      'rm -f e2e.db e2e.db-shm e2e.db-wal && ' +
+      'venv/bin/python -m backend.seed && ' +
+      'venv/bin/uvicorn backend.main:app --port 8000',
+    url: 'http://localhost:8000',
+    reuseExistingServer: !process.env.CI,
+    timeout: 60_000,
+    env: {
+      DATABASE_URL: 'sqlite:///./e2e.db',
+      LOGIN_RATELIMIT_DISABLED: '1',
+      PYTHONUNBUFFERED: '1',
+    },
+  },
 });
