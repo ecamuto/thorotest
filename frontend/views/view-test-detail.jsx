@@ -13,7 +13,7 @@ function TestDetail({ testId, onBack, currentUser }) {
   React.useEffect(() => {
     const id = testId || "TC-2301";
     setLoading(true);
-    fetch(`/api/tests/${id}`)
+    fetch(`/api/tests/${id}`, { headers: window.authHeaders() })
       .then(r => { if (!r.ok) throw new Error("not found"); return r.json(); })
       .then(t => {
         setTest({ ...t, folder: t.folder_id, updated: t.updated_at, lastRun: t.last_run_at });

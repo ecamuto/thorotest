@@ -55,7 +55,7 @@ function Library({ onNav, onOpenTest, currentUser }) {
     if (filterStatus !== "all") params.set("status", filterStatus);
     if (filterType !== "all") params.set("type", filterType);
     setTestsLoading(true);
-    fetch(`/api/tests?${params}`)
+    fetch(`/api/tests?${params}`, { headers: window.authHeaders() })
       .then(r => r.json())
       .then(data => {
         setTests(data.map(t => ({ ...t, folder: t.folder_id, lastRun: t.last_run_at, updated: t.updated_at })));
