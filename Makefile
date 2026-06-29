@@ -1,4 +1,4 @@
-.PHONY: help setup install dev db-reset db-seed demo test test-e2e test-e2e-auth test-report open clean docker-up docker-up-sqlite docker-down docker-logs
+.PHONY: help setup install dev db-reset db-seed demo test test-e2e test-e2e-auth test-e2e-import test-all test-report hooks-install open clean docker-up docker-up-sqlite docker-down docker-logs
 
 PYTHON  := python3
 VENV    := venv
@@ -38,6 +38,17 @@ test-e2e: ## Run all Playwright e2e tests (requires dev server running)
 
 test-e2e-auth: ## Run auth e2e suite only
 	npx playwright test e2e/suite1-auth/
+
+test-e2e-import: ## Run import e2e suite only
+	npx playwright test e2e/suite17-import/
+
+test-all: ## Full gate: backend pytest + all Playwright e2e (same as CI)
+	$(PYTEST) backend/tests/ -q
+	npx playwright test
+
+hooks-install: ## Enable the repo's git hooks (pre-push runs test-all)
+	git config core.hooksPath .githooks
+	@echo "Git hooks enabled. 'git push' now runs 'make test-all' first."
 
 test-report: ## Open last Playwright HTML report
 	npx playwright show-report

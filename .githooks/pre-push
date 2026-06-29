@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Opt-in pre-push gate. Enable with: make hooks-install
+# Runs the same checks as CI (backend pytest + Playwright e2e) before any push.
+# Bypass a single push with: git push --no-verify
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+echo "[pre-push] backend unit tests…"
+venv/bin/pytest backend/tests/ -q
+
+echo "[pre-push] e2e tests…"
+npx playwright test
+
+echo "[pre-push] OK"

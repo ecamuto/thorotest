@@ -17,6 +17,7 @@
     "test:p1-steps": "playwright test e2e/suite-p1-steps/",
     "test:p3-retest": "playwright test e2e/suite-p3-retest/",
     "test:p14-oauth": "playwright test e2e/suite-p14-oauth-login/",
+    "test:import": "playwright test e2e/suite17-import/",
     "test:report": "playwright show-report"
   },
   "repository": {
