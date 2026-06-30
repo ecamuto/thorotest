@@ -157,7 +157,7 @@ function Insights() {
   const [insLoading, setInsLoading] = React.useState(true);
 
   React.useEffect(() => {
-    fetch('/api/insights')
+    fetch('/api/insights', { headers: window.authHeaders() })
       .then(r => r.json())
       .then(data => { setIns(data); setInsLoading(false); })
       .catch(() => setInsLoading(false));

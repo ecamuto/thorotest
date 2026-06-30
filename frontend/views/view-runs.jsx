@@ -194,7 +194,7 @@ function RunDetail({ runId, onBack, currentUser }) {
   React.useEffect(() => {
     const id = runId || "R-1287";
     setLoading(true);
-    fetch(`/api/runs/${id}`)
+    fetch(`/api/runs/${id}`, { headers: window.authHeaders() })
       .then(r => { if (!r.ok) throw new Error("not found"); return r.json(); })
       .then(data => {
         setLiveRun(data);
@@ -768,7 +768,7 @@ function NewRunModal({ onClose, onCreated }) {
   const [error, setError] = React.useState(null);
 
   React.useEffect(() => {
-    fetch("/api/tests")
+    fetch("/api/tests", { headers: window.authHeaders() })
       .then(r => r.json())
       .then(data => setTests(data))
       .catch(() => { if (window.TH_DATA) setTests(window.TH_DATA.tests || []); });

@@ -5,7 +5,7 @@ function Overview({ onNav }) {
   const [insights, setInsights] = React.useState(null);
 
   React.useEffect(() => {
-    fetch('/api/insights')
+    fetch('/api/insights', { headers: window.authHeaders() })
       .then(r => r.json())
       .then(setInsights)
       .catch(() => {});

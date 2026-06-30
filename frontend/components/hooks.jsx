@@ -4,7 +4,7 @@ function useInitialData(refreshKey = 0) {
   const [state, setState] = React.useState({ data: null, loading: true, error: null });
 
   React.useEffect(() => {
-    fetch('/api/initial-data')
+    fetch('/api/initial-data', { headers: window.authHeaders() })
       .then(r => { if (!r.ok) throw new Error('API unavailable'); return r.json(); })
       .then(data => setState({ data, loading: false, error: null }))
       .catch(err => {
