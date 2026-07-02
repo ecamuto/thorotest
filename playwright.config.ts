@@ -26,6 +26,7 @@ export default defineConfig({
   // manually-started `make dev` be reused locally; CI always boots a clean one.
   webServer: {
     command:
+      'npm run build && ' +
       'rm -f e2e.db e2e.db-shm e2e.db-wal && ' +
       'venv/bin/python -m backend.seed && ' +
       'venv/bin/uvicorn backend.main:app --port 8000',

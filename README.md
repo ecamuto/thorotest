@@ -8,7 +8,7 @@ Source-available test management platform. Organize, run, and track tests across
 
 | Layer | Tech |
 |---|---|
-| Frontend | React 18 (CDN), Babel standalone (no bundler), vanilla JS |
+| Frontend | React 18 (vendored production UMD), JSX transpiled + minified by esbuild at build time |
 | Backend | FastAPI, SQLAlchemy |
 | Database | SQLite (default) · PostgreSQL · MySQL / MariaDB (via `DATABASE_URL`) |
 | Realtime | WebSocket (native FastAPI) |
@@ -19,7 +19,7 @@ Source-available test management platform. Organize, run, and track tests across
 | Tests | pytest, httpx, Playwright |
 | Deploy | Docker + docker-compose |
 
-No npm build step for the app. Open `http://localhost:8000` and it works.
+Fully self-contained: React, fonts, and all assets are served locally — no CDN or external requests, works airgapped. `npm run build` produces `frontend/dist/` (run automatically by `make dev`, `install.sh`, and the Docker build).
 
 ---
 
@@ -58,7 +58,9 @@ Database is created automatically on first run. Seed data: 19 test cases across 
 |---|---|
 | `make setup` | Full setup: venv + deps + Playwright |
 | `make install` | Re-install deps into existing venv |
-| `make dev` | Start backend dev server on `http://localhost:8000` (hot-reload) |
+| `make dev` | Build frontend + start backend dev server on `http://localhost:8000` (hot-reload) |
+| `make frontend-build` | Build frontend to `frontend/dist/` (transpile + minify + vendor assets) |
+| `make frontend-watch` | Rebuild frontend on change (run beside `make dev` when editing UI) |
 | `make db-reset` | Delete `testhub.db` — re-seeded on next `make dev` |
 | `make db-seed` | Populate DB with demo data |
 | `make demo` | Alias for `make db-seed` |
@@ -89,6 +91,7 @@ cp .env.example .env
 | `SECRET_KEY` | `thorotest-dev-secret-...` | JWT signing key — **change in production** |
 | `TESTHUB_BASE_URL` | `http://localhost:8000` | Public base URL (OAuth callbacks, default CORS origin) |
 | `ALLOWED_ORIGINS` | = `TESTHUB_BASE_URL` | CORS origins — comma-separated list, or `*` for any (dev only) |
+| `DEMO_MODE` | _(unset)_ | Live-run demo simulation with fabricated results (demos only — **never in production**) |
 | `ANTHROPIC_API_KEY` | _(unset)_ | Enables AI assistant (BYOK). No-op if absent |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | _(unset)_ | GitHub OAuth login (optional) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | _(unset)_ | Google OAuth login (optional) |
@@ -355,9 +358,10 @@ make test-report        # open HTML report
 **Adding a new view:**
 
 1. Create `frontend/views/view-myview.jsx`, register component on `window`
-2. Add `<script type="text/babel" src="views/view-myview.jsx"></script>` to `frontend/index.html`
+2. Add `<script src="views/view-myview.js"></script>` to `frontend/index.html` (note `.js` — the build transpiles `.jsx` → `.js` into `frontend/dist/`)
 3. Add a case in `frontend/app.jsx`'s hash router switch
 4. Add nav item to the `NAV` array in `frontend/components/app-shell.jsx` if needed
+5. Rebuild with `npm run build`, or keep `make frontend-watch` running while you edit
 
 **Adding a new API endpoint:**
 

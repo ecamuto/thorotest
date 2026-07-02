@@ -27,7 +27,18 @@ from .auth_utils import SECRET_KEY, ALGORITHM, get_current_user
 from .gql_schema import graphql_router
 from .routers import folders, tests, runs, pipelines, activity, auth, projects, categories, defects, integrations, tokens, webhooks, favorites, import_, attachments, admin, ai, notifications, audit_log, oauth, totp
 
-FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
+# Serve the built frontend (frontend/dist — produced by `npm run build`).
+# Fall back to the source dir so the API can still boot without a build
+# (unit tests, API-only deployments); the UI itself needs the build.
+_FRONTEND_SRC = os.path.join(os.path.dirname(__file__), "..", "frontend")
+_FRONTEND_DIST = os.path.join(_FRONTEND_SRC, "dist")
+FRONTEND_DIR = _FRONTEND_DIST if os.path.isdir(_FRONTEND_DIST) else _FRONTEND_SRC
+if FRONTEND_DIR == _FRONTEND_SRC:
+    import logging as _logging
+    _logging.getLogger("thorotest").warning(
+        "frontend/dist not found — serving unbuilt frontend sources. "
+        "The UI will not render; run `npm run build` first."
+    )
 
 
 def _run_migrations():

@@ -23,6 +23,9 @@ uploads/
 # Node
 node_modules/
 
+# Frontend build output (npm run build)
+frontend/dist/
+
 # Test artifacts
 playwright-report/
 test-results/

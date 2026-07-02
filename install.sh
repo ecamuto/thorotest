@@ -31,10 +31,12 @@ info "Installing Python dependencies..."
 if command -v node &>/dev/null; then
     info "Installing Node dependencies..."
     npm install --silent
+    info "Building frontend (frontend/dist)..."
+    npm run build
     info "Installing Playwright browsers..."
     npx playwright install --with-deps chromium
 else
-    warn "Node not found — skipping Playwright install (not needed for production)"
+    warn "Node not found — cannot build the frontend. Install Node 20+ and run 'npm install && npm run build', or deploy with Docker (builds it for you)."
 fi
 
 echo ""
