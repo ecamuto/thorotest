@@ -12,6 +12,7 @@ from ..schemas import TestOut, TestCreate, TestUpdate, BulkAction, DefectOut, Co
 from ..auth_utils import require_role, get_current_user
 from ..notifications import _notify_comment_event
 from ..audit_utils import log_event, EVT_TEST_CREATED, EVT_TEST_UPDATED, EVT_TEST_DELETED
+from ._pagination import paginate, MAX_LIMIT
 
 router = APIRouter(tags=["tests"])
 
@@ -21,10 +22,13 @@ ADMIN_ONLY = require_role("admin")
 
 @router.get("/tests", response_model=List[TestOut])
 def list_tests(
+    response: Response,
     folder_id: Optional[str] = None,
     search: Optional[str] = None,
     status: Optional[str] = None,
     type: Optional[str] = None,
+    limit: int = MAX_LIMIT,
+    offset: int = 0,
     db: Session = Depends(get_db),
     _: models.User = Depends(get_current_user),
 ):
@@ -38,7 +42,7 @@ def list_tests(
         q = q.filter(models.Test.status == status)
     if type and type != "all":
         q = q.filter(models.Test.type == type)
-    return q.all()
+    return paginate(q.order_by(models.Test.id), response, limit, offset)
 
 
 @router.post("/tests/bulk")

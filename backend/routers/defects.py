@@ -1,7 +1,7 @@
 import random
 import string
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -9,6 +9,7 @@ from ..db import get_db
 from .. import models
 from ..schemas import DefectOut, DefectCreate, DefectUpdate
 from ..auth_utils import require_role, get_current_user
+from ._pagination import paginate, MAX_LIMIT
 
 router = APIRouter(tags=["defects"])
 
@@ -18,10 +19,13 @@ ADMIN_ONLY = require_role("admin")
 
 @router.get("/defects", response_model=List[DefectOut])
 def list_defects(
+    response: Response,
     status: Optional[str] = None,
     severity: Optional[str] = None,
     test_id: Optional[str] = None,
     search: Optional[str] = None,
+    limit: int = MAX_LIMIT,
+    offset: int = 0,
     db: Session = Depends(get_db),
     _: models.User = Depends(get_current_user),
 ):
@@ -39,7 +43,7 @@ def list_defects(
                 models.Defect.id.ilike(f"%{search}%"),
             )
         )
-    return q.order_by(models.Defect.id.desc()).all()
+    return paginate(q.order_by(models.Defect.id.desc()), response, limit, offset)
 
 
 @router.get("/defects/{defect_id}", response_model=DefectOut)

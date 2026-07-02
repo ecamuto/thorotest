@@ -9,7 +9,7 @@ not yet sellable production. Items ordered by priority — work top to bottom.
 |---|------|----------|--------|
 | 1 | Kill/gate fake run simulation | Critical | ✅ Done — gated behind `DEMO_MODE` (default off) |
 | 2 | Frontend production build + vendor assets | Critical | ✅ Done — esbuild build to `frontend/dist`, no CDN/external requests |
-| 3 | Pagination on list endpoints + trim `/api/initial-data` | High | ⬜ Todo |
+| 3 | Pagination on list endpoints + trim `/api/initial-data` | High | ✅ Done — limit/offset + X-Total-Count, capped initial-data, N+1s fixed |
 | 4 | `/health` endpoint, structured logging, app healthcheck in compose | Medium | ⬜ Todo |
 | 5 | Password reset flow + SMTP send | Medium | ⬜ Todo |
 | 6 | Alembic migration baseline (replace homegrown `_run_migrations`) | High | ⬜ Todo |
@@ -41,13 +41,20 @@ top-level declaration a global. The build wraps each .jsx in an IIFE;
 bare), and cross-file components must be exported with `window.X = X`
 (Metric and Detail were fixed during migration). Full e2e suite: 202/202.
 
-### 3. No pagination (HIGH — dies at scale)
-46 unpaginated `.all()` calls across routers (only audit log paginates).
-`/api/initial-data` serializes the entire DB on every app load. Insights
-endpoint has an N+1 loop (query per flaky test). TestRail migrators bring
-50k+ cases — product will stop responding.
-Fix: limit/offset (or cursor) on list endpoints, cap initial-data payload,
-rewrite flaky-test loop as a join. Estimate 3–5 days.
+### 3. No pagination (HIGH — dies at scale) — DONE
+Was: 46 unpaginated `.all()` calls, `/api/initial-data` serialized the whole
+DB per app load, insights had query-per-test and query-per-folder loops.
+Now: `/api/tests|runs|defects|pipelines|activity` accept `limit`/`offset`
+(hard cap 1000, activity default 200) and return the filtered total in the
+`X-Total-Count` header — responses stay plain arrays, fully backward
+compatible (`backend/routers/_pagination.py`). `/api/initial-data` caps each
+collection (tests 1000 / runs 500 / defects 500 / pipelines 200 /
+activity 100) and reports real counts in a new `totals` key. Insights (REST
+and GraphQL) rewritten as SQL aggregates/GROUP BYs; GraphQL `tests`/`runs`/
+`defects` resolvers take limit/offset too.
+Follow-up for v1.1: UI page controls + "showing N of M" indicator using
+X-Total-Count / totals (today the UI just shows the capped slice), and
+server-side sorting params.
 
 ### 4. Zero observability (MEDIUM — enterprise checklist)
 No `/health` endpoint, no logging config, no metrics. Docker healthcheck
