@@ -124,10 +124,43 @@ def _run_migrations():
             conn.commit()
 
 
+def _ensure_schema():
+    """Bring the database schema to the current Alembic revision.
+
+    Three cases:
+    - Fresh database (no tables): `alembic upgrade head` builds the schema.
+    - Pre-Alembic install (tables, no alembic_version): run the legacy
+      in-place upgrades once, then stamp the baseline revision.
+    - Alembic-managed: `alembic upgrade head` applies pending revisions.
+
+    Schema changes must ship as Alembic revisions from now on — see
+    "Database migrations" in README.md.
+    """
+    from alembic import command
+    from alembic.config import Config
+    from .db import DATABASE_URL
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    cfg = Config(os.path.join(root, "alembic.ini"))
+    cfg.set_main_option("script_location", os.path.join(root, "migrations"))
+    # % must be escaped for configparser interpolation
+    cfg.set_main_option("sqlalchemy.url", DATABASE_URL.replace("%", "%%"))
+
+    tables = inspect(engine).get_table_names()
+    if "alembic_version" in tables or not tables:
+        command.upgrade(cfg, "head")
+    else:
+        # Legacy pre-Alembic database: create missing tables and columns the
+        # old way, then mark the DB as being at the current revision.
+        logging.getLogger("thorotest").info("Pre-Alembic database detected — stamping baseline")
+        models.Base.metadata.create_all(bind=engine)
+        _run_migrations()
+        command.stamp(cfg, "head")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    models.Base.metadata.create_all(bind=engine)
-    _run_migrations()
+    _ensure_schema()
     init_db()
     yield
 

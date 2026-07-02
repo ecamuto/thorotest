@@ -1,4 +1,4 @@
-.PHONY: help setup install dev frontend-build frontend-watch db-reset db-seed demo test test-e2e test-e2e-auth test-e2e-import test-all test-report hooks-install open clean docker-up docker-up-sqlite docker-down docker-logs
+.PHONY: help setup install dev frontend-build frontend-watch db-reset db-revision db-upgrade db-seed demo test test-e2e test-e2e-auth test-e2e-import test-all test-report hooks-install open clean docker-up docker-up-sqlite docker-down docker-logs
 
 PYTHON  := python3
 VENV    := venv
@@ -29,6 +29,12 @@ dev: frontend-build ## Start backend dev server on http://localhost:8000
 db-reset: ## Delete DB — re-seeded automatically on next `make dev`
 	rm -f testhub.db
 	@echo "testhub.db deleted. Run 'make dev' to re-seed."
+
+db-revision: ## Create an Alembic migration from model changes: make db-revision m="add foo column"
+	$(VENV)/bin/alembic revision --autogenerate -m "$(m)"
+
+db-upgrade: ## Apply pending Alembic migrations to the local DB
+	$(VENV)/bin/alembic upgrade head
 
 db-seed: ## Populate DB with demo data (deletes existing DB first)
 	rm -f testhub.db

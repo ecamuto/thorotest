@@ -62,6 +62,8 @@ Database is created automatically on first run. Seed data: 19 test cases across 
 | `make frontend-build` | Build frontend to `frontend/dist/` (transpile + minify + vendor assets) |
 | `make frontend-watch` | Rebuild frontend on change (run beside `make dev` when editing UI) |
 | `make db-reset` | Delete `testhub.db` — re-seeded on next `make dev` |
+| `make db-revision m="…"` | Create Alembic migration from model changes (autogenerate) |
+| `make db-upgrade` | Apply pending Alembic migrations |
 | `make db-seed` | Populate DB with demo data |
 | `make demo` | Alias for `make db-seed` |
 | `make test` | Run backend unit tests (pytest) |
@@ -367,6 +369,21 @@ make test-report        # open HTML report
 3. Add a case in `frontend/app.jsx`'s hash router switch
 4. Add nav item to the `NAV` array in `frontend/components/app-shell.jsx` if needed
 5. Rebuild with `npm run build`, or keep `make frontend-watch` running while you edit
+
+**Database migrations (Alembic):**
+
+Schema is Alembic-managed. On boot the app upgrades the DB to the latest
+revision automatically (pre-Alembic databases are detected and stamped at the
+baseline). When you change `backend/models.py`:
+
+```bash
+make db-revision m="add foo column to tests"   # autogenerate from model diff
+# review the file in migrations/versions/, then:
+make db-upgrade                                # or just restart the app
+```
+
+Never edit applied revisions; add a new one. `create_all` is no longer the
+source of schema truth for existing installs — revisions are.
 
 **Adding a new API endpoint:**
 
