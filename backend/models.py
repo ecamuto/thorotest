@@ -339,3 +339,13 @@ class TotpRecoveryCode(Base):
     code_hash = Column(String(255), nullable=False)
     used = Column(Boolean, default=False)
     created_at = Column(String(64), nullable=False)
+
+
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    token_hash = Column(String(255), nullable=False, unique=True)
+    created_at = Column(String(64), nullable=False)   # ISO UTC string
+    expires_at = Column(String(64), nullable=False)   # ISO UTC string
+    used = Column(Boolean, default=False)

@@ -92,6 +92,7 @@ cp .env.example .env
 | `TESTHUB_BASE_URL` | `http://localhost:8000` | Public base URL (OAuth callbacks, default CORS origin) |
 | `ALLOWED_ORIGINS` | = `TESTHUB_BASE_URL` | CORS origins — comma-separated list, or `*` for any (dev only) |
 | `LOG_LEVEL` | `INFO` | Application log level (`DEBUG`, `INFO`, `WARNING`, …) |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | _(unset)_ | Outbound email for password resets. No-op if `SMTP_HOST` absent |
 | `DEMO_MODE` | _(unset)_ | Live-run demo simulation with fabricated results (demos only — **never in production**) |
 | `ANTHROPIC_API_KEY` | _(unset)_ | Enables AI assistant (BYOK). No-op if absent |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | _(unset)_ | GitHub OAuth login (optional) |

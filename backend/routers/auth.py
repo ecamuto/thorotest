@@ -1,21 +1,26 @@
+import hashlib
 import os
+import secrets
 import time
 import threading
 from collections import defaultdict, deque
+from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from .. import models
-from ..schemas import UserCreate, UserLogin, UserOut, UserListItem, UserUpdate, PasswordChange
+from ..schemas import UserCreate, UserLogin, UserOut, UserListItem, UserUpdate, PasswordChange, ForgotPasswordIn, ResetPasswordIn
 from ..auth_utils import hash_password, verify_password, verify_and_update, create_access_token, get_current_user
 from ..totp_utils import create_partial_token
 from ..audit_utils import (
     log_event,
     EVT_LOGIN_SUCCESS, EVT_LOGIN_FAIL, EVT_LOGOUT,
     EVT_PASSWORD_CHANGE, EVT_PASSWORD_CHANGE_FAIL,
+    EVT_PASSWORD_RESET_REQUEST, EVT_PASSWORD_RESET,
 )
+from ..emailer import send_email
 
 router = APIRouter(tags=["auth"])
 
@@ -201,5 +206,88 @@ def change_password(
         actor_id=current_user.id,
         actor_email=current_user.email,
         description=f"{current_user.email} changed their password",
+        ip_address=ip,
+    )
+
+
+# ── Password reset ────────────────────────────────────────────────────────────
+RESET_TOKEN_TTL_HOURS = 1
+
+
+@router.post("/auth/forgot-password", status_code=202)
+def forgot_password(
+    request: Request,
+    payload: ForgotPasswordIn,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """Request a password-reset email.
+
+    Always returns 202 with the same body — whether or not the email matches
+    an account — so the endpoint cannot be used to enumerate users. Reuses the
+    login throttling window per (ip, email) to bound abuse.
+    """
+    ip = request.client.host if request.client else None
+    key = "pwreset|" + _login_key(ip, payload.email)
+    _check_login_rate(key)
+    _record_login_failure(key)  # every request counts toward the window
+
+    user = db.query(models.User).filter(models.User.email == payload.email).first()
+    if user:
+        raw = secrets.token_urlsafe(32)
+        now = datetime.now(timezone.utc)
+        db.add(models.PasswordResetToken(
+            user_id=user.id,
+            token_hash=hashlib.sha256(raw.encode()).hexdigest(),
+            created_at=now.isoformat(),
+            expires_at=(now + timedelta(hours=RESET_TOKEN_TTL_HOURS)).isoformat(),
+        ))
+        db.commit()
+        base = os.getenv("TESTHUB_BASE_URL", "http://localhost:8000").rstrip("/")
+        link = f"{base}/#/reset-password/{raw}"
+        body = (
+            f"A password reset was requested for your ThoroTest account.\n\n"
+            f"Open this link to choose a new password (valid for {RESET_TOKEN_TTL_HOURS} hour):\n\n"
+            f"  {link}\n\n"
+            f"If you did not request this, you can ignore this email."
+        )
+        background_tasks.add_task(send_email, user.email, "Reset your ThoroTest password", body)
+        log_event(
+            EVT_PASSWORD_RESET_REQUEST,
+            actor_id=user.id,
+            actor_email=user.email,
+            description=f"Password reset requested for {user.email}",
+            ip_address=ip,
+        )
+    return {"detail": "If that email exists, a reset link has been sent."}
+
+
+@router.post("/auth/reset-password", status_code=204)
+def reset_password(request: Request, payload: ResetPasswordIn, db: Session = Depends(get_db)):
+    if len(payload.new_password) < 6:
+        raise HTTPException(status_code=422, detail="New password must be at least 6 characters")
+    ip = request.client.host if request.client else None
+    token_hash = hashlib.sha256(payload.token.encode()).hexdigest()
+    prt = db.query(models.PasswordResetToken).filter(
+        models.PasswordResetToken.token_hash == token_hash,
+        models.PasswordResetToken.used == False,  # noqa: E712
+    ).first()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if not prt or prt.expires_at < now_iso:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    user = db.query(models.User).filter(models.User.id == prt.user_id).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    user.hashed_password = hash_password(payload.new_password)
+    # Bump token_version: revokes every previously issued JWT for this user.
+    user.token_version = (user.token_version or 0) + 1
+    prt.used = True
+    db.commit()
+    log_event(
+        EVT_PASSWORD_RESET,
+        actor_id=user.id,
+        actor_email=user.email,
+        description=f"{user.email} reset their password via email link",
         ip_address=ip,
     )

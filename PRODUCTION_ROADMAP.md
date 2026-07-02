@@ -11,7 +11,7 @@ not yet sellable production. Items ordered by priority — work top to bottom.
 | 2 | Frontend production build + vendor assets | Critical | ✅ Done — esbuild build to `frontend/dist`, no CDN/external requests |
 | 3 | Pagination on list endpoints + trim `/api/initial-data` | High | ✅ Done — limit/offset + X-Total-Count, capped initial-data, N+1s fixed |
 | 4 | `/health` endpoint, logging, app healthcheck in compose | Medium | ✅ Done |
-| 5 | Password reset flow + SMTP send | Medium | ⬜ Todo |
+| 5 | Password reset flow + SMTP send | Medium | ✅ Done |
 | 6 | Alembic migration baseline (replace homegrown `_run_migrations`) | High | ⬜ Todo |
 | 7 | Backup/restore docs + uploads volume in docker-compose | Medium | ⬜ Todo |
 
@@ -64,10 +64,18 @@ with `LOG_LEVEL` env override. Docker: `HEALTHCHECK` in the image and app
 healthchecks in both compose files (urllib against /health).
 Still open for v1.1: metrics endpoint (Prometheus) if customers ask.
 
-### 5. No password reset (MEDIUM — first support ticket)
-SMTP columns exist on `NotificationConfig` model but there is no
-forgot-password endpoint and no email sending anywhere.
-Fix: reset-token flow + SMTP send using existing config. Estimate 2 days.
+### 5. No password reset (MEDIUM — first support ticket) — DONE
+`POST /api/auth/forgot-password` (always 202, no user enumeration, reuses
+the login rate-limit window) emails a single-use link valid 1 hour;
+`POST /api/auth/reset-password` validates the hashed token, sets the new
+password and bumps `token_version` (revokes all existing sessions). Both
+audit-logged. Email goes through new `backend/emailer.py` using env SMTP
+(`SMTP_HOST/PORT/USER/PASS/FROM`) — env, not the per-user NotificationConfig
+SMTP columns, because system mail must work before any user is configured.
+Unset SMTP_HOST = emails skipped, API responds normally. Login UI gained
+forgot/reset screens (`#/reset-password/<token>` route).
+Known e2e flake (pre-existing): suite11 login `waitForURL` timeout, seen
+twice under parallel workers, always passes on rerun — worth a look someday.
 
 ### 6. Homegrown migrations (HIGH — upgrade cycles)
 `main.py:_run_migrations()` is a hand-rolled ALTER TABLE list, every column
