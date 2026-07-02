@@ -91,6 +91,7 @@ cp .env.example .env
 | `SECRET_KEY` | `thorotest-dev-secret-...` | JWT signing key — **change in production** |
 | `TESTHUB_BASE_URL` | `http://localhost:8000` | Public base URL (OAuth callbacks, default CORS origin) |
 | `ALLOWED_ORIGINS` | = `TESTHUB_BASE_URL` | CORS origins — comma-separated list, or `*` for any (dev only) |
+| `LOG_LEVEL` | `INFO` | Application log level (`DEBUG`, `INFO`, `WARNING`, …) |
 | `DEMO_MODE` | _(unset)_ | Live-run demo simulation with fabricated results (demos only — **never in production**) |
 | `ANTHROPIC_API_KEY` | _(unset)_ | Enables AI assistant (BYOK). No-op if absent |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | _(unset)_ | GitHub OAuth login (optional) |
@@ -296,6 +297,9 @@ All endpoints except `/auth/register`, `/auth/login`, and public pages require `
 | TOTP 2FA | `/api/totp` |
 | Aggregated | `/api/initial-data`, `/api/insights` |
 | GraphQL | `/graphql` |
+| Health | `/health` — unauthenticated liveness/readiness probe (checks DB; 200 ok / 503 degraded) |
+
+List endpoints (`/api/tests`, `/api/runs`, `/api/defects`, `/api/pipelines`, `/api/activity`) accept `limit` and `offset` query params (max 1000 rows per page) and return the total filtered row count in the `X-Total-Count` response header.
 
 WebSocket:
 

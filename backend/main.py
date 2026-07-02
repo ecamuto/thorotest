@@ -1,12 +1,23 @@
+import logging
 import os
+import time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import func, inspect, text
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt as jose_jwt
+
+# Application logging. Uvicorn configures its own access/error loggers; this
+# covers the app's "thorotest.*" loggers. LOG_LEVEL env overrides (DEBUG,
+# INFO, WARNING, ...). basicConfig is a no-op if the root logger is already
+# configured (e.g. under pytest), so this never fights the test runner.
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 
 from sqlalchemy import event as sa_event
 from .db import engine, get_db, _is_sqlite
@@ -135,6 +146,31 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_STARTED_AT = time.monotonic()
+
+
+@app.get("/health")
+async def health():
+    """Liveness/readiness probe: unauthenticated, checks DB connectivity.
+
+    200 {"status":"ok"} when the app can reach the database, 503 otherwise.
+    Intended for load balancers, Docker healthchecks, and uptime monitors —
+    it deliberately exposes no version or configuration details.
+    """
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        db_ok = True
+    except Exception:
+        logging.getLogger("thorotest.health").exception("Health check DB ping failed")
+        db_ok = False
+    body = {
+        "status": "ok" if db_ok else "degraded",
+        "database": "ok" if db_ok else "unreachable",
+        "uptime_seconds": int(time.monotonic() - _STARTED_AT),
+    }
+    return JSONResponse(body, status_code=200 if db_ok else 503)
 
 # REST
 app.include_router(folders.router, prefix="/api")

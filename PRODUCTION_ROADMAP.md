@@ -10,7 +10,7 @@ not yet sellable production. Items ordered by priority — work top to bottom.
 | 1 | Kill/gate fake run simulation | Critical | ✅ Done — gated behind `DEMO_MODE` (default off) |
 | 2 | Frontend production build + vendor assets | Critical | ✅ Done — esbuild build to `frontend/dist`, no CDN/external requests |
 | 3 | Pagination on list endpoints + trim `/api/initial-data` | High | ✅ Done — limit/offset + X-Total-Count, capped initial-data, N+1s fixed |
-| 4 | `/health` endpoint, structured logging, app healthcheck in compose | Medium | ⬜ Todo |
+| 4 | `/health` endpoint, logging, app healthcheck in compose | Medium | ✅ Done |
 | 5 | Password reset flow + SMTP send | Medium | ⬜ Todo |
 | 6 | Alembic migration baseline (replace homegrown `_run_migrations`) | High | ⬜ Todo |
 | 7 | Backup/restore docs + uploads volume in docker-compose | Medium | ⬜ Todo |
@@ -56,11 +56,13 @@ Follow-up for v1.1: UI page controls + "showing N of M" indicator using
 X-Total-Count / totals (today the UI just shows the capped slice), and
 server-side sorting params.
 
-### 4. Zero observability (MEDIUM — enterprise checklist)
-No `/health` endpoint, no logging config, no metrics. Docker healthcheck
-exists for Postgres only, not the app.
-Fix: `/health` (DB ping), uvicorn/structlog logging config, healthcheck in
-docker-compose for app service. Estimate 1 day.
+### 4. Zero observability (MEDIUM — enterprise checklist) — DONE
+`/health` added: unauthenticated, pings the DB (`SELECT 1`), returns 200
+ok / 503 degraded plus uptime — safe for load balancers and monitors (no
+version/config leakage). App logging configured via `logging.basicConfig`
+with `LOG_LEVEL` env override. Docker: `HEALTHCHECK` in the image and app
+healthchecks in both compose files (urllib against /health).
+Still open for v1.1: metrics endpoint (Prometheus) if customers ask.
 
 ### 5. No password reset (MEDIUM — first support ticket)
 SMTP columns exist on `NotificationConfig` model but there is no
