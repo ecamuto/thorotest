@@ -1,10 +1,26 @@
 import asyncio
+import logging
+import os
 import random
 from typing import Dict, List
 from fastapi import WebSocket
 from .db import SessionLocal
 from . import models
 from .notifications import _notify_run_events, _fire_webhooks
+
+logger = logging.getLogger("thorotest.ws")
+
+# Demo mode: when enabled, connecting to a running run's WebSocket drives the
+# run to completion with randomly generated outcomes. Never enable in
+# production — real runs get their results from manual case updates, step
+# results, or automated-result imports.
+DEMO_MODE = os.getenv("DEMO_MODE", "").strip().lower() in ("1", "true", "yes")
+
+if DEMO_MODE and os.getenv("ENVIRONMENT", os.getenv("ENV", "")).strip().lower() in ("production", "prod"):
+    raise RuntimeError(
+        "DEMO_MODE is enabled in a production environment. Demo mode fabricates "
+        "run results and must never run against real data — unset DEMO_MODE."
+    )
 
 
 class RunWSManager:
@@ -33,6 +49,9 @@ class RunWSManager:
             conns.remove(ws)
 
     async def start_simulation(self, run_id: str):
+        if not DEMO_MODE:
+            logger.debug("Run simulation requested for %s but DEMO_MODE is off — ignoring", run_id)
+            return
         if run_id in self.running_tasks:
             return
         task = asyncio.create_task(self._simulate(run_id))
