@@ -13,7 +13,7 @@ not yet sellable production. Items ordered by priority — work top to bottom.
 | 4 | `/health` endpoint, logging, app healthcheck in compose | Medium | ✅ Done |
 | 5 | Password reset flow + SMTP send | Medium | ✅ Done |
 | 6 | Alembic migration baseline (replace homegrown `_run_migrations`) | High | ✅ Done |
-| 7 | Backup/restore docs + uploads volume in docker-compose | Medium | ⬜ Todo |
+| 7 | Backup/restore docs + uploads volume in docker-compose | Medium | ✅ Done |
 
 ## Item detail
 
@@ -89,11 +89,13 @@ migrations/. `python -m backend.seed` uses the same bootstrap.
 Rule going forward: every `models.py` change ships an Alembic revision.
 Known e2e flake (suite11 login, pre-existing) seen 3rd time; rerun green.
 
-### 7. Data durability (MEDIUM)
-Attachments on local disk (`./uploads`), no volume in docker-compose →
-lost on container rebuild. No backup/restore docs.
-Fix: uploads volume + backup docs (pg_dump / sqlite copy + uploads dir).
-Estimate 1 day. S3 storage backend can be v1.1.
+### 7. Data durability (MEDIUM) — DONE
+Uploads now persist: named volume `uploads_data:/app/uploads` in the
+Postgres compose file, `./uploads` bind mount in the SQLite compose file.
+`BACKUP.md` documents backup/restore for SQLite (`.backup` snapshot),
+PostgreSQL (`pg_dump`/`pg_restore`), MySQL, and the Docker variants, plus a
+cron example — always DB + uploads/ together, backup before upgrades.
+S3 attachment storage remains a v1.1 item.
 
 ## Lower-priority notes (not blocking v1)
 

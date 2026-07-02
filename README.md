@@ -95,6 +95,7 @@ cp .env.example .env
 | `ALLOWED_ORIGINS` | = `TESTHUB_BASE_URL` | CORS origins — comma-separated list, or `*` for any (dev only) |
 | `LOG_LEVEL` | `INFO` | Application log level (`DEBUG`, `INFO`, `WARNING`, …) |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | _(unset)_ | Outbound email for password resets. No-op if `SMTP_HOST` absent |
+| `UPLOAD_DIR` / `MAX_UPLOAD_MB` | `./uploads` / `50` | Attachment storage directory and per-file size limit |
 | `DEMO_MODE` | _(unset)_ | Live-run demo simulation with fabricated results (demos only — **never in production**) |
 | `ANTHROPIC_API_KEY` | _(unset)_ | Enables AI assistant (BYOK). No-op if absent |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | _(unset)_ | GitHub OAuth login (optional) |
@@ -118,6 +119,10 @@ Generate a secure `SECRET_KEY`:
 ```bash
 python3 -c "import secrets; print(secrets.token_hex(32))"
 ```
+
+**Backups:** all state lives in the database plus the `uploads/` directory —
+see [BACKUP.md](BACKUP.md) for backup/restore procedures per database and for
+Docker deployments.
 
 ---
 
