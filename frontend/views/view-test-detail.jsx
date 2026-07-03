@@ -1041,3 +1041,4 @@ function GitHistoryTab({test}) {
 }
 
 window.TestDetail = TestDetail;
+window.Detail = Detail;

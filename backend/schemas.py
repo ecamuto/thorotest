@@ -246,6 +246,15 @@ class PasswordChange(BaseModel):
     new_password: str
 
 
+class ForgotPasswordIn(BaseModel):
+    email: str
+
+
+class ResetPasswordIn(BaseModel):
+    token: str
+    new_password: str
+
+
 class UserLogin(BaseModel):
     email: str
     password: str

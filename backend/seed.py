@@ -206,6 +206,8 @@ def seed_db():
 
 
 if __name__ == "__main__":
-    models.Base.metadata.create_all(bind=engine)
+    # Same schema bootstrap as the app (Alembic-aware), then demo data.
+    from backend.main import _ensure_schema
+    _ensure_schema()
     seed_db()
     print("Demo data loaded.")

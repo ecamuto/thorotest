@@ -289,3 +289,4 @@ window.Overview = Overview;
 window.StatusBadge = StatusBadge;
 window.StatusSelect = StatusSelect;
 window.ProgressBar = ProgressBar;
+window.Metric = Metric;

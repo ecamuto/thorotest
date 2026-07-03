@@ -7,6 +7,42 @@ function LoginPage({ onLogin, oauthError, onDismissOAuthError }) {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(null);
+  // mode: "login" | "forgot" | "forgot-sent" | "reset"
+  const resetToken = (window.location.hash.match(/^#\/reset-password\/(.+)$/) || [])[1] || null;
+  const [mode, setMode] = useState(resetToken ? "reset" : "login");
+  const [newPassword, setNewPassword] = useState("");
+  const [resetDone, setResetDone] = useState(false);
+
+  const handleForgot = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      await window.TH_API.forgotPassword(email);
+      setMode("forgot-sent");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReset = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      await window.TH_API.resetPassword(resetToken, newPassword);
+      window.location.hash = "";
+      setMode("login");
+      setResetDone(true);
+      setPassword("");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -51,7 +87,63 @@ function LoginPage({ onLogin, oauthError, onDismissOAuthError }) {
           </div>
         )}
 
+        {mode === "forgot" && (
+          <form onSubmit={handleForgot} className="login-form">
+            <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "0 0 12px" }}>
+              Enter your account email and we'll send you a password reset link.
+            </p>
+            <div className="login-field">
+              <label className="login-label">{t("login.email")}</label>
+              <input className="login-input" type="email" value={email}
+                     onChange={e => setEmail(e.target.value)} required autoFocus />
+            </div>
+            {error && <div className="login-error">{error}</div>}
+            <button type="submit" className="btn primary login-btn" disabled={loading}>
+              {loading ? "Sending…" : "Send reset link"}
+            </button>
+            <button type="button" className="btn login-btn" style={{ marginTop: 8, width: "100%" }}
+                    onClick={() => { setMode("login"); setError(null); }}>
+              Back to sign in
+            </button>
+          </form>
+        )}
+
+        {mode === "forgot-sent" && (
+          <div className="login-form">
+            <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+              If that email exists, a reset link has been sent. Check your inbox.
+            </p>
+            <button type="button" className="btn primary login-btn" style={{ width: "100%" }}
+                    onClick={() => { setMode("login"); setError(null); }}>
+              Back to sign in
+            </button>
+          </div>
+        )}
+
+        {mode === "reset" && (
+          <form onSubmit={handleReset} className="login-form">
+            <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "0 0 12px" }}>
+              Choose a new password for your account.
+            </p>
+            <div className="login-field">
+              <label className="login-label">New password</label>
+              <input className="login-input" type="password" value={newPassword}
+                     onChange={e => setNewPassword(e.target.value)} minLength={6} required autoFocus />
+            </div>
+            {error && <div className="login-error">{error}</div>}
+            <button type="submit" className="btn primary login-btn" disabled={loading}>
+              {loading ? "Saving…" : "Set new password"}
+            </button>
+          </form>
+        )}
+
+        {mode === "login" && (
         <form onSubmit={handleSubmit} className="login-form">
+          {resetDone && (
+            <div style={{ fontSize: 13, color: "var(--pass, #4ade80)", marginBottom: 12 }}>
+              Password updated — sign in with your new password.
+            </div>
+          )}
           <div className="login-field">
             <label className="login-label">{t("login.email")}</label>
             <input
@@ -79,8 +171,15 @@ function LoginPage({ onLogin, oauthError, onDismissOAuthError }) {
           <button type="submit" className="btn primary login-btn" disabled={loading}>
             {loading ? t("login.signingIn") : t("login.signIn")}
           </button>
+          <button type="button" className="login-forgot-link"
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 12, marginTop: 10, padding: 0 }}
+                  onClick={() => { setMode("forgot"); setError(null); }}>
+            Forgot password?
+          </button>
         </form>
+        )}
 
+        {mode === "login" && (<React.Fragment>
         <div className="login-oauth-buttons">
           <div className="login-divider" style={{ display: "flex", alignItems: "center", gap: 8, margin: "16px 0 12px" }}>
             <div style={{ flex: 1, height: 1, background: "var(--border, #3f3f5a)" }} />
@@ -148,6 +247,7 @@ function LoginPage({ onLogin, oauthError, onDismissOAuthError }) {
           ))}
           <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 8 }}>{t("login.demoPassword")}</div>
         </div>
+        </React.Fragment>)}
       </div>
     </div>
   );

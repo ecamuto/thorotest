@@ -1,0 +1,121 @@
+# Production Readiness Roadmap
+
+Outcome of full-codebase commercial review (2026-07-02). Verdict: strong beta,
+not yet sellable production. Items ordered by priority — work top to bottom.
+
+## Status
+
+| # | Item | Severity | Status |
+|---|------|----------|--------|
+| 1 | Kill/gate fake run simulation | Critical | ✅ Done — gated behind `DEMO_MODE` (default off) |
+| 2 | Frontend production build + vendor assets | Critical | ✅ Done — esbuild build to `frontend/dist`, no CDN/external requests |
+| 3 | Pagination on list endpoints + trim `/api/initial-data` | High | ✅ Done — limit/offset + X-Total-Count, capped initial-data, N+1s fixed |
+| 4 | `/health` endpoint, logging, app healthcheck in compose | Medium | ✅ Done |
+| 5 | Password reset flow + SMTP send | Medium | ✅ Done |
+| 6 | Alembic migration baseline (replace homegrown `_run_migrations`) | High | ✅ Done |
+| 7 | Backup/restore docs + uploads volume in docker-compose | Medium | ✅ Done |
+
+## Item detail
+
+### 1. Fake run simulation (CRITICAL — product integrity) — DONE
+`backend/ws_manager.py` `_simulate()` assigned **random** outcomes
+(80/15/5 pass/fail/blocked) to any run with status `running` as soon as a
+WebSocket client connected (`main.py` run_ws handler). Real customer runs got
+invented results. Fixed: simulation now runs only when `DEMO_MODE=1` is set;
+default is off. Real result paths (manual case PATCH, step results, JUnit
+import) unaffected.
+
+### 2. Frontend not production-grade (CRITICAL — perf + self-host promise) — DONE
+Was: React **development** builds + Babel standalone from unpkg CDN, ~17 jsx
+files transpiled in-browser per page load, Google Fonts external.
+Now: `npm run build` (scripts/build-frontend.mjs, esbuild) transpiles +
+minifies to `frontend/dist/`; React production UMD vendored from
+node_modules; Geist + JetBrains Mono woff2 vendored in `frontend/fonts/`.
+Zero external requests — works airgapped. Backend serves dist (falls back to
+source dir with a warning so API-only boots still work). Docker is now a
+multi-stage build (node builds frontend → python runtime). Cache busting via
+`?v=<hash>` stamped on asset URLs.
+Scoping note: the old Babel-standalone runtime effectively made every
+top-level declaration a global. The build wraps each .jsx in an IIFE;
+`frontend/react-globals.js` exposes React hooks globally (files use them
+bare), and cross-file components must be exported with `window.X = X`
+(Metric and Detail were fixed during migration). Full e2e suite: 202/202.
+
+### 3. No pagination (HIGH — dies at scale) — DONE
+Was: 46 unpaginated `.all()` calls, `/api/initial-data` serialized the whole
+DB per app load, insights had query-per-test and query-per-folder loops.
+Now: `/api/tests|runs|defects|pipelines|activity` accept `limit`/`offset`
+(hard cap 1000, activity default 200) and return the filtered total in the
+`X-Total-Count` header — responses stay plain arrays, fully backward
+compatible (`backend/routers/_pagination.py`). `/api/initial-data` caps each
+collection (tests 1000 / runs 500 / defects 500 / pipelines 200 /
+activity 100) and reports real counts in a new `totals` key. Insights (REST
+and GraphQL) rewritten as SQL aggregates/GROUP BYs; GraphQL `tests`/`runs`/
+`defects` resolvers take limit/offset too.
+Follow-up for v1.1: UI page controls + "showing N of M" indicator using
+X-Total-Count / totals (today the UI just shows the capped slice), and
+server-side sorting params.
+
+### 4. Zero observability (MEDIUM — enterprise checklist) — DONE
+`/health` added: unauthenticated, pings the DB (`SELECT 1`), returns 200
+ok / 503 degraded plus uptime — safe for load balancers and monitors (no
+version/config leakage). App logging configured via `logging.basicConfig`
+with `LOG_LEVEL` env override. Docker: `HEALTHCHECK` in the image and app
+healthchecks in both compose files (urllib against /health).
+Still open for v1.1: metrics endpoint (Prometheus) if customers ask.
+
+### 5. No password reset (MEDIUM — first support ticket) — DONE
+`POST /api/auth/forgot-password` (always 202, no user enumeration, reuses
+the login rate-limit window) emails a single-use link valid 1 hour;
+`POST /api/auth/reset-password` validates the hashed token, sets the new
+password and bumps `token_version` (revokes all existing sessions). Both
+audit-logged. Email goes through new `backend/emailer.py` using env SMTP
+(`SMTP_HOST/PORT/USER/PASS/FROM`) — env, not the per-user NotificationConfig
+SMTP columns, because system mail must work before any user is configured.
+Unset SMTP_HOST = emails skipped, API responds normally. Login UI gained
+forgot/reset screens (`#/reset-password/<token>` route).
+Known e2e flake (pre-existing): suite11 login `waitForURL` timeout, seen
+twice under parallel workers, always passes on rerun — worth a look someday.
+
+### 6. Homegrown migrations (HIGH — upgrade cycles) — DONE
+Schema is now Alembic-managed (`alembic.ini` + `migrations/`, baseline
+revision `e8e566ab263b` autogenerated and verified to reproduce the
+`create_all` schema exactly — 27 tables). On boot `_ensure_schema()`:
+fresh DB → `upgrade head`; pre-Alembic DB → one-time legacy ALTERs then
+`stamp head`; managed DB → `upgrade head`. Legacy `_run_migrations()` kept
+only for the stamping path. Workflow: `make db-revision m="…"` +
+`make db-upgrade` (documented in README). Docker image ships alembic.ini +
+migrations/. `python -m backend.seed` uses the same bootstrap.
+Rule going forward: every `models.py` change ships an Alembic revision.
+Known e2e flake (suite11 login, pre-existing) seen 3rd time; rerun green.
+
+### 7. Data durability (MEDIUM) — DONE
+Uploads now persist: named volume `uploads_data:/app/uploads` in the
+Postgres compose file, `./uploads` bind mount in the SQLite compose file.
+`BACKUP.md` documents backup/restore for SQLite (`.backup` snapshot),
+PostgreSQL (`pg_dump`/`pg_restore`), MySQL, and the Docker variants, plus a
+cron example — always DB + uploads/ together, backup before upgrades.
+S3 attachment storage remains a v1.1 item.
+
+## Lower-priority notes (not blocking v1)
+
+- WS notifications JWT passed as query param (`main.py`) — lands in access
+  logs. Consider ticket-based WS auth.
+- Single-process state: login rate limiter + WS managers are in-memory —
+  one uvicorn worker only. Document the limit; Redis backing is v1.1.
+- No multi-tenancy — fine for self-host per-instance licensing; blocks SaaS.
+- License is MIT + Commons Clause = **source-available**, not open source,
+  but `frontend/index.html` title says "Open-source". Fix branding.
+  Commons Clause does not block third-party SaaS hosting — decide if that
+  matters.
+- SSO/SAML/SCIM: v1.1 pricing tier.
+
+## Strengths (keep selling these)
+
+- Manual + automated runs in one timeline (differentiator vs TestRail/Zephyr).
+- Import pipeline: TestRail XML, JUnit, CSV, YAML, JSON + auto-detect.
+- REST + GraphQL + API tokens + HMAC webhooks.
+- Auth stack: argon2id, token revocation, TOTP 2FA, OAuth (GitHub/Google),
+  RBAC, audit log, login rate limiting, prod boot-refusal on default secret.
+- 332 pytest + ~200 Playwright tests, CI-gated.
+- i18n (en/it/de/es/fr), BYOK AI assistant, SQLite/Postgres/MySQL support.

@@ -8,7 +8,7 @@ Source-available test management platform. Organize, run, and track tests across
 
 | Layer | Tech |
 |---|---|
-| Frontend | React 18 (CDN), Babel standalone (no bundler), vanilla JS |
+| Frontend | React 18 (vendored production UMD), JSX transpiled + minified by esbuild at build time |
 | Backend | FastAPI, SQLAlchemy |
 | Database | SQLite (default) · PostgreSQL · MySQL / MariaDB (via `DATABASE_URL`) |
 | Realtime | WebSocket (native FastAPI) |
@@ -19,7 +19,7 @@ Source-available test management platform. Organize, run, and track tests across
 | Tests | pytest, httpx, Playwright |
 | Deploy | Docker + docker-compose |
 
-No npm build step for the app. Open `http://localhost:8000` and it works.
+Fully self-contained: React, fonts, and all assets are served locally — no CDN or external requests, works airgapped. `npm run build` produces `frontend/dist/` (run automatically by `make dev`, `install.sh`, and the Docker build).
 
 ---
 
@@ -58,8 +58,12 @@ Database is created automatically on first run. Seed data: 19 test cases across 
 |---|---|
 | `make setup` | Full setup: venv + deps + Playwright |
 | `make install` | Re-install deps into existing venv |
-| `make dev` | Start backend dev server on `http://localhost:8000` (hot-reload) |
+| `make dev` | Build frontend + start backend dev server on `http://localhost:8000` (hot-reload) |
+| `make frontend-build` | Build frontend to `frontend/dist/` (transpile + minify + vendor assets) |
+| `make frontend-watch` | Rebuild frontend on change (run beside `make dev` when editing UI) |
 | `make db-reset` | Delete `testhub.db` — re-seeded on next `make dev` |
+| `make db-revision m="…"` | Create Alembic migration from model changes (autogenerate) |
+| `make db-upgrade` | Apply pending Alembic migrations |
 | `make db-seed` | Populate DB with demo data |
 | `make demo` | Alias for `make db-seed` |
 | `make test` | Run backend unit tests (pytest) |
@@ -89,6 +93,10 @@ cp .env.example .env
 | `SECRET_KEY` | `thorotest-dev-secret-...` | JWT signing key — **change in production** |
 | `TESTHUB_BASE_URL` | `http://localhost:8000` | Public base URL (OAuth callbacks, default CORS origin) |
 | `ALLOWED_ORIGINS` | = `TESTHUB_BASE_URL` | CORS origins — comma-separated list, or `*` for any (dev only) |
+| `LOG_LEVEL` | `INFO` | Application log level (`DEBUG`, `INFO`, `WARNING`, …) |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | _(unset)_ | Outbound email for password resets. No-op if `SMTP_HOST` absent |
+| `UPLOAD_DIR` / `MAX_UPLOAD_MB` | `./uploads` / `50` | Attachment storage directory and per-file size limit |
+| `DEMO_MODE` | _(unset)_ | Live-run demo simulation with fabricated results (demos only — **never in production**) |
 | `ANTHROPIC_API_KEY` | _(unset)_ | Enables AI assistant (BYOK). No-op if absent |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | _(unset)_ | GitHub OAuth login (optional) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | _(unset)_ | Google OAuth login (optional) |
@@ -111,6 +119,10 @@ Generate a secure `SECRET_KEY`:
 ```bash
 python3 -c "import secrets; print(secrets.token_hex(32))"
 ```
+
+**Backups:** all state lives in the database plus the `uploads/` directory —
+see [BACKUP.md](BACKUP.md) for backup/restore procedures per database and for
+Docker deployments.
 
 ---
 
@@ -162,6 +174,9 @@ thorotest/
 │   ├── data.js                 # Static fallback data (TH_DATA)
 │   ├── api.js                  # HTTP + WebSocket client helpers (TH_API)
 │   ├── i18n.js                 # i18n string lookup (T(key, lang))
+│   ├── react-globals.js        # Exposes React hooks as globals for the views
+│   ├── fonts.css / fonts/      # Vendored webfonts (Geist, JetBrains Mono)
+│   ├── dist/                   # Build output (npm run build) — served by the app
 │   ├── app.jsx                 # Root App component + boot + hash routing
 │   │
 │   ├── components/
@@ -189,6 +204,11 @@ thorotest/
 │       ├── view-config.jsx         # Config-as-code view
 │       └── view-misc.jsx           # Pipelines, Insights, AI assistant
 │
+├── scripts/
+│   └── build-frontend.mjs  # esbuild production build (npm run build)
+├── migrations/             # Alembic migrations (baseline + future revisions)
+├── alembic.ini             # Alembic config (DATABASE_URL-driven)
+├── BACKUP.md               # Backup & restore procedures
 ├── backend/
 │   ├── main.py             # FastAPI app, lifespan, /api/initial-data, WebSocket
 │   ├── db.py               # SQLAlchemy engine, session, Base
@@ -196,11 +216,13 @@ thorotest/
 │   ├── schemas.py          # Pydantic schemas
 │   ├── seed.py             # Demo seed data (runs on first boot if DB empty)
 │   ├── auth_utils.py       # JWT creation/validation, password hashing (passlib)
-│   ├── ws_manager.py       # WebSocket connection manager + run simulation
+│   ├── ws_manager.py       # WebSocket connection manager + demo run simulation (DEMO_MODE)
+│   ├── emailer.py          # Outbound system email (password resets) via env SMTP
 │   ├── gql_schema.py       # Strawberry GraphQL schema
 │   ├── github_sync.py      # Tests-as-Code: read YAML tests from a GitHub repo
 │   └── routers/
-│       ├── auth.py         # /auth/register, /auth/login, /me, /users
+│       ├── _pagination.py  # Shared limit/offset + X-Total-Count helper
+│       ├── auth.py         # /auth/register, /auth/login, /me, /users, password reset
 │       ├── tests.py        # CRUD /api/tests + bulk + history + comments + defects
 │       ├── runs.py         # /api/runs + run detail + defects
 │       ├── folders.py      # GET /api/folders (nested tree)
@@ -293,6 +315,9 @@ All endpoints except `/auth/register`, `/auth/login`, and public pages require `
 | TOTP 2FA | `/api/totp` |
 | Aggregated | `/api/initial-data`, `/api/insights` |
 | GraphQL | `/graphql` |
+| Health | `/health` — unauthenticated liveness/readiness probe (checks DB; 200 ok / 503 degraded) |
+
+List endpoints (`/api/tests`, `/api/runs`, `/api/defects`, `/api/pipelines`, `/api/activity`) accept `limit` and `offset` query params (max 1000 rows per page) and return the total filtered row count in the `X-Total-Count` response header.
 
 WebSocket:
 
@@ -346,7 +371,7 @@ make test-e2e-auth      # auth suite only
 make test-report        # open HTML report
 ```
 
-28 suites covering all major user flows, feature phases, and regression scenarios.
+29 suites covering all major user flows, feature phases, and regression scenarios.
 
 ---
 
@@ -355,9 +380,25 @@ make test-report        # open HTML report
 **Adding a new view:**
 
 1. Create `frontend/views/view-myview.jsx`, register component on `window`
-2. Add `<script type="text/babel" src="views/view-myview.jsx"></script>` to `frontend/index.html`
+2. Add `<script src="views/view-myview.js"></script>` to `frontend/index.html` (note `.js` — the build transpiles `.jsx` → `.js` into `frontend/dist/`)
 3. Add a case in `frontend/app.jsx`'s hash router switch
 4. Add nav item to the `NAV` array in `frontend/components/app-shell.jsx` if needed
+5. Rebuild with `npm run build`, or keep `make frontend-watch` running while you edit
+
+**Database migrations (Alembic):**
+
+Schema is Alembic-managed. On boot the app upgrades the DB to the latest
+revision automatically (pre-Alembic databases are detected and stamped at the
+baseline). When you change `backend/models.py`:
+
+```bash
+make db-revision m="add foo column to tests"   # autogenerate from model diff
+# review the file in migrations/versions/, then:
+make db-upgrade                                # or just restart the app
+```
+
+Never edit applied revisions; add a new one. `create_all` is no longer the
+source of schema truth for existing installs — revisions are.
 
 **Adding a new API endpoint:**
 

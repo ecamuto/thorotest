@@ -3,8 +3,10 @@ from strawberry.fastapi import GraphQLRouter
 from typing import List, Optional
 from fastapi import Depends, Request
 from jose import JWTError, jwt
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 from .db import get_db
+from .routers._pagination import MAX_LIMIT
 from . import models
 from .auth_utils import SECRET_KEY, ALGORITHM
 
@@ -146,12 +148,14 @@ class Query:
                 for f in db.query(models.Folder).all()]
 
     @strawberry.field
-    def tests(self, info: strawberry.types.Info, folder_id: Optional[str] = None) -> List[TestGQL]:
+    def tests(self, info: strawberry.types.Info, folder_id: Optional[str] = None,
+              limit: int = MAX_LIMIT, offset: int = 0) -> List[TestGQL]:
         _require_user(info)
         db: Session = info.context["db"]
         q = db.query(models.Test)
         if folder_id:
             q = q.filter(models.Test.folder_id == folder_id)
+        q = q.order_by(models.Test.id).offset(max(offset, 0)).limit(min(limit, MAX_LIMIT))
         return [_test_to_gql(t) for t in q.all()]
 
     @strawberry.field
@@ -162,10 +166,11 @@ class Query:
         return _test_to_gql(t) if t else None
 
     @strawberry.field
-    def runs(self, info: strawberry.types.Info) -> List[RunGQL]:
+    def runs(self, info: strawberry.types.Info, limit: int = MAX_LIMIT, offset: int = 0) -> List[RunGQL]:
         _require_user(info)
         db: Session = info.context["db"]
-        return [_run_to_gql(r) for r in db.query(models.Run).all()]
+        q = db.query(models.Run).order_by(models.Run.id).offset(max(offset, 0)).limit(min(limit, MAX_LIMIT))
+        return [_run_to_gql(r) for r in q.all()]
 
     @strawberry.field
     def run(self, info: strawberry.types.Info, id: str) -> Optional[RunDetailGQL]:
@@ -184,24 +189,31 @@ class Query:
         )
 
     @strawberry.field
-    def defects(self, info: strawberry.types.Info) -> List[DefectGQL]:
+    def defects(self, info: strawberry.types.Info, limit: int = MAX_LIMIT, offset: int = 0) -> List[DefectGQL]:
         _require_user(info)
         db: Session = info.context["db"]
+        q = db.query(models.Defect).order_by(models.Defect.id.desc()).offset(max(offset, 0)).limit(min(limit, MAX_LIMIT))
         return [DefectGQL(id=d.id, title=d.title, status=d.status, severity=d.severity,
                           test_id=d.test_id, run_id=d.run_id)
-                for d in db.query(models.Defect).all()]
+                for d in q.all()]
 
     @strawberry.field
     def insights(self, info: strawberry.types.Info) -> InsightsGQL:
         _require_user(info)
         db: Session = info.context["db"]
         folders = db.query(models.Folder).filter(models.Folder.parent_id.isnot(None)).all()
+        # One GROUP BY over tests instead of a query per folder.
+        rows = db.query(
+            models.Test.folder_id,
+            func.count(models.Test.id),
+            func.sum(case((models.Test.status == "pass", 1), else_=0)),
+            func.sum(case((models.Test.status.in_(("fail", "warn")), 1), else_=0)),
+        ).group_by(models.Test.folder_id).all()
+        stats = {fid: (cnt, int(p or 0), int(fl or 0)) for fid, cnt, p, fl in rows}
         coverage = []
         for f in folders:
-            tests = db.query(models.Test).filter(models.Test.folder_id == f.id).all()
-            passed = sum(1 for t in tests if t.status == "pass")
-            failed = sum(1 for t in tests if t.status in ("fail", "warn"))
-            coverage.append(CoverageStat(folder=f.name, passed=passed, failed=failed, total=len(tests)))
+            cnt, passed, failed = stats.get(f.id, (0, 0, 0))
+            coverage.append(CoverageStat(folder=f.name, passed=passed, failed=failed, total=cnt))
 
         total = db.query(models.Test).count()
         automated = db.query(models.Test).filter(models.Test.auto == True).count()

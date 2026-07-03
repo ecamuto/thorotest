@@ -4,6 +4,8 @@
   "description": "Source-available test management platform. Organize, run, and track tests across manual and automated suites — one timeline for both.",
   "main": "index.js",
   "scripts": {
+    "build": "node scripts/build-frontend.mjs",
+    "watch": "node scripts/build-frontend.mjs --watch",
     "test": "playwright test",
     "test:auth": "playwright test e2e/suite1-auth/",
     "test:nav": "playwright test e2e/suite2-navigation/",
@@ -34,6 +36,9 @@
   "homepage": "https://github.com/ecamuto/thorotest#readme",
   "devDependencies": {
     "@playwright/test": "^1.60.0",
+    "esbuild": "^0.28.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3"
   }

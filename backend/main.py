@@ -1,12 +1,23 @@
+import logging
 import os
+import time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import func, inspect, text
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt as jose_jwt
+
+# Application logging. Uvicorn configures its own access/error loggers; this
+# covers the app's "thorotest.*" loggers. LOG_LEVEL env overrides (DEBUG,
+# INFO, WARNING, ...). basicConfig is a no-op if the root logger is already
+# configured (e.g. under pytest), so this never fights the test runner.
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 
 from sqlalchemy import event as sa_event
 from .db import engine, get_db, _is_sqlite
@@ -27,7 +38,18 @@ from .auth_utils import SECRET_KEY, ALGORITHM, get_current_user
 from .gql_schema import graphql_router
 from .routers import folders, tests, runs, pipelines, activity, auth, projects, categories, defects, integrations, tokens, webhooks, favorites, import_, attachments, admin, ai, notifications, audit_log, oauth, totp
 
-FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
+# Serve the built frontend (frontend/dist — produced by `npm run build`).
+# Fall back to the source dir so the API can still boot without a build
+# (unit tests, API-only deployments); the UI itself needs the build.
+_FRONTEND_SRC = os.path.join(os.path.dirname(__file__), "..", "frontend")
+_FRONTEND_DIST = os.path.join(_FRONTEND_SRC, "dist")
+FRONTEND_DIR = _FRONTEND_DIST if os.path.isdir(_FRONTEND_DIST) else _FRONTEND_SRC
+if FRONTEND_DIR == _FRONTEND_SRC:
+    import logging as _logging
+    _logging.getLogger("thorotest").warning(
+        "frontend/dist not found — serving unbuilt frontend sources. "
+        "The UI will not render; run `npm run build` first."
+    )
 
 
 def _run_migrations():
@@ -102,10 +124,43 @@ def _run_migrations():
             conn.commit()
 
 
+def _ensure_schema():
+    """Bring the database schema to the current Alembic revision.
+
+    Three cases:
+    - Fresh database (no tables): `alembic upgrade head` builds the schema.
+    - Pre-Alembic install (tables, no alembic_version): run the legacy
+      in-place upgrades once, then stamp the baseline revision.
+    - Alembic-managed: `alembic upgrade head` applies pending revisions.
+
+    Schema changes must ship as Alembic revisions from now on — see
+    "Database migrations" in README.md.
+    """
+    from alembic import command
+    from alembic.config import Config
+    from .db import DATABASE_URL
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    cfg = Config(os.path.join(root, "alembic.ini"))
+    cfg.set_main_option("script_location", os.path.join(root, "migrations"))
+    # % must be escaped for configparser interpolation
+    cfg.set_main_option("sqlalchemy.url", DATABASE_URL.replace("%", "%%"))
+
+    tables = inspect(engine).get_table_names()
+    if "alembic_version" in tables or not tables:
+        command.upgrade(cfg, "head")
+    else:
+        # Legacy pre-Alembic database: create missing tables and columns the
+        # old way, then mark the DB as being at the current revision.
+        logging.getLogger("thorotest").info("Pre-Alembic database detected — stamping baseline")
+        models.Base.metadata.create_all(bind=engine)
+        _run_migrations()
+        command.stamp(cfg, "head")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    models.Base.metadata.create_all(bind=engine)
-    _run_migrations()
+    _ensure_schema()
     init_db()
     yield
 
@@ -124,6 +179,31 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_STARTED_AT = time.monotonic()
+
+
+@app.get("/health")
+async def health():
+    """Liveness/readiness probe: unauthenticated, checks DB connectivity.
+
+    200 {"status":"ok"} when the app can reach the database, 503 otherwise.
+    Intended for load balancers, Docker healthchecks, and uptime monitors —
+    it deliberately exposes no version or configuration details.
+    """
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        db_ok = True
+    except Exception:
+        logging.getLogger("thorotest.health").exception("Health check DB ping failed")
+        db_ok = False
+    body = {
+        "status": "ok" if db_ok else "degraded",
+        "database": "ok" if db_ok else "unreachable",
+        "uptime_seconds": int(time.monotonic() - _STARTED_AT),
+    }
+    return JSONResponse(body, status_code=200 if db_ok else 503)
 
 # REST
 app.include_router(folders.router, prefix="/api")
@@ -154,26 +234,38 @@ app.include_router(graphql_router, prefix="/graphql")
 
 @app.get("/api/insights")
 async def insights(db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
-    tests = db.query(models.Test).all()
-    total = len(tests)
-    pass_count = sum(1 for t in tests if t.status == "pass")
-    auto_count = sum(1 for t in tests if t.auto)
+    # Aggregate in SQL — this endpoint must not load whole tables into memory.
+    total = db.query(func.count(models.Test.id)).scalar() or 0
+    pass_count = db.query(func.count(models.Test.id)).filter(models.Test.status == "pass").scalar() or 0
+    auto_count = db.query(func.count(models.Test.id)).filter(models.Test.auto == True).scalar() or 0  # noqa: E712
 
-    defects = db.query(models.Defect).all()
-    open_defects = sum(1 for d in defects if d.status != "resolved")
-    critical = sum(1 for d in defects if d.status != "resolved" and d.severity == "critical")
-    high = sum(1 for d in defects if d.status != "resolved" and d.severity == "high")
+    _open = func.coalesce(models.Defect.status, "") != "resolved"
+    open_defects = db.query(func.count(models.Defect.id)).filter(_open).scalar() or 0
+    critical = db.query(func.count(models.Defect.id)).filter(_open, models.Defect.severity == "critical").scalar() or 0
+    high = db.query(func.count(models.Defect.id)).filter(_open, models.Defect.severity == "high").scalar() or 0
 
     pass_rate = round(pass_count / total * 100, 1) if total > 0 else 0
     automation_rate = round(auto_count / total * 100) if total > 0 else 0
 
-    top_folders = db.query(models.Folder).filter(models.Folder.parent_id == None).all()
+    # Folder coverage: folders table is small; test counts come from two
+    # GROUP BY queries instead of scanning every test row in Python.
+    folders = db.query(models.Folder).all()
+    counts_by_folder = dict(
+        db.query(models.Test.folder_id, func.count(models.Test.id))
+        .group_by(models.Test.folder_id).all()
+    )
+    pass_by_folder = dict(
+        db.query(models.Test.folder_id, func.count(models.Test.id))
+        .filter(models.Test.status == "pass")
+        .group_by(models.Test.folder_id).all()
+    )
     folder_coverage = []
-    for f in top_folders:
-        child_ids = [c.id for c in f.children]
-        folder_tests = [t for t in tests if t.folder_id == f.id or t.folder_id in child_ids]
-        f_total = len(folder_tests)
-        f_pass = sum(1 for t in folder_tests if t.status == "pass")
+    for f in folders:
+        if f.parent_id is not None:
+            continue
+        ids = [f.id] + [c.id for c in folders if c.parent_id == f.id]
+        f_total = sum(counts_by_folder.get(i, 0) for i in ids)
+        f_pass = sum(pass_by_folder.get(i, 0) for i in ids)
         folder_coverage.append({
             "name": f.name,
             "value": round(f_pass / f_total * 100) if f_total > 0 else 0,
@@ -193,17 +285,23 @@ async def insights(db: Session = Depends(get_db), _: models.User = Depends(get_c
     )
     fail_map = {r.test_id: r.cnt for r in fail_case_counts}
 
-    flaky_list = []
-    for row in all_case_counts:
-        if row.cnt < 2:
-            continue
-        fails = fail_map.get(row.test_id, 0)
-        if fails == 0:
-            continue
-        rate = round(fails / row.cnt * 100)
-        t = db.query(models.Test).filter(models.Test.id == row.test_id).first()
-        if t:
-            flaky_list.append({"id": t.id, "title": t.title, "fail_rate": rate, "total_runs": row.cnt})
+    candidates = [
+        (row.test_id, row.cnt, fail_map[row.test_id])
+        for row in all_case_counts
+        if row.cnt >= 2 and fail_map.get(row.test_id, 0) > 0
+    ]
+    titles = {}
+    if candidates:
+        titles = dict(
+            db.query(models.Test.id, models.Test.title)
+            .filter(models.Test.id.in_([tid for tid, _, _ in candidates]))
+            .all()
+        )
+    flaky_list = [
+        {"id": tid, "title": titles[tid], "fail_rate": round(fails / cnt * 100), "total_runs": cnt}
+        for tid, cnt, fails in candidates
+        if tid in titles
+    ]
     flaky_list.sort(key=lambda x: x["fail_rate"], reverse=True)
 
     return {
@@ -218,6 +316,13 @@ async def insights(db: Session = Depends(get_db), _: models.User = Depends(get_c
     }
 
 
+# Caps for the aggregated payload below. Views that need more than this pull
+# from the paginated list endpoints (which also serve server-side search).
+# The `totals` key in the response carries the real row counts so the UI can
+# tell when it is looking at a capped slice.
+INITIAL_DATA_CAPS = {"tests": 1000, "runs": 500, "pipelines": 200, "activity": 100, "defects": 500}
+
+
 # Aggregated initial-data endpoint (replaces window.TH_DATA)
 @app.get("/api/initial-data")
 async def initial_data(db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
@@ -226,7 +331,15 @@ async def initial_data(db: Session = Depends(get_db), _: models.User = Depends(g
     all_folders = db.query(models.Folder).all()
     folder_tree = _build_tree(all_folders)
 
-    all_tests = db.query(models.Test).all()
+    totals = {
+        "tests": db.query(func.count(models.Test.id)).scalar() or 0,
+        "runs": db.query(func.count(models.Run.id)).scalar() or 0,
+        "pipelines": db.query(func.count(models.Pipeline.id)).scalar() or 0,
+        "activity": db.query(func.count(models.Activity.id)).scalar() or 0,
+        "defects": db.query(func.count(models.Defect.id)).scalar() or 0,
+    }
+
+    all_tests = db.query(models.Test).order_by(models.Test.id).limit(INITIAL_DATA_CAPS["tests"]).all()
     tests_out = [
         {
             "id": t.id, "title": t.title, "folder": t.folder_id, "type": t.type,
@@ -237,7 +350,7 @@ async def initial_data(db: Session = Depends(get_db), _: models.User = Depends(g
         for t in all_tests
     ]
 
-    all_runs = db.query(models.Run).all()
+    all_runs = db.query(models.Run).order_by(models.Run.id).limit(INITIAL_DATA_CAPS["runs"]).all()
     runs_out = [
         {
             "id": r.id, "name": r.name, "status": r.status, "progress": r.progress,
@@ -248,7 +361,7 @@ async def initial_data(db: Session = Depends(get_db), _: models.User = Depends(g
         for r in all_runs
     ]
 
-    all_pipelines = db.query(models.Pipeline).all()
+    all_pipelines = db.query(models.Pipeline).order_by(models.Pipeline.id).limit(INITIAL_DATA_CAPS["pipelines"]).all()
     pipelines_out = [
         {
             "id": p.id, "name": p.name, "platform": p.platform, "status": p.status,
@@ -258,13 +371,13 @@ async def initial_data(db: Session = Depends(get_db), _: models.User = Depends(g
         for p in all_pipelines
     ]
 
-    all_activity = db.query(models.Activity).order_by(models.Activity.id.desc()).all()
+    all_activity = db.query(models.Activity).order_by(models.Activity.id.desc()).limit(INITIAL_DATA_CAPS["activity"]).all()
     activity_out = [
         {"who": a.who, "what": a.what, "target": a.target, "detail": a.detail, "when": a.when}
         for a in all_activity
     ]
 
-    all_defects = db.query(models.Defect).all()
+    all_defects = db.query(models.Defect).order_by(models.Defect.id.desc()).limit(INITIAL_DATA_CAPS["defects"]).all()
     defects_out = [
         {"id": d.id, "title": d.title, "status": d.status, "severity": d.severity,
          "testId": d.test_id, "runId": d.run_id}
@@ -292,6 +405,7 @@ async def initial_data(db: Session = Depends(get_db), _: models.User = Depends(g
         "defects": defects_out,
         "projects": projects_out,
         "categories": categories_out,
+        "totals": totals,
     }
 
 

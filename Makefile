@@ -1,4 +1,4 @@
-.PHONY: help setup install dev db-reset db-seed demo test test-e2e test-e2e-auth test-e2e-import test-all test-report hooks-install open clean docker-up docker-up-sqlite docker-down docker-logs
+.PHONY: help setup install dev frontend-build frontend-watch db-reset db-revision db-upgrade db-seed demo test test-e2e test-e2e-auth test-e2e-import test-all test-report hooks-install open clean docker-up docker-up-sqlite docker-down docker-logs
 
 PYTHON  := python3
 VENV    := venv
@@ -15,18 +15,31 @@ setup: ## Full setup: venv + deps + Playwright (same as ./install.sh)
 install: ## Install deps into existing venv (faster re-install)
 	$(PIP) install -r requirements.txt
 	npm install
+	npm run build
 
-dev: ## Start backend dev server on http://localhost:8000
+frontend-build: ## Build frontend to frontend/dist (transpile + minify + vendor assets)
+	npm run build
+
+frontend-watch: ## Rebuild frontend on change (run beside `make dev` when editing UI)
+	npm run watch
+
+dev: frontend-build ## Start backend dev server on http://localhost:8000
 	$(UVICORN) backend.main:app --reload
 
 db-reset: ## Delete DB — re-seeded automatically on next `make dev`
 	rm -f testhub.db
 	@echo "testhub.db deleted. Run 'make dev' to re-seed."
 
+db-revision: ## Create an Alembic migration from model changes: make db-revision m="add foo column"
+	$(VENV)/bin/alembic revision --autogenerate -m "$(m)"
+
+db-upgrade: ## Apply pending Alembic migrations to the local DB
+	$(VENV)/bin/alembic upgrade head
+
 db-seed: ## Populate DB with demo data (deletes existing DB first)
 	rm -f testhub.db
 	$(VENV)/bin/python -m backend.seed
-	@echo "Done."
+	@echo "Done. For live-run simulation in demos, start the server with DEMO_MODE=1."
 
 demo: db-seed ## Alias: reset DB and load demo data
 
@@ -69,4 +82,4 @@ docker-logs: ## Tail Docker container logs
 	docker compose logs -f
 
 clean: ## Remove venv, node_modules, DB, test artifacts
-	rm -rf $(VENV) node_modules testhub.db playwright-report test-results
+	rm -rf $(VENV) node_modules testhub.db playwright-report test-results frontend/dist

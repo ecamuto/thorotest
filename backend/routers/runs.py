@@ -9,6 +9,7 @@ from .. import models
 from ..schemas import RunOut, RunDetailOut, RunCreate, DefectOut, StepResultOut, StepResultIn, RunCaseAssign, RunCaseOut
 from ..auth_utils import require_role, get_current_user
 from ..audit_utils import log_event, EVT_RUN_STARTED, EVT_RUN_COMPLETED
+from ._pagination import paginate, MAX_LIMIT
 from fpdf import FPDF
 from fpdf.fonts import FontFace
 
@@ -20,8 +21,14 @@ LEAD_ROLES = require_role("admin", "manager")
 
 
 @router.get("/runs", response_model=List[RunOut])
-def list_runs(db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
-    return db.query(models.Run).all()
+def list_runs(
+    response: Response,
+    limit: int = MAX_LIMIT,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(get_current_user),
+):
+    return paginate(db.query(models.Run).order_by(models.Run.id), response, limit, offset)
 
 
 @router.get("/runs/my-cases")
