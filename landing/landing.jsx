@@ -1,4 +1,4 @@
-// Test Hub — public landing page (standalone, no app dependency)
+// ThoroTest — public landing page (standalone, no app dependency)
 
 // Icons
 const I = {
@@ -61,7 +61,7 @@ function Landing() {
       }}>
         <div style={{display:"flex", alignItems:"center", gap:9}}>
           <div className="brand-mark">T</div>
-          <span className="brand-name">Test Hub</span>
+          <span className="brand-name">ThoroTest</span>
         </div>
         <div style={{display:"flex", gap:18, fontSize:12.5, color:"var(--text-muted)"}}>
           <a>Docs</a>
@@ -88,7 +88,7 @@ function Landing() {
             <span className="accent">visualized for humans.</span>
           </h1>
           <div className="lede">
-            Test Hub is an open-source test management workspace. Your test cases live as YAML in your repo. The UI is a thin layer that makes them runnable, traceable, and reviewable — for QAs, devs, and PMs in the same view.
+            ThoroTest is a source-available test management workspace. Your test cases live as YAML in your repo. The UI is a thin layer that makes them runnable, traceable, and reviewable — for QAs, devs, and PMs in the same view.
           </div>
 
           <div style={{display:"flex", gap:8, marginTop:24}}>
@@ -117,7 +117,7 @@ function Landing() {
             <div style={{padding:18, borderRight:"1px solid var(--border)"}}>
               <div className="mono dim" style={{fontSize:10.5, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10}}>tests/checkout/payment/stripe-charge.yml</div>
               <pre className="code" style={{border:"none", background:"transparent", padding:0, fontSize:11}}>
-{`# `}<span className="c">Test Hub — Tests as Code</span>{`
+{`# `}<span className="c">ThoroTest — Tests as Code</span>{`
 `}<span className="k">id</span>{`: TC-2301
 `}<span className="k">title</span>{`: `}<span className="s">"Stripe card charge succeeds"</span>{`
 `}<span className="k">type</span>{`: `}<span className="t">automated</span>{`
@@ -134,7 +134,7 @@ function Landing() {
               </pre>
             </div>
             <div style={{padding:18, background:"var(--bg-2)"}}>
-              <div className="mono dim" style={{fontSize:10.5, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10}}>Test Hub · live preview</div>
+              <div className="mono dim" style={{fontSize:10.5, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10}}>ThoroTest · live preview</div>
               <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:8}}>
                 <StatusBadge s="pass" />
                 <span className="mono dim" style={{fontSize:10.5}}>TC-2301</span>
@@ -159,7 +159,7 @@ function Landing() {
 
         {/* Pillars */}
         <div style={{marginTop:48}}>
-          <div className="eyebrow"><span className="dot" /> Why Test Hub</div>
+          <div className="eyebrow"><span className="dot" /> Why ThoroTest</div>
           <h2 style={{fontSize:32, fontWeight:600, letterSpacing:"-0.02em", margin:"14px 0 32px", maxWidth:600, lineHeight:1.15}}>One workspace where every test — manual or automated — is a first-class citizen.</h2>
 
           <div className="grid grid-3">
@@ -239,7 +239,7 @@ $ testhub run --plan smoke
 
         {/* Final CTA + stats */}
         <div style={{marginTop:64, padding:"40px 32px", border:"1px solid var(--border)", borderRadius:"var(--radius-lg)", background:"var(--bg-2)", textAlign:"center"}}>
-          <div className="eyebrow" style={{justifyContent:"center"}}><span className="dot" /> Open source</div>
+          <div className="eyebrow" style={{justifyContent:"center"}}><span className="dot" /> Source-available</div>
           <h2 style={{fontSize:30, fontWeight:600, letterSpacing:"-0.02em", margin:"14px auto 14px", maxWidth:520, lineHeight:1.2}}>Built in the open. Run anywhere. Yours forever.</h2>
           <div style={{fontSize:13.5, color:"var(--text-muted)", maxWidth:520, margin:"0 auto 24px"}}>
             Apache 2.0 · no proprietary lock-in · works on a laptop or a k8s cluster. Contribute on GitHub.
@@ -260,7 +260,7 @@ $ testhub run --plan smoke
 
         <div style={{marginTop:64, paddingTop:24, borderTop:"1px solid var(--border)", display:"flex", alignItems:"center", gap:14, fontSize:11.5, color:"var(--text-dim)"}}>
           <div className="brand-mark" style={{transform:"scale(0.9)"}}>T</div>
-          <span>Test Hub</span>
+          <span>ThoroTest</span>
           <span className="mono">v1.4.2</span>
           <span className="spacer" />
           <span className="mono">Apache 2.0 · made in the open</span>

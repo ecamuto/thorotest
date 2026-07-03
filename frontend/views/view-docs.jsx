@@ -281,28 +281,30 @@ function QuickstartSection() {
       </div>
 
       <DocStep n="1" title="Start the server">
-        <CodeBlock>{`cd ThoroTest
-make run          # starts FastAPI on :8000 + frontend on :5173`}</CodeBlock>
+        <CodeBlock>{`cd thorotest
+make dev          # builds the frontend and starts the app on :8000`}</CodeBlock>
       </DocStep>
 
       <DocStep n="2" title="Register an account">
         <CodeBlock>{`curl -X POST http://localhost:8000/api/auth/register \\
   -H "Content-Type: application/json" \\
-  -d '{"username": "alice", "password": "secret"}'`}</CodeBlock>
+  -d '{"username": "alice", "email": "alice@example.com", "password": "secret1"}'`}</CodeBlock>
       </DocStep>
 
       <DocStep n="3" title="Get a token">
         <CodeBlock>{`curl -X POST http://localhost:8000/api/auth/login \\
   -H "Content-Type: application/json" \\
-  -d '{"username": "alice", "password": "secret"}'
+  -d '{"email": "alice@example.com", "password": "secret1"}'
 
 # → { "access_token": "eyJ...", "token_type": "bearer" }
 TOKEN="eyJ..."`}</CodeBlock>
       </DocStep>
 
       <DocStep n="4" title="List your tests">
-        <CodeBlock>{`curl http://localhost:8000/api/tests \\
-  -H "Authorization: Bearer $TOKEN"`}</CodeBlock>
+        <CodeBlock>{`curl http://localhost:8000/api/tests?limit=50&offset=0 \\
+  -H "Authorization: Bearer $TOKEN"
+# Pagination: limit/offset (max 1000/page); the X-Total-Count response
+# header carries the total row count for the filtered query.`}</CodeBlock>
       </DocStep>
 
       <DocStep n="5" title="Create a test">
@@ -334,7 +336,7 @@ TOKEN="eyJ..."`}</CodeBlock>
 
 BASE = "http://localhost:8000/api"
 
-r = httpx.post(f"{BASE}/auth/login", json={"username": "alice", "password": "secret"})
+r = httpx.post(f"{BASE}/auth/login", json={"email": "alice@example.com", "password": "secret1"})
 token = r.json()["access_token"]
 headers = {"Authorization": f"Bearer {token}"}
 

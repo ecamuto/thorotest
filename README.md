@@ -174,6 +174,9 @@ thorotest/
 │   ├── data.js                 # Static fallback data (TH_DATA)
 │   ├── api.js                  # HTTP + WebSocket client helpers (TH_API)
 │   ├── i18n.js                 # i18n string lookup (T(key, lang))
+│   ├── react-globals.js        # Exposes React hooks as globals for the views
+│   ├── fonts.css / fonts/      # Vendored webfonts (Geist, JetBrains Mono)
+│   ├── dist/                   # Build output (npm run build) — served by the app
 │   ├── app.jsx                 # Root App component + boot + hash routing
 │   │
 │   ├── components/
@@ -201,6 +204,11 @@ thorotest/
 │       ├── view-config.jsx         # Config-as-code view
 │       └── view-misc.jsx           # Pipelines, Insights, AI assistant
 │
+├── scripts/
+│   └── build-frontend.mjs  # esbuild production build (npm run build)
+├── migrations/             # Alembic migrations (baseline + future revisions)
+├── alembic.ini             # Alembic config (DATABASE_URL-driven)
+├── BACKUP.md               # Backup & restore procedures
 ├── backend/
 │   ├── main.py             # FastAPI app, lifespan, /api/initial-data, WebSocket
 │   ├── db.py               # SQLAlchemy engine, session, Base
@@ -208,11 +216,13 @@ thorotest/
 │   ├── schemas.py          # Pydantic schemas
 │   ├── seed.py             # Demo seed data (runs on first boot if DB empty)
 │   ├── auth_utils.py       # JWT creation/validation, password hashing (passlib)
-│   ├── ws_manager.py       # WebSocket connection manager + run simulation
+│   ├── ws_manager.py       # WebSocket connection manager + demo run simulation (DEMO_MODE)
+│   ├── emailer.py          # Outbound system email (password resets) via env SMTP
 │   ├── gql_schema.py       # Strawberry GraphQL schema
 │   ├── github_sync.py      # Tests-as-Code: read YAML tests from a GitHub repo
 │   └── routers/
-│       ├── auth.py         # /auth/register, /auth/login, /me, /users
+│       ├── _pagination.py  # Shared limit/offset + X-Total-Count helper
+│       ├── auth.py         # /auth/register, /auth/login, /me, /users, password reset
 │       ├── tests.py        # CRUD /api/tests + bulk + history + comments + defects
 │       ├── runs.py         # /api/runs + run detail + defects
 │       ├── folders.py      # GET /api/folders (nested tree)
@@ -361,7 +371,7 @@ make test-e2e-auth      # auth suite only
 make test-report        # open HTML report
 ```
 
-28 suites covering all major user flows, feature phases, and regression scenarios.
+29 suites covering all major user flows, feature phases, and regression scenarios.
 
 ---
 
