@@ -23,6 +23,30 @@ RATE_WINDOW = 3600
 _rate_store: dict = defaultdict(deque)
 _rate_lock = asyncio.Lock()
 _ai_client: AsyncAnthropic | None = None
+_openai_client = None  # openai.AsyncOpenAI, created lazily
+
+# Provider selection:
+#   AI_PROVIDER=anthropic (default) — uses ANTHROPIC_API_KEY, model AI_MODEL or claude-sonnet-4-6
+#   AI_PROVIDER=openai — any OpenAI-compatible endpoint (OpenAI, Mistral, Groq,
+#     Ollama, LM Studio, vLLM, ...) via AI_BASE_URL + AI_MODEL + AI_API_KEY.
+#     Setting AI_BASE_URL alone also selects this provider.
+_DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6"
+
+
+def _provider() -> str:
+    explicit = os.getenv("AI_PROVIDER")
+    if explicit:
+        return explicit.strip().lower()
+    return "openai" if os.getenv("AI_BASE_URL") else "anthropic"
+
+
+def _ensure_configured() -> None:
+    if _provider() == "anthropic":
+        if not os.getenv("ANTHROPIC_API_KEY"):
+            raise HTTPException(status_code=503, detail="AI features not configured (ANTHROPIC_API_KEY missing)")
+    else:
+        if not os.getenv("AI_MODEL"):
+            raise HTTPException(status_code=503, detail="AI features not configured (AI_MODEL missing)")
 
 
 def _get_client() -> AsyncAnthropic:
@@ -33,6 +57,21 @@ def _get_client() -> AsyncAnthropic:
             raise HTTPException(status_code=503, detail="AI features not configured (ANTHROPIC_API_KEY missing)")
         _ai_client = AsyncAnthropic(api_key=key)
     return _ai_client
+
+
+def _get_openai_client():
+    global _openai_client
+    if _openai_client is None:
+        try:
+            from openai import AsyncOpenAI
+        except ImportError:
+            raise HTTPException(status_code=503, detail="AI provider 'openai' requires the openai package (pip install openai)")
+        _openai_client = AsyncOpenAI(
+            base_url=os.getenv("AI_BASE_URL", "https://api.openai.com/v1"),
+            # Local servers (Ollama, LM Studio) accept any non-empty key.
+            api_key=os.getenv("AI_API_KEY", "not-needed"),
+        )
+    return _openai_client
 
 
 async def _check_rate(user_id: int) -> None:
@@ -46,25 +85,55 @@ async def _check_rate(user_id: int) -> None:
         dq.append(now)
 
 
-async def _call_json(system: str, user: str, max_tokens: int = 2048) -> dict:
+async def _call_anthropic(system: str, user: str, max_tokens: int) -> str:
     client = _get_client()
     try:
         msg = await client.messages.create(
-            model="claude-sonnet-4-6",
+            model=os.getenv("AI_MODEL") or _DEFAULT_ANTHROPIC_MODEL,
             max_tokens=max_tokens,
             system=system,
             messages=[{"role": "user", "content": user}],
         )
-        text = msg.content[0].text.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        return json.loads(text)
+        return msg.content[0].text
     except anthropic_lib.RateLimitError:
         raise HTTPException(status_code=503, detail="AI service temporarily unavailable (upstream rate limit). Try again in a moment.")
     except anthropic_lib.AuthenticationError:
         raise HTTPException(status_code=503, detail="AI features misconfigured (invalid API key)")
     except anthropic_lib.APIConnectionError:
         raise HTTPException(status_code=503, detail="Could not reach AI service")
+
+
+async def _call_openai(system: str, user: str, max_tokens: int) -> str:
+    client = _get_openai_client()
+    import openai as openai_lib
+    try:
+        resp = await client.chat.completions.create(
+            model=os.environ["AI_MODEL"],
+            max_tokens=max_tokens,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+        )
+        return resp.choices[0].message.content or ""
+    except openai_lib.RateLimitError:
+        raise HTTPException(status_code=503, detail="AI service temporarily unavailable (upstream rate limit). Try again in a moment.")
+    except openai_lib.AuthenticationError:
+        raise HTTPException(status_code=503, detail="AI features misconfigured (invalid API key)")
+    except openai_lib.APIConnectionError:
+        raise HTTPException(status_code=503, detail="Could not reach AI service")
+
+
+async def _call_json(system: str, user: str, max_tokens: int = 2048) -> dict:
+    if _provider() == "anthropic":
+        text = await _call_anthropic(system, user, max_tokens)
+    else:
+        text = await _call_openai(system, user, max_tokens)
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+    try:
+        return json.loads(text)
     except json.JSONDecodeError:
         raise HTTPException(status_code=500, detail="AI returned invalid response format")
 
@@ -112,9 +181,8 @@ async def generate_tests(
     current_user: models.User = WRITE_ROLES,
     db: Session = Depends(get_db),
 ):
-    # Check key before rate check
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        raise HTTPException(status_code=503, detail="AI features not configured (ANTHROPIC_API_KEY missing)")
+    # Check config before rate check
+    _ensure_configured()
     await _check_rate(current_user.id)
     result = await _call_json(
         system=_GENERATE_SYSTEM.replace("{count}", str(payload.count)),
@@ -131,8 +199,7 @@ async def suggest_edge_cases(
 ):
     if payload.folder_id is None:
         raise HTTPException(status_code=422, detail="folder_id is required")
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        raise HTTPException(status_code=503, detail="AI features not configured (ANTHROPIC_API_KEY missing)")
+    _ensure_configured()
     await _check_rate(current_user.id)
 
     tests = (
@@ -161,8 +228,7 @@ async def analyze_flaky(
     current_user: models.User = WRITE_ROLES,
     db: Session = Depends(get_db),
 ):
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        raise HTTPException(status_code=503, detail="AI features not configured (ANTHROPIC_API_KEY missing)")
+    _ensure_configured()
     await _check_rate(current_user.id)
 
     cases = (

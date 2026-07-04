@@ -12,6 +12,7 @@ passlib>=1.7.4
 argon2-cffi>=23.1.0        # argon2id password hashing backend for passlib
 python-dotenv>=1.0.0
 anthropic>=0.105.0
+openai>=1.40.0             # only used when AI_PROVIDER=openai (OpenAI-compatible / local LLMs)
 fpdf2>=2.8.0
 pyotp>=2.9.0
 qrcode[pil]>=8.2

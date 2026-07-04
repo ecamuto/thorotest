@@ -98,6 +98,10 @@ cp .env.example .env
 | `UPLOAD_DIR` / `MAX_UPLOAD_MB` | `./uploads` / `50` | Attachment storage directory and per-file size limit |
 | `DEMO_MODE` | _(unset)_ | Live-run demo simulation with fabricated results (demos only — **never in production**) |
 | `ANTHROPIC_API_KEY` | _(unset)_ | Enables AI assistant (BYOK). No-op if absent |
+| `AI_PROVIDER` | `anthropic` | AI backend: `anthropic` or `openai` (any OpenAI-compatible API, incl. local LLMs) |
+| `AI_MODEL` | `claude-sonnet-4-6` | Model ID. Required when `AI_PROVIDER=openai` |
+| `AI_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible endpoint (e.g. `http://localhost:11434/v1` for Ollama). Setting it implies `AI_PROVIDER=openai` |
+| `AI_API_KEY` | _(unset)_ | API key for the OpenAI-compatible endpoint (any value for local servers) |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | _(unset)_ | GitHub OAuth login (optional) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | _(unset)_ | Google OAuth login (optional) |
 
@@ -414,7 +418,22 @@ make db-reset   # deletes testhub.db — re-seeded automatically on next make de
 ```
 
 **AI assistant:**
-Requires an Anthropic API key. Set `ANTHROPIC_API_KEY` in `.env`. The endpoint is a no-op if the key is absent — no errors, no external calls.
+Defaults to Claude — set `ANTHROPIC_API_KEY` in `.env`. The endpoint is a no-op if the key is absent — no errors, no external calls.
+
+Any OpenAI-compatible provider also works (OpenAI, Mistral, Groq, OpenRouter, or a local LLM via Ollama / LM Studio / vLLM):
+
+```bash
+# Hosted example (OpenAI)
+AI_PROVIDER=openai
+AI_MODEL=gpt-4o
+AI_API_KEY=sk-...
+
+# Local example (Ollama)
+AI_BASE_URL=http://localhost:11434/v1
+AI_MODEL=llama3.1
+```
+
+Setting `AI_BASE_URL` alone selects the OpenAI-compatible provider. Small local models (<8B) sometimes return malformed JSON — the API responds 500 in that case; prefer instruction-tuned 8B+ models.
 
 **Theming:**
 The tweaks panel (bottom-right gear icon) switches between dark/light and compact/comfortable density. Persists in `localStorage`.
