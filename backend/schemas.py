@@ -90,6 +90,7 @@ class RunOut(BaseModel):
     failed: int
     blocked: int
     started: Optional[str] = None
+    created_at: Optional[str] = None
     owner: Optional[str] = None
     env: Optional[str] = None
     branch: Optional[str] = None
@@ -150,7 +151,8 @@ class ActivityOut(BaseModel):
     what: str
     target: str
     detail: str
-    when: str
+    when: Optional[str] = None
+    created_at: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

@@ -2,9 +2,15 @@ import hashlib
 import secrets
 import sys
 import os
+from datetime import datetime, timedelta, timezone
 from .db import SessionLocal, engine
 from . import models
 from .auth_utils import hash_password
+
+
+def _ago(**kwargs) -> str:
+    """ISO UTC timestamp N units in the past (e.g. _ago(hours=8))."""
+    return (datetime.now(timezone.utc) - timedelta(**kwargs)).isoformat()
 
 
 def _seed_token(name, scope, prefix_suffix, created_at, last_used_at=None):
@@ -92,12 +98,12 @@ def seed_db():
         db.flush()
 
         runs = [
-            models.Run(id="R-1287", name="Release 4.2.0 — Pre-prod regression", status="running", progress=64, total=142, passed=79, failed=4, blocked=1, started="31m ago", owner="MR", env="staging", branch="release/4.2.0"),
-            models.Run(id="R-1286", name="Nightly smoke — main", status="fail", progress=100, total=38, passed=35, failed=3, blocked=0, started="8h ago", owner="ci-bot", env="preview", branch="main"),
-            models.Run(id="R-1285", name="Hotfix verify — payment timeout", status="pass", progress=100, total=12, passed=12, failed=0, blocked=0, started="1d ago", owner="LP", env="staging", branch="hotfix/pay-timeout"),
-            models.Run(id="R-1284", name="Mobile checkout sweep (iOS 17)", status="pass", progress=100, total=24, passed=22, failed=0, blocked=2, started="1d ago", owner="AR", env="staging", branch="main"),
-            models.Run(id="R-1283", name="API contract regression v2", status="fail", progress=100, total=89, passed=84, failed=5, blocked=0, started="2d ago", owner="ci-bot", env="preview", branch="main"),
-            models.Run(id="R-1282", name="Manual exploratory — admin panel", status="pass", progress=100, total=8, passed=8, failed=0, blocked=0, started="3d ago", owner="MR", env="local", branch="feature/admin-bulk-edit"),
+            models.Run(id="R-1287", name="Release 4.2.0 — Pre-prod regression", status="running", progress=64, total=142, passed=79, failed=4, blocked=1, started="31m ago", created_at=_ago(minutes=31), owner="MR", env="staging", branch="release/4.2.0"),
+            models.Run(id="R-1286", name="Nightly smoke — main", status="fail", progress=100, total=38, passed=35, failed=3, blocked=0, started="8h ago", created_at=_ago(hours=8), owner="ci-bot", env="preview", branch="main"),
+            models.Run(id="R-1285", name="Hotfix verify — payment timeout", status="pass", progress=100, total=12, passed=12, failed=0, blocked=0, started="1d ago", created_at=_ago(days=1), owner="LP", env="staging", branch="hotfix/pay-timeout"),
+            models.Run(id="R-1284", name="Mobile checkout sweep (iOS 17)", status="pass", progress=100, total=24, passed=22, failed=0, blocked=2, started="1d ago", created_at=_ago(days=1, hours=6), owner="AR", env="staging", branch="main"),
+            models.Run(id="R-1283", name="API contract regression v2", status="fail", progress=100, total=89, passed=84, failed=5, blocked=0, started="2d ago", created_at=_ago(days=2), owner="ci-bot", env="preview", branch="main"),
+            models.Run(id="R-1282", name="Manual exploratory — admin panel", status="pass", progress=100, total=8, passed=8, failed=0, blocked=0, started="3d ago", created_at=_ago(days=3), owner="MR", env="local", branch="feature/admin-bulk-edit"),
         ]
         db.add_all(runs)
         db.flush()
@@ -143,12 +149,12 @@ def seed_db():
         db.add_all(pipelines)
 
         activities = [
-            models.Activity(who="Marco R.", what="marked", target="TC-2302", detail="as ⚠ blocked — needs 3DS test card", when="12m"),
-            models.Activity(who="ci-bot", what="completed run", target="R-1286 nightly.yml", detail="3 failures in cart suite", when="8h"),
-            models.Activity(who="Luca P.", what="edited", target="TC-2301", detail="added pre-condition + tag p0", when="9h"),
-            models.Activity(who="Anna R.", what="created", target="TC-2303", detail="new manual test for Apple Pay iOS", when="now"),
-            models.Activity(who="ThoroTest AI", what="suggested", target="3 new cases", detail="missing edge cases in coupon stacking", when="5h"),
-            models.Activity(who="Marco R.", what="requested review on", target="TC-1045", detail="password reset SLA — failing intermittently", when="1d"),
+            models.Activity(who="Marco R.", what="marked", target="TC-2302", detail="as ⚠ blocked — needs 3DS test card", when="12m", created_at=_ago(minutes=12)),
+            models.Activity(who="ci-bot", what="completed run", target="R-1286 nightly.yml", detail="3 failures in cart suite", when="8h", created_at=_ago(hours=8)),
+            models.Activity(who="Luca P.", what="edited", target="TC-2301", detail="added pre-condition + tag p0", when="9h", created_at=_ago(hours=9)),
+            models.Activity(who="Anna R.", what="created", target="TC-2303", detail="new manual test for Apple Pay iOS", when="now", created_at=_ago(minutes=1)),
+            models.Activity(who="ThoroTest AI", what="suggested", target="3 new cases", detail="missing edge cases in coupon stacking", when="5h", created_at=_ago(hours=5)),
+            models.Activity(who="Marco R.", what="requested review on", target="TC-1045", detail="password reset SLA — failing intermittently", when="1d", created_at=_ago(days=1)),
         ]
         db.add_all(activities)
 

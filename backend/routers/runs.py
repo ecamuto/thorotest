@@ -9,6 +9,7 @@ from .. import models
 from ..schemas import RunOut, RunDetailOut, RunCreate, DefectOut, StepResultOut, StepResultIn, RunCaseAssign, RunCaseOut
 from ..auth_utils import require_role, get_current_user
 from ..audit_utils import log_event, EVT_RUN_STARTED, EVT_RUN_COMPLETED
+from ..activity_utils import log_activity, actor_name
 from ._pagination import paginate, MAX_LIMIT
 from fpdf import FPDF
 from fpdf.fonts import FontFace
@@ -107,6 +108,7 @@ def create_run(payload: RunCreate, db: Session = Depends(get_db), current_user: 
         total=payload.total or len(payload.test_ids),
         owner=payload.owner, env=payload.env, branch=payload.branch,
         started="just now",
+        created_at=datetime.now(timezone.utc).isoformat(),
     )
     db.add(run)
     db.flush()
@@ -114,6 +116,7 @@ def create_run(payload: RunCreate, db: Session = Depends(get_db), current_user: 
     for test_id in payload.test_ids:
         db.add(models.RunCase(run_id=run.id, test_id=test_id, status="pending"))
 
+    log_activity(db, actor_name(current_user), "started run", run.id, run.name)
     db.commit()
     db.refresh(run)
     log_event(
@@ -150,11 +153,13 @@ def retest_run(
         total=len(failed_cases),
         owner=current_user.username,
         started="just now",
+        created_at=datetime.now(timezone.utc).isoformat(),
     )
     db.add(new_run)
     db.flush()
     for c in failed_cases:
         db.add(models.RunCase(run_id=new_run.id, test_id=c.test_id, status="pending"))
+    log_activity(db, actor_name(current_user), "started retest", new_run.id, new_run.name)
     db.commit()
     db.refresh(new_run)
     return new_run
@@ -193,6 +198,11 @@ def update_run_status(run_id: str, status: str, db: Session = Depends(get_db), c
     if not r:
         raise HTTPException(status_code=404, detail="Run not found")
     r.status = status
+    if status == "completed":
+        log_activity(db, actor_name(current_user), "completed run", r.id,
+                     f"{r.name} — {r.passed} passed / {r.failed} failed")
+    else:
+        log_activity(db, actor_name(current_user), "updated run", r.id, f"{r.name} → {status}")
     db.commit()
     if status == "completed":
         log_event(

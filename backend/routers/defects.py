@@ -9,6 +9,7 @@ from ..db import get_db
 from .. import models
 from ..schemas import DefectOut, DefectCreate, DefectUpdate
 from ..auth_utils import require_role, get_current_user
+from ..activity_utils import log_activity, actor_name
 from ._pagination import paginate, MAX_LIMIT
 
 router = APIRouter(tags=["defects"])
@@ -76,6 +77,7 @@ def create_defect(
         created_by=created_by,
     )
     db.add(d)
+    log_activity(db, created_by, "filed defect", bug_id, payload.title)
     db.commit()
     db.refresh(d)
     return d

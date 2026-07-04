@@ -91,6 +91,7 @@ class Run(Base):
     failed = Column(Integer, default=0)
     blocked = Column(Integer, default=0)
     started = Column(String(64), nullable=True)
+    created_at = Column(String(64), nullable=True)  # ISO UTC; used for daily test-health buckets
     owner = Column(String(255), nullable=True)
     env = Column(String(255), nullable=True)
     branch = Column(String(255), nullable=True)
@@ -134,7 +135,8 @@ class Activity(Base):
     what = Column(String(255))
     target = Column(String(255))
     detail = Column(Text)
-    when = Column(String(64))
+    when = Column(String(64))              # legacy display string; superseded by created_at
+    created_at = Column(String(64), nullable=True)  # ISO UTC; relative time computed client-side
 
 
 class Defect(Base):

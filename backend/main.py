@@ -2,6 +2,7 @@ import logging
 import os
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -316,6 +317,48 @@ async def insights(db: Session = Depends(get_db), _: models.User = Depends(get_c
     }
 
 
+@app.get("/api/insights/test-health")
+async def test_health(days: int = 14, db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
+    """Daily pass/fail/blocked/skipped totals from run result counters.
+
+    Buckets runs by the date part of Run.created_at. Rows without created_at
+    (pre-migration data) are excluded — only runs with real timestamps count.
+    """
+    days = max(1, min(days, 90))
+    today = datetime.now(timezone.utc).date()
+    start = today - timedelta(days=days - 1)
+    # created_at is a UTC ISO string, so lexicographic >= works for the cutoff.
+    runs = (
+        db.query(models.Run)
+        .filter(models.Run.created_at.isnot(None), models.Run.created_at >= start.isoformat())
+        .all()
+    )
+    buckets = {
+        (start + timedelta(days=i)).isoformat(): {"passed": 0, "failed": 0, "blocked": 0, "skipped": 0, "runs": 0}
+        for i in range(days)
+    }
+    for r in runs:
+        day = r.created_at[:10]
+        b = buckets.get(day)
+        if b is None:
+            continue
+        passed, failed, blocked = r.passed or 0, r.failed or 0, r.blocked or 0
+        b["passed"] += passed
+        b["failed"] += failed
+        b["blocked"] += blocked
+        b["skipped"] += max((r.total or 0) - passed - failed - blocked, 0) if r.status not in ("running", "pending") else 0
+        b["runs"] += 1
+    day_list = [{"date": d, **v} for d, v in sorted(buckets.items())]
+    return {
+        "days": day_list,
+        "total_runs": sum(v["runs"] for v in buckets.values()),
+        "totals": {
+            k: sum(v[k] for v in buckets.values())
+            for k in ("passed", "failed", "blocked", "skipped")
+        },
+    }
+
+
 # Caps for the aggregated payload below. Views that need more than this pull
 # from the paginated list endpoints (which also serve server-side search).
 # The `totals` key in the response carries the real row counts so the UI can
@@ -355,7 +398,8 @@ async def initial_data(db: Session = Depends(get_db), _: models.User = Depends(g
         {
             "id": r.id, "name": r.name, "status": r.status, "progress": r.progress,
             "total": r.total, "passed": r.passed, "failed": r.failed, "blocked": r.blocked,
-            "started": r.started, "owner": r.owner, "env": r.env, "branch": r.branch,
+            "started": r.started, "created_at": r.created_at,
+            "owner": r.owner, "env": r.env, "branch": r.branch,
             "source_run_id": r.source_run_id,
         }
         for r in all_runs
@@ -373,7 +417,8 @@ async def initial_data(db: Session = Depends(get_db), _: models.User = Depends(g
 
     all_activity = db.query(models.Activity).order_by(models.Activity.id.desc()).limit(INITIAL_DATA_CAPS["activity"]).all()
     activity_out = [
-        {"who": a.who, "what": a.what, "target": a.target, "detail": a.detail, "when": a.when}
+        {"who": a.who, "what": a.what, "target": a.target, "detail": a.detail,
+         "when": a.when, "created_at": a.created_at}
         for a in all_activity
     ]
 

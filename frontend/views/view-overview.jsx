@@ -1,13 +1,31 @@
 // Overview screen — dashboard
 
-function Overview({ onNav }) {
+// "2026-07-04T10:00:00+00:00" → "12m", "8h", "3d"
+function timeAgo(iso) {
+  if (!iso) return "";
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return iso;
+  const s = Math.max(0, (Date.now() - then) / 1000);
+  if (s < 60) return "now";
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  if (s < 86400 * 7) return `${Math.floor(s / 86400)}d`;
+  return `${Math.floor(s / 86400 / 7)}w`;
+}
+
+function Overview({ onNav, currentUser }) {
   const { data: D, loading, error } = useInitialData();
   const [insights, setInsights] = React.useState(null);
+  const [health, setHealth] = React.useState(null);
 
   React.useEffect(() => {
     fetch('/api/insights', { headers: window.authHeaders() })
       .then(r => r.json())
       .then(setInsights)
+      .catch(() => {});
+    fetch('/api/insights/test-health?days=14', { headers: window.authHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(setHealth)
       .catch(() => {});
   }, []);
 
@@ -31,26 +49,40 @@ function Overview({ onNav }) {
   const totalTests = insights ? String(insights.total_tests) : "—";
   const automationRate = insights ? `${insights.automation_rate}%` : "—";
 
+  const activeRuns = D.runs.filter(r => r.status === "running").length;
+  const failingMain = D.runs.filter(r => r.status === "fail" && r.branch === "main").length;
+
+  const hour = new Date().getHours();
+  const daypart = hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
+  const firstName = (currentUser?.display_name || currentUser?.username || "").split(" ")[0];
+
+  const subParts = [];
+  subParts.push(activeRuns === 1 ? "1 run is active" : `${activeRuns} runs are active`);
+  if (failingMain > 0) subParts.push(<span key="f">{failingMain === 1 ? "1 build is failing" : `${failingMain} builds are failing`} on <span className="mono">main</span></span>);
+  if (insights && insights.open_defects > 0) subParts.push(`${insights.open_defects} defects are open`);
+
   return (
     <div className="page fade-in">
       <div className="page-h">
         <div>
           <div className="eyebrow"><span className="dot" /> Workspace · acme/web</div>
-          <h1 className="page-title" style={{marginTop:8}}>Good afternoon, Marco.</h1>
-          <div className="page-sub">2 runs are active, 1 build is failing on <span className="mono">main</span>, and AI suggested 3 new test cases since yesterday.</div>
+          <h1 className="page-title" style={{marginTop:8}}>Good {daypart}{firstName ? `, ${firstName}` : ""}.</h1>
+          <div className="page-sub">
+            {subParts.map((p, i) => <React.Fragment key={i}>{i > 0 && (i === subParts.length - 1 ? " and " : ", ")}{p}</React.Fragment>)}.
+          </div>
         </div>
         <div className="actions">
-          <button className="btn"><Icon name="download" /> Export report</button>
-          <button className="btn accent"><Icon name="play" /> Start a run</button>
+          <button className="btn" onClick={() => TH_API.exportTestsCSV()}><Icon name="download" /> Export report</button>
+          <button className="btn accent" onClick={() => onNav("runs")}><Icon name="play" /> Start a run</button>
         </div>
       </div>
 
       {/* Metrics row */}
       <div className="grid grid-4" style={{marginBottom:14}}>
-        <Metric label="Pass rate (7d)" value={passRate} delta="+1.8 vs prev 7d" up />
+        <Metric label="Pass rate" value={passRate} delta="of all tests in library" />
         <Metric label="Open defects" value={openDefects} delta={defectDelta} />
         <Metric label="Total tests" value={totalTests} delta={automationRate + " automated"} up sub="in library" />
-        <Metric label="Avg run time" value="12m04" delta="−1m12 vs prev 7d" up />
+        <Metric label="Active runs" value={String(activeRuns)} delta={`${D.runs.length} runs total`} />
       </div>
 
       <div className="grid grid-main" style={{marginBottom:14}}>
@@ -59,44 +91,27 @@ function Overview({ onNav }) {
           <div className="card-h">
             <div>
               <div className="card-title">Test health</div>
-              <div className="card-sub">Last 14 days · 1,284 runs</div>
+              <div className="card-sub">
+                {health ? `Last 14 days · ${health.total_runs} run${health.total_runs === 1 ? "" : "s"}` : "Last 14 days"}
+              </div>
             </div>
             <div className="spacer" />
-            <div className="chip active">All</div>
-            <div className="chip">Smoke</div>
-            <div className="chip">Regression</div>
-            <div className="chip">E2E</div>
           </div>
           <div className="card-b">
-            <HealthChart />
-            <div style={{display:"flex", gap:18, marginTop:12, fontSize:11.5}}>
-              <Legend color="var(--pass)" label="passed" value="1,184" />
-              <Legend color="var(--fail)" label="failed" value="62" />
-              <Legend color="var(--warn)" label="blocked" value="14" />
-              <Legend color="var(--skip)" label="skipped" value="24" />
-            </div>
+            <HealthChart health={health} />
+            {health && (
+              <div style={{display:"flex", gap:18, marginTop:12, fontSize:11.5}}>
+                <Legend color="var(--pass)" label="passed" value={health.totals.passed.toLocaleString()} />
+                <Legend color="var(--fail)" label="failed" value={health.totals.failed.toLocaleString()} />
+                <Legend color="var(--warn)" label="blocked" value={health.totals.blocked.toLocaleString()} />
+                <Legend color="var(--skip)" label="skipped" value={health.totals.skipped.toLocaleString()} />
+              </div>
+            )}
           </div>
         </div>
 
         {/* AI suggestions */}
-        <div className="ai-box">
-          <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:10}}>
-            <span style={{fontSize:11, fontFamily:"var(--font-mono)", textTransform:"uppercase", letterSpacing:"0.08em", color:"var(--purple)"}}>AI assistant</span>
-          </div>
-          <div style={{fontSize:13, fontWeight:500, marginBottom:6}}>3 missing edge cases in coupon stacking</div>
-          <div style={{fontSize:12, color:"var(--text-muted)", lineHeight:1.5}}>
-            I analyzed <span className="mono" style={{color:"var(--text)"}}>src/checkout/coupon.ts</span> against your 11 existing tests in <b>co-coupon</b>. Found 3 branches with no coverage:
-          </div>
-          <ul style={{margin:"10px 0 12px", padding:"0 0 0 18px", fontSize:12, color:"var(--text-muted)", lineHeight:1.7}}>
-            <li>Two percentage coupons applied at once (only one is tested)</li>
-            <li>Fixed-amount coupon when subtotal &lt; coupon value</li>
-            <li>Coupon expiry race condition during checkout</li>
-          </ul>
-          <div style={{display:"flex", gap:6}}>
-            <button className="btn sm" style={{background:"var(--purple)", borderColor:"var(--purple)", color:"oklch(0.16 0 0)"}}>Generate drafts</button>
-            <button className="btn sm">Dismiss</button>
-          </div>
-        </div>
+        <AiSuggestBox D={D} />
       </div>
 
       <div className="grid grid-main">
@@ -132,7 +147,7 @@ function Overview({ onNav }) {
                   </td>
                   <td><StatusBadge s={r.status} /></td>
                   <td className="mono dim">{r.owner}</td>
-                  <td className="mono dim">{r.started}</td>
+                  <td className="mono dim">{r.created_at ? timeAgo(r.created_at) : r.started}</td>
                 </tr>
               ))}
             </tbody>
@@ -144,9 +159,9 @@ function Overview({ onNav }) {
           <div className="card-h">
             <div className="card-title">Activity</div>
             <div className="spacer" />
-            <button className="btn sm ghost">Filter</button>
           </div>
           <div style={{padding:"4px 0"}}>
+            {D.activity.length === 0 && <div className="empty" style={{padding:"20px 14px"}}>No activity yet.</div>}
             {D.activity.map((a, i) => (
               <div key={i} style={{display:"flex", gap:10, padding:"10px 14px", borderBottom: i < D.activity.length-1 ? "1px solid var(--border)" : "none"}}>
                 <div className="avatar" style={{
@@ -157,12 +172,113 @@ function Overview({ onNav }) {
                   <div style={{fontSize:12}}><b>{a.who}</b> <span className="muted">{a.what}</span> <span className="mono" style={{color:"var(--accent)"}}>{a.target}</span></div>
                   <div style={{fontSize:11.5, color:"var(--text-dim)", marginTop:2}}>{a.detail}</div>
                 </div>
-                <div className="mono dim" style={{fontSize:10.5, flexShrink:0}}>{a.when}</div>
+                <div className="mono dim" style={{fontSize:10.5, flexShrink:0}}>{a.created_at ? timeAgo(a.created_at) : a.when}</div>
               </div>
             ))}
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Compact AI coverage widget — analyzes a folder's tests via /api/ai/suggest-edge-cases
+// and can create pending draft tests from the suggestions.
+function AiSuggestBox({ D }) {
+  const folderNames = {};
+  D.folders.forEach(f => {
+    folderNames[f.id] = f.name;
+    (f.children || []).forEach(c => { folderNames[c.id] = c.name; });
+  });
+  const folderIds = [...new Set(D.tests.map(t => t.folder).filter(Boolean))];
+
+  const [folderId, setFolderId] = React.useState(folderIds[0] || "");
+  const [loading, setLoading] = React.useState(false);
+  const [err, setErr] = React.useState(null);
+  const [result, setResult] = React.useState(null);
+  const [creating, setCreating] = React.useState(false);
+  const [createdCount, setCreatedCount] = React.useState(0);
+
+  const analyze = () => {
+    setLoading(true); setErr(null); setResult(null); setCreatedCount(0);
+    TH_API.suggestEdgeCases({ folder_id: folderId })
+      .then(data => { setResult(data); setLoading(false); })
+      .catch(e => { setErr(e.message); setLoading(false); });
+  };
+
+  const generateDrafts = async () => {
+    if (!result?.suggestions?.length) return;
+    setCreating(true); setErr(null);
+    let n = 0;
+    try {
+      for (const s of result.suggestions) {
+        await TH_API.createTest({ title: s.title, folder_id: folderId, status: "pending" });
+        n++;
+      }
+      setCreatedCount(n);
+    } catch (e) {
+      setErr(n > 0 ? `Created ${n} draft${n === 1 ? "" : "s"}, then failed: ${e.message}` : e.message);
+      setCreatedCount(n);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const suggestions = result?.suggestions || [];
+
+  return (
+    <div className="ai-box">
+      <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:10}}>
+        <span style={{fontSize:11, fontFamily:"var(--font-mono)", textTransform:"uppercase", letterSpacing:"0.08em", color:"var(--purple)"}}>AI assistant</span>
+      </div>
+
+      {!result && (
+        <>
+          <div style={{fontSize:13, fontWeight:500, marginBottom:6}}>Find missing edge cases</div>
+          <div style={{fontSize:12, color:"var(--text-muted)", lineHeight:1.5, marginBottom:10}}>
+            Pick a folder — AI compares its existing tests and suggests uncovered edge cases.
+          </div>
+          <div style={{display:"flex", gap:6, alignItems:"center"}}>
+            <select className="input" style={{flex:1, minWidth:0}} value={folderId} onChange={e => setFolderId(e.target.value)} disabled={loading}>
+              {folderIds.map(id => <option key={id} value={id}>{folderNames[id] || id}</option>)}
+            </select>
+            <button className="btn sm" style={{background:"var(--purple)", borderColor:"var(--purple)", color:"oklch(0.16 0 0)"}}
+              onClick={analyze} disabled={loading || !folderId}>
+              {loading ? "Analyzing…" : "Analyze"}
+            </button>
+          </div>
+        </>
+      )}
+
+      {result && (
+        <>
+          <div style={{fontSize:13, fontWeight:500, marginBottom:6}}>
+            {suggestions.length} missing edge case{suggestions.length === 1 ? "" : "s"} in {folderNames[folderId] || folderId}
+          </div>
+          {suggestions.length === 0 && (
+            <div style={{fontSize:12, color:"var(--text-muted)", lineHeight:1.5}}>No gaps found — coverage looks solid.</div>
+          )}
+          <ul style={{margin:"10px 0 12px", padding:"0 0 0 18px", fontSize:12, color:"var(--text-muted)", lineHeight:1.7}}>
+            {suggestions.map((s, i) => (
+              <li key={i}><span style={{color:"var(--text)"}}>{s.title}</span>{s.rationale ? ` — ${s.rationale}` : ""}</li>
+            ))}
+          </ul>
+          <div style={{display:"flex", gap:6}}>
+            {suggestions.length > 0 && createdCount === 0 && (
+              <button className="btn sm" style={{background:"var(--purple)", borderColor:"var(--purple)", color:"oklch(0.16 0 0)"}}
+                onClick={generateDrafts} disabled={creating}>
+                {creating ? "Creating…" : "Generate drafts"}
+              </button>
+            )}
+            {createdCount > 0 && (
+              <span style={{fontSize:12, color:"var(--pass)", alignSelf:"center"}}>✓ Created {createdCount} draft{createdCount === 1 ? "" : "s"}</span>
+            )}
+            <button className="btn sm" onClick={() => { setResult(null); setErr(null); setCreatedCount(0); }}>Dismiss</button>
+          </div>
+        </>
+      )}
+
+      {err && <div style={{fontSize:12, color:"var(--fail)", marginTop:10}}>{err}</div>}
     </div>
   );
 }
@@ -217,22 +333,25 @@ function ProgressBar({run}) {
   );
 }
 
-function HealthChart() {
-  const days = [
-    [82, 4, 0], [88, 2, 1], [91, 1, 0], [76, 6, 2], [89, 3, 0], [94, 1, 0], [86, 5, 1],
-    [92, 2, 0], [78, 8, 1], [90, 2, 1], [93, 1, 0], [85, 4, 1], [91, 2, 0], [88, 3, 1],
-  ];
-  const max = Math.max(...days.map(d => d.reduce((a,b)=>a+b,0)));
+function HealthChart({ health }) {
+  if (!health) return <div className="empty" style={{height:140, display:"flex", alignItems:"center", justifyContent:"center"}}>Loading…</div>;
+  const days = health.days || [];
+  if (health.total_runs === 0) {
+    return <div className="empty" style={{height:140, display:"flex", alignItems:"center", justifyContent:"center"}}>No runs in the last 14 days.</div>;
+  }
+  const max = Math.max(...days.map(d => d.passed + d.failed + d.blocked + d.skipped), 1);
   return (
     <div style={{display:"flex", gap:4, alignItems:"flex-end", height:140, padding:"6px 0"}}>
       {days.map((d, i) => {
-        const sum = d.reduce((a,b)=>a+b,0);
+        const sum = d.passed + d.failed + d.blocked + d.skipped;
         const h = (sum/max)*100;
         return (
-          <div key={i} style={{flex:1, display:"flex", flexDirection:"column-reverse", height:`${h}%`, minWidth:0, gap:1}}>
-            <div style={{background:"var(--pass)", flex: d[0], borderRadius:"2px 2px 0 0"}} />
-            {d[1] > 0 && <div style={{background:"var(--fail)", flex: d[1]}} />}
-            {d[2] > 0 && <div style={{background:"var(--warn)", flex: d[2]}} />}
+          <div key={d.date} title={`${d.date} — ${d.passed} passed, ${d.failed} failed, ${d.blocked} blocked, ${d.skipped} skipped`}
+            style={{flex:1, display:"flex", flexDirection:"column-reverse", height:`${Math.max(h, sum > 0 ? 3 : 0)}%`, minWidth:0, gap:1}}>
+            {d.passed > 0 && <div style={{background:"var(--pass)", flex: d.passed, borderRadius:"2px 2px 0 0"}} />}
+            {d.failed > 0 && <div style={{background:"var(--fail)", flex: d.failed}} />}
+            {d.blocked > 0 && <div style={{background:"var(--warn)", flex: d.blocked}} />}
+            {d.skipped > 0 && <div style={{background:"var(--skip)", flex: d.skipped}} />}
           </div>
         );
       })}
@@ -290,3 +409,4 @@ window.StatusBadge = StatusBadge;
 window.StatusSelect = StatusSelect;
 window.ProgressBar = ProgressBar;
 window.Metric = Metric;
+window.timeAgo = timeAgo;

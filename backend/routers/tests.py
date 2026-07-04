@@ -12,6 +12,7 @@ from ..schemas import TestOut, TestCreate, TestUpdate, BulkAction, DefectOut, Co
 from ..auth_utils import require_role, get_current_user
 from ..notifications import _notify_comment_event
 from ..audit_utils import log_event, EVT_TEST_CREATED, EVT_TEST_UPDATED, EVT_TEST_DELETED
+from ..activity_utils import log_activity, actor_name
 from ._pagination import paginate, MAX_LIMIT
 
 router = APIRouter(tags=["tests"])
@@ -120,6 +121,7 @@ def create_test(payload: TestCreate, db: Session = Depends(get_db), current_user
     data["id"] = test_id
     t = models.Test(**data)
     db.add(t)
+    log_activity(db, actor_name(current_user), "created", test_id, t.title)
     db.commit()
     db.refresh(t)
     log_event(
@@ -144,6 +146,10 @@ def update_test(test_id: str, payload: TestUpdate, db: Session = Depends(get_db)
         setattr(t, field, value)
     if category_ids is not None:
         t.categories = db.query(models.Category).filter(models.Category.id.in_(category_ids)).all()
+    if "status" in data:
+        log_activity(db, actor_name(current_user), "marked", test_id, f"as {data['status']} — {t.title}")
+    else:
+        log_activity(db, actor_name(current_user), "edited", test_id, t.title)
     db.commit()
     db.refresh(t)
     log_event(
@@ -164,6 +170,7 @@ def delete_test(test_id: str, db: Session = Depends(get_db), current_user: model
         raise HTTPException(status_code=404, detail="Test not found")
     test_title = t.title   # capture before delete
     db.delete(t)
+    log_activity(db, actor_name(current_user), "deleted", test_id, test_title)
     db.commit()
     log_event(
         EVT_TEST_DELETED,
