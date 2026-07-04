@@ -76,8 +76,25 @@ test.describe('Suite 10 — Settings', () => {
   });
 
   // SETT-04 · Cambio password — successo [P1]
+  // Uses a throwaway user, NOT marco: suites run on 2 parallel workers and every
+  // other suite logs in as marco — changing marco's password (even briefly, with
+  // a restore) makes concurrent loginAs() calls fail with "Invalid credentials".
   test('SETT-04: change password success', async ({ page }) => {
+    // Create the throwaway user with marco's admin token (read-only wrt marco)
     await loginAs(page, 'marco@acme.com');
+    const adminToken = await page.evaluate(() => localStorage.getItem('th_token'));
+    const suffix = Date.now().toString(36);
+    const email = `pwtest-${suffix}@acme.com`;
+    const created = await page.request.post(`${BASE}/api/admin/users`, {
+      data: { username: `pwtest-${suffix}`, email, password: 'demo123', role: 'tester' },
+      headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+    });
+    expect(created.ok()).toBeTruthy();
+    const userId = (await created.json()).id;
+
+    // Re-login as the throwaway user and change its password through the UI
+    await page.evaluate(() => localStorage.removeItem('th_token'));
+    await loginAs(page, email);
     await page.goto('/#/settings');
     await page.click('button:has-text("Password")');
 
@@ -91,12 +108,17 @@ test.describe('Suite 10 — Settings', () => {
 
     await expect(page.locator('text=Saved.')).toBeVisible({ timeout: 8000 });
 
-    // Restore original password
-    await inputs.nth(0).fill('newpass123');
-    await inputs.nth(1).fill('demo123');
-    await inputs.nth(2).fill('demo123');
-    await page.click('button:has-text("Update password")');
-    await expect(page.locator('text=Saved.')).toBeVisible({ timeout: 5000 });
+    // New password works
+    const relogin = await page.request.post(`${BASE}/api/auth/login`, {
+      data: { email, password: 'newpass123' },
+      headers: { 'Content-Type': 'application/json' },
+    });
+    expect(relogin.status()).toBe(200);
+
+    // Cleanup
+    await page.request.delete(`${BASE}/api/admin/users/${userId}`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
   });
 
   // SETT-05 · Cambio password — mismatch [P1]

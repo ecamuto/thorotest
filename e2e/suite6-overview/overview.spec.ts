@@ -3,6 +3,10 @@ import { loginAs } from '../fixtures/auth';
 
 const BASE = 'http://localhost:8000';
 
+// Match /api/insights exactly — NOT sub-resources like /api/insights/test-health,
+// which the Overview page also fires and which lacks the aggregate KPI fields.
+const isInsightsResponse = (r: { url(): string }) => /\/api\/insights(\?|$)/.test(r.url());
+
 test.describe('Suite 6 — Overview & Insights', () => {
 
   test.beforeEach(async ({ page }) => {
@@ -13,7 +17,7 @@ test.describe('Suite 6 — Overview & Insights', () => {
   test('OVR-01: KPI Overview da dati reali', async ({ page }) => {
     // Navigate to Overview and capture /api/insights
     const [response] = await Promise.all([
-      page.waitForResponse(r => r.url().includes('/api/insights')),
+      page.waitForResponse(isInsightsResponse),
       page.click('.nav-item:has-text("Overview")'),
     ]);
 
@@ -39,7 +43,7 @@ test.describe('Suite 6 — Overview & Insights', () => {
   // E2E-OVR-02 · Insights — folder coverage [P1]
   test('OVR-02: Insights folder coverage', async ({ page }) => {
     const [response] = await Promise.all([
-      page.waitForResponse(r => r.url().includes('/api/insights')),
+      page.waitForResponse(isInsightsResponse),
       page.click('.nav-item:has-text("Insights")'),
     ]);
 
@@ -57,7 +61,7 @@ test.describe('Suite 6 — Overview & Insights', () => {
   // E2E-OVR-03 · Insights — top flaky [P1]
   test('OVR-03: Insights top flaky tests', async ({ page }) => {
     const [response] = await Promise.all([
-      page.waitForResponse(r => r.url().includes('/api/insights')),
+      page.waitForResponse(isInsightsResponse),
       page.click('.nav-item:has-text("Insights")'),
     ]);
 
