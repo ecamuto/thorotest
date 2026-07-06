@@ -169,6 +169,40 @@ def seed_db():
             models.Defect(id="BUG-0780", title="Invoice PDF — line items misaligned for >10 items", status="closed", severity="low", test_id="TC-3001", description="PDF template used fixed-height rows. Switched to dynamic height calculation.", created_at="2mo", created_by="Anna Ricci"),
         ]
         db.add_all(defects)
+        db.flush()
+
+        def _tests(*ids):
+            return db.query(models.Test).filter(models.Test.id.in_(ids)).all()
+
+        requirements = [
+            models.Requirement(id="REQ-101", title="User authentication", type="epic", status="active",
+                               priority="critical", owner="Anna Ricci", created_at="1mo", created_by="Anna Ricci",
+                               description="Sign-in, session, and lockout behaviour across web and mobile.",
+                               tests=_tests("TC-1042", "TC-1043", "TC-1044")),
+            models.Requirement(id="REQ-102", title="Password reset flow", type="story", status="active",
+                               priority="high", owner="Marco Rossi", created_at="3w", created_by="Marco Rossi",
+                               description="Self-service reset via emailed link within the 60s SLA.",
+                               tests=_tests("TC-1045", "TC-1046")),
+            models.Requirement(id="REQ-103", title="Checkout — card payments", type="feature", status="active",
+                               priority="critical", owner="Luca Pace", created_at="2w", created_by="Luca Pace",
+                               description="Card charge incl. 3DS challenge on the unbranded test card.",
+                               external_provider="jira", external_key="PAY-45",
+                               external_url="https://acme.atlassian.net/browse/PAY-45",
+                               tests=_tests("TC-2301", "TC-2302", "TC-2303")),
+            models.Requirement(id="REQ-104", title="Multi-factor authentication", type="feature", status="active",
+                               priority="high", owner="Alex Rivera", created_at="2w", created_by="Alex Rivera",
+                               description="TOTP + backup codes, single-use enforcement.",
+                               tests=_tests("TC-1048", "TC-1049")),
+            models.Requirement(id="REQ-105", title="Guest cart persistence", type="story", status="active",
+                               priority="med", owner="Marco Rossi", created_at="1w", created_by="Marco Rossi",
+                               description="Cart survives reload for unauthenticated sessions.",
+                               tests=_tests("TC-2210", "TC-2212")),
+            models.Requirement(id="REQ-106", title="Invoice PDF export", type="feature", status="draft",
+                               priority="low", owner="Anna Ricci", created_at="4d", created_by="Anna Ricci",
+                               description="Downloadable invoice PDF — no automated coverage yet.",
+                               tests=[]),
+        ]
+        db.add_all(requirements)
 
         comments = [
             models.Comment(test_id="TC-2301", who="Luca Pace", text="Updated the expected for step 4 — capture SLA is now 4s, not 5s. See REQ-PAY-014 v3.", when="1d"),
