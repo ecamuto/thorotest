@@ -1,6 +1,6 @@
 # ThoroTest
 
-Source-available test management platform. Organize, run, and track tests across manual and automated suites — one timeline for both.
+Source-available test management platform. Organize, run, and track tests across manual and automated suites — one timeline for both. Trace features, stories, and epics to the tests that cover them, and see coverage at a glance.
 
 ---
 
@@ -168,6 +168,35 @@ Only `title` is required. Malformed files are skipped and reported in the sync r
 
 ---
 
+## Requirements & coverage
+
+Track features, stories, and epics as **requirements**, and link each to the tests that
+verify it. The Requirements view shows a coverage bar per requirement (passed / failed /
+untested) and the Overview surfaces a workspace-wide coverage summary — including
+**uncovered** requirements and those **at risk** (with a failing linked test). Each test's
+detail page lists the requirements it covers.
+
+Requirements carry `external_provider` / `external_key` / `external_url` fields so they can
+later be linked to an external tracker (e.g. Jira) — the same fields exist on defects.
+
+### Bulk import
+
+`POST /api/requirements/import` accepts a YAML, JSON, or CSV file and upserts requirements
+(matched by `id`, else by `title`). Linked tests are matched by id; unknown ids are
+reported as `warnings` rather than failing the import.
+
+```yaml
+- id: REQ-103                 # optional stable id (generated if absent)
+  title: "Checkout — card payments"
+  type: feature               # feature | story | epic
+  status: active              # draft | active | done | deprecated
+  priority: high              # low | med | high | critical
+  owner: luca@example.com
+  tests: [TC-2301, TC-2302]   # linked test ids (CSV: space/comma separated)
+```
+
+---
+
 ## Project structure
 
 ```
@@ -200,6 +229,7 @@ thorotest/
 │       ├── view-test-detail.jsx    # Test case — steps, history, defects, comments
 │       ├── view-runs.jsx           # Runs list + live run detail (WebSocket)
 │       ├── view-defects.jsx        # Defect management
+│       ├── view-requirements.jsx   # Requirements + test coverage
 │       ├── view-settings.jsx       # Profile, password, tokens, webhooks, integrations
 │       ├── view-admin.jsx          # User and role management (admin only)
 │       ├── view-import.jsx         # Bulk test import (CSV / YAML)
@@ -231,6 +261,7 @@ thorotest/
 │       ├── runs.py         # /api/runs + run detail + defects
 │       ├── folders.py      # GET /api/folders (nested tree)
 │       ├── defects.py      # CRUD /api/defects (filters: status, severity, test, run)
+│       ├── requirements.py # CRUD /api/requirements + coverage + link tests + import
 │       ├── projects.py     # CRUD /api/projects
 │       ├── categories.py   # CRUD /api/categories
 │       ├── integrations.py # CRUD /api/integrations + GitHub YAML sync
@@ -349,6 +380,7 @@ backend/tests/
 ├── test_tests_crud.py        # Full CRUD, bulk actions, filters
 ├── test_test_detail_tabs.py  # History, defects, comments endpoints
 ├── test_defects.py           # Defects CRUD, filters, severity/status logic
+├── test_requirements.py      # Requirements CRUD, coverage, linking, import, roles
 ├── test_steps.py             # Structured test steps CRUD
 ├── test_step_execution.py    # Step execution and result recording
 ├── test_attachments.py       # File upload/download per test and run

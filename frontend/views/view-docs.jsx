@@ -265,7 +265,7 @@ function buildGroups(spec) {
       map[tag].push({ method, path, op });
     }
   }
-  const TAG_ORDER = ["tests","runs","defects","folders","auth","projects","categories","activity","pipelines"];
+  const TAG_ORDER = ["tests","runs","defects","requirements","folders","auth","projects","categories","activity","pipelines"];
   const sorted = [...TAG_ORDER.filter(t => map[t]), ...Object.keys(map).filter(t => !TAG_ORDER.includes(t))];
   return sorted.map(tag => ({ tag, endpoints: map[tag] }));
 }

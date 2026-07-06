@@ -15,6 +15,13 @@ not yet sellable production. Items ordered by priority — work top to bottom.
 | 6 | Alembic migration baseline (replace homegrown `_run_migrations`) | High | ✅ Done |
 | 7 | Backup/restore docs + uploads volume in docker-compose | Medium | ✅ Done |
 
+## Post-v1 features
+
+| Version | Feature | Status |
+|---|---|---|
+| 1.1 | Requirements & test coverage (features/stories/epics ↔ tests, coverage metrics, YAML/JSON/CSV import, GraphQL) | ✅ Done — `feat/requirements-coverage` |
+| 1.2 | Jira integration (pull stories → requirements, push defects → bugs) — reuses `external_*` fields shipped in 1.1 | ⏳ Next |
+
 ## Item detail
 
 ### 1. Fake run simulation (CRITICAL — product integrity) — DONE

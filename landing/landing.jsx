@@ -175,8 +175,8 @@ function Landing() {
             />
             <Pillar
               num="03"
-              title="Lineage you can actually read"
-              body="See requirement → test → code file → CI run → defect in one graph. Click anything to traverse. No spreadsheets, no broken JIRA links."
+              title="Requirement coverage, not guesswork"
+              body="Link features, stories, and epics to the tests that cover them. See coverage per requirement — and which ones are uncovered or at risk — from requirement → test → CI run → defect in one graph."
             />
             <Pillar
               num="04"
