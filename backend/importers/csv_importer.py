@@ -82,7 +82,8 @@ def parse_csv(content: bytes, column_mapping: dict | None = None) -> ImportResul
 
     if "title" not in mapping:
         warnings.append("No title column detected — cannot import test cases from this CSV")
-        return ImportResult(format_detected=f"csv ({tool})", warnings=warnings)
+        return ImportResult(format_detected=f"csv ({tool})", warnings=warnings,
+                            source_provider=tool)
 
     for row in reader:
         title = row.get(mapping["title"], "").strip()
@@ -116,6 +117,7 @@ def parse_csv(content: bytes, column_mapping: dict | None = None) -> ImportResul
         tests=tests,
         format_detected=f"csv ({tool})",
         warnings=warnings,
+        source_provider=tool,
     )
 
 

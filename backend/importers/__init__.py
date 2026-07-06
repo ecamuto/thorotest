@@ -5,9 +5,10 @@ from .testrail_xml import parse_testrail_xml
 from .junit_xml import parse_junit_xml
 from .json_importer import parse_json
 from .yaml_importer import parse_yaml_test
+from .zephyr_json import parse_zephyr
 
 __all__ = [
     "ImportResult", "TestData", "RunData", "DefectData",
     "detect_format", "parse_csv", "parse_testrail_xml", "parse_junit_xml", "parse_json",
-    "parse_yaml_test",
+    "parse_yaml_test", "parse_zephyr",
 ]

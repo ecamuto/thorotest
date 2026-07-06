@@ -1,12 +1,25 @@
+def _is_zephyr_json(content: bytes) -> bool:
+    """Heuristic: Zephyr Scale JSON wraps records in a 'values' array whose
+    items carry Zephyr-specific keys (testScript, objective, testCase, ...)."""
+    head = content[:4000].decode("utf-8", errors="ignore")
+    if '"values"' not in head:
+        return False
+    return any(
+        marker in head
+        for marker in ('"testScript"', '"objective"', '"testCase"',
+                       '"testCycle"', '"precondition"')
+    )
+
+
 def detect_format(filename: str, content: bytes) -> str:
-    """Return 'csv', 'testrail_xml', 'junit_xml', or 'json'."""
+    """Return 'csv', 'testrail_xml', 'junit_xml', 'json', or 'zephyr'."""
     name = filename.lower()
 
     if name.endswith(".csv") or name.endswith(".xlsx"):
         return "csv"
 
     if name.endswith(".json"):
-        return "json"
+        return "zephyr" if _is_zephyr_json(content) else "json"
 
     if name.endswith(".xml"):
         head = content[:2000].decode("utf-8", errors="ignore")
@@ -19,7 +32,7 @@ def detect_format(filename: str, content: bytes) -> str:
     # Sniff content type by magic bytes / first chars
     head = content[:512].decode("utf-8", errors="ignore").strip()
     if head.startswith("{") or head.startswith("["):
-        return "json"
+        return "zephyr" if _is_zephyr_json(content) else "json"
     if head.startswith("<"):
         if "<suite" in head:
             return "testrail_xml"

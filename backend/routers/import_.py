@@ -8,7 +8,7 @@ from ..db import get_db
 from .. import models
 from ..importers import (
     detect_format, parse_csv, parse_testrail_xml, parse_junit_xml, parse_json,
-    ImportResult,
+    parse_zephyr, ImportResult,
 )
 from ..importers.csv_importer import get_csv_columns
 from ..auth_utils import require_role
@@ -30,7 +30,24 @@ def _run_parser(fmt: str, content: bytes, column_mapping: dict | None) -> Import
         return parse_junit_xml(content)
     if fmt == "json":
         return parse_json(content)
+    if fmt == "zephyr":
+        return parse_zephyr(content)
     raise HTTPException(status_code=400, detail=f"Unknown format: {fmt}")
+
+
+# Fallback provider token when a parser doesn't set ImportResult.source_provider.
+_FMT_PROVIDER = {
+    "zephyr": "zephyr",
+    "testrail_xml": "testrail",
+    "junit_xml": "junit",
+    "csv": "csv",
+    "json": "json",
+}
+
+
+def _provider_for(fmt: str, result: ImportResult) -> str:
+    """Normalised source-tool name used as Test/Defect external_provider."""
+    return result.source_provider or _FMT_PROVIDER.get(fmt, fmt)
 
 
 @router.post("/import/detect")
@@ -119,6 +136,7 @@ async def execute_import(
             raise HTTPException(status_code=400, detail="column_mapping must be valid JSON")
 
     result = _run_parser(fmt, content, mapping)
+    provider = _provider_for(fmt, result)
 
     now = datetime.now(timezone.utc).isoformat()
     stats = {"folders": 0, "tests": 0, "runs": 0, "defects": 0, "skipped": 0}
@@ -162,16 +180,33 @@ async def execute_import(
         return folder_cache[path]
 
     # ── Tests ──────────────────────────────────────────────────
-    title_to_id: dict[str, str] = {}  # for run case linking
+    title_to_id: dict[str, str] = {}       # title → test.id (fallback linking)
+    key_to_id: dict[str, str] = {}         # source_id → test.id (primary linking)
 
     for t in result.tests:
         folder_id = _get_or_create_folder(t.folder_path) if t.folder_path else None
 
-        existing = db.query(models.Test).filter(models.Test.title == t.title).first()
+        # Match order: stable external identity (provider, key) first, so
+        # re-imports update the same test and same-title cases in different
+        # folders stay distinct. Fall back to (title, folder) for sources with
+        # no key. Title-only matching is deliberately avoided.
+        existing = None
+        if t.source_id:
+            existing = db.query(models.Test).filter(
+                models.Test.external_provider == provider,
+                models.Test.external_key == t.source_id,
+            ).first()
+        if existing is None:
+            existing = db.query(models.Test).filter(
+                models.Test.title == t.title,
+                models.Test.folder_id == folder_id,
+            ).first()
 
         if existing:
             if conflict == "skip":
                 title_to_id[t.title] = existing.id
+                if t.source_id:
+                    key_to_id[t.source_id] = existing.id
                 stats["skipped"] += 1
                 continue
             elif conflict == "overwrite":
@@ -181,7 +216,13 @@ async def execute_import(
                 existing.tags = t.tags
                 existing.owner = t.owner or existing.owner
                 existing.updated_at = now
+                # Backfill external identity if this test was matched by title.
+                if t.source_id and not existing.external_key:
+                    existing.external_provider = provider
+                    existing.external_key = t.source_id
                 title_to_id[t.title] = existing.id
+                if t.source_id:
+                    key_to_id[t.source_id] = existing.id
                 db.flush()
                 stats["tests"] += 1
                 continue
@@ -200,14 +241,33 @@ async def execute_import(
             tags=t.tags,
             auto=t.type == "automated",
             updated_at=now,
+            external_provider=provider if t.source_id else None,
+            external_key=t.source_id or None,
         )
         db.add(test)
         db.flush()
         title_to_id[t.title] = tid
+        if t.source_id:
+            key_to_id[t.source_id] = tid
         stats["tests"] += 1
+
+    def _resolve_test_id(source_test_id: str, test_title: str) -> str | None:
+        """Link a case/defect to a test by source id first, title as fallback."""
+        if source_test_id and source_test_id in key_to_id:
+            return key_to_id[source_test_id]
+        return title_to_id.get(test_title)
 
     # ── Runs ──────────────────────────────────────────────────
     for run_data in result.runs:
+        # Dedup: skip a run already imported from the same source cycle.
+        if run_data.source_id:
+            dup = db.query(models.Run).filter(
+                models.Run.source_run_id == run_data.source_id,
+            ).first()
+            if dup is not None:
+                stats["skipped"] += 1
+                continue
+
         rid = f"R-{uuid.uuid4().hex[:6].upper()}"
         total = len(run_data.cases)
         passed = sum(1 for c in run_data.cases if c.status == "pass")
@@ -224,12 +284,13 @@ async def execute_import(
             blocked=blocked,
             progress=100 if total > 0 else 0,
             started=now,
+            source_run_id=run_data.source_id or None,
         )
         db.add(run)
         db.flush()
 
         for case in run_data.cases:
-            test_id = title_to_id.get(case.test_title)
+            test_id = _resolve_test_id(case.source_test_id, case.test_title)
             if not test_id:
                 continue
             db.add(models.RunCase(run_id=rid, test_id=test_id, status=case.status))
@@ -238,7 +299,18 @@ async def execute_import(
 
     # ── Defects ───────────────────────────────────────────────
     for d in result.defects:
+        # Dedup: skip a defect already imported from the same source key.
+        if d.source_id:
+            dup = db.query(models.Defect).filter(
+                models.Defect.external_provider == provider,
+                models.Defect.external_key == d.source_id,
+            ).first()
+            if dup is not None:
+                stats["skipped"] += 1
+                continue
+
         did = f"D-{uuid.uuid4().hex[:6].upper()}"
+        # DefectData carries no source_test_id, so link by title only.
         test_id = title_to_id.get(d.test_title) if d.test_title else None
         defect = models.Defect(
             id=did,
@@ -248,6 +320,8 @@ async def execute_import(
             description=d.description,
             test_id=test_id,
             created_at=now,
+            external_provider=provider if d.source_id else None,
+            external_key=d.source_id or None,
         )
         db.add(defect)
         stats["defects"] += 1

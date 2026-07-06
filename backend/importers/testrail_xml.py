@@ -54,4 +54,5 @@ def parse_testrail_xml(content: bytes) -> ImportResult:
         for section in sections_el.findall("section"):
             _parse_sections(section, "", tests, warnings)
 
-    return ImportResult(tests=tests, warnings=warnings, format_detected="testrail_xml")
+    return ImportResult(tests=tests, warnings=warnings, format_detected="testrail_xml",
+                        source_provider="testrail")
