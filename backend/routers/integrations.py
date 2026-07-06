@@ -37,14 +37,20 @@ def update_integration(intg_id: str, payload: IntegrationUpdate, db: Session = D
         raise HTTPException(status_code=404, detail="Integration not found")
     updates = payload.model_dump(exclude_unset=True)
     if "config" in updates and updates["config"] is not None:
-        # Merge so a redacted/empty token from the client never wipes the stored one.
+        # Merge so a redacted/empty secret from the client never wipes the stored one.
         merged = dict(intg.config or {})
         incoming = updates.pop("config")
-        new_token = incoming.get("token")
+        prev = intg.config or {}
         merged.update(incoming)
-        if not new_token:
-            merged["token"] = (intg.config or {}).get("token", "")
+        # Preserve stored secrets when the client submits them blank (redacted).
+        for secret_key in ("token", "api_token"):
+            if not incoming.get(secret_key):
+                if prev.get(secret_key):
+                    merged[secret_key] = prev[secret_key]
+                else:
+                    merged.pop(secret_key, None)
         merged.pop("token_set", None)
+        merged.pop("api_token_set", None)
         intg.config = merged
     for field, value in updates.items():
         setattr(intg, field, value)

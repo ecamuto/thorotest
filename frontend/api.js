@@ -312,6 +312,16 @@
       if (!res.ok && res.status !== 204) throw new Error("Delete defect failed");
     },
 
+    async pushDefectToJira(id) {
+      const res = await fetch(BASE + `/api/defects/${id}/push`, { method: "POST", headers: authHeaders() });
+      if (!res.ok) {
+        let msg = "Push to Jira failed";
+        try { msg = (await res.json()).detail || msg; } catch {}
+        throw new Error(msg);
+      }
+      return res.json();
+    },
+
     async getRunDefects(runId) {
       const res = await fetch(BASE + `/api/runs/${runId}/defects`, { headers: authHeaders() });
       if (!res.ok) throw new Error("Run defects fetch failed");

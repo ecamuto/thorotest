@@ -380,13 +380,17 @@ class IntegrationOut(BaseModel):
     @field_validator("config", mode="before")
     @classmethod
     def _redact_token(cls, v):
-        """Never expose the stored PAT to clients; report only whether it is set."""
+        """Never expose stored secrets (GitHub PAT, Jira api_token) to clients;
+        report only whether each is set."""
         if not isinstance(v, dict):
             return {}
         out = dict(v)
         if out.get("token"):
             out["token"] = ""
             out["token_set"] = True
+        if out.get("api_token"):
+            out["api_token"] = ""
+            out["api_token_set"] = True
         return out
 
 

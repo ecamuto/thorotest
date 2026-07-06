@@ -42,6 +42,17 @@ function Defects() {
     setDeleteConfirmId(null);
   };
 
+  const [pushingId, setPushingId] = useState(null);
+  const [pushErr, setPushErr] = useState(null);
+  const handlePush = async (id) => {
+    setPushingId(id); setPushErr(null);
+    try {
+      const updated = await TH_API.pushDefectToJira(id);
+      setDefects(prev => prev.map(d => d.id === id ? updated : d));
+    } catch (e) { setPushErr({ id, msg: e.message }); }
+    setPushingId(null);
+  };
+
   const severityClass = s => s === "critical" || s === "high" ? "priority-high" : s === "med" ? "priority-med" : "priority-low";
   const statusColor = s => {
     if (s === "open") return "var(--fail)";
@@ -126,6 +137,7 @@ function Defects() {
                   <th style={{width:90}}>Severity</th>
                   <th style={{width:90}}>Test</th>
                   <th style={{width:90}}>Run</th>
+                  <th style={{width:110}}>Tracker</th>
                   <th style={{width:80}}>Filed</th>
                   <th style={{width:32}}></th>
                 </tr>
@@ -159,6 +171,18 @@ function Defects() {
                     <td><span className={"tag " + severityClass(d.severity)}>{d.severity}</span></td>
                     <td className="mono" style={{fontSize:11}}>{d.test_id || <span className="dim">—</span>}</td>
                     <td className="mono" style={{fontSize:11}}>{d.run_id || <span className="dim">—</span>}</td>
+                    <td style={{fontSize:11}}>
+                      {d.external_key ? (
+                        <a href={d.external_url || "#"} target="_blank" rel="noreferrer" className="mono" style={{color:"var(--accent)", textDecoration:"none"}}>{d.external_key}</a>
+                      ) : (
+                        <>
+                          <button className="btn ghost sm" style={{padding:"2px 6px"}} disabled={pushingId === d.id} onClick={() => handlePush(d.id)} title="Create a Jira bug from this defect">
+                            {pushingId === d.id ? "Pushing…" : "Push to Jira"}
+                          </button>
+                          {pushErr && pushErr.id === d.id && <div style={{fontSize:10, color:"var(--fail)", marginTop:2, maxWidth:100}}>{pushErr.msg}</div>}
+                        </>
+                      )}
+                    </td>
                     <td className="dim" style={{fontSize:11}}>{d.created_at || "—"}</td>
                     <td>
                       <button
