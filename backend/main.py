@@ -86,6 +86,12 @@ def _run_migrations():
         if "defects" in tables:
             for col in ("description", "created_at", "created_by"):
                 _add_column("defects", col)
+            # Phase 1 (v1.1): external tracker link fields (Jira in Phase 2).
+            # The requirements + requirement_tests tables are created by
+            # create_all() in the legacy path, so no manual CREATE TABLE needed.
+            _add_column("defects", "external_provider", ddl_type="VARCHAR(64)")
+            _add_column("defects", "external_key", ddl_type="VARCHAR(128)")
+            _add_column("defects", "external_url", ddl_type="VARCHAR(512)")
         if "users" in tables:
             _add_column("users", "language", default="'en'")
             # Phase 2: migrate legacy "member" role to "tester"

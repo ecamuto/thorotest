@@ -11,6 +11,15 @@ test_categories = Table(
 )
 
 
+requirement_tests = Table(
+    "requirement_tests",
+    Base.metadata,
+    Column("requirement_id", String(255), ForeignKey("requirements.id", ondelete="CASCADE")),
+    Column("test_id", String(255), ForeignKey("tests.id", ondelete="CASCADE")),
+    UniqueConstraint("requirement_id", "test_id", name="uq_requirement_test"),
+)
+
+
 class Project(Base):
     __tablename__ = "projects"
     id = Column(String(255), primary_key=True)
@@ -72,6 +81,7 @@ class Test(Base):
     categories = relationship("Category", secondary=test_categories, back_populates="tests")
     run_cases = relationship("RunCase", back_populates="test")
     defects = relationship("Defect", back_populates="test_rel")
+    requirements = relationship("Requirement", secondary=requirement_tests, back_populates="tests")
     comments = relationship("Comment", back_populates="test_rel")
     steps = relationship("TestStep", back_populates="test", cascade="all, delete-orphan", order_by="TestStep.order")
 
@@ -150,8 +160,35 @@ class Defect(Base):
     created_by = Column(String(255), nullable=True)
     test_id = Column(String(255), ForeignKey("tests.id"), nullable=True)
     run_id = Column(String(255), ForeignKey("runs.id"), nullable=True)
+    # External tracker link (populated by Jira sync — Phase 2)
+    external_provider = Column(String(64), nullable=True)   # e.g. "jira"
+    external_key = Column(String(128), nullable=True)       # e.g. "PROJ-123"
+    external_url = Column(String(512), nullable=True)
 
     test_rel = relationship("Test", back_populates="defects")
+
+
+class Requirement(Base):
+    __tablename__ = "requirements"
+    id = Column(String(255), primary_key=True)
+    title = Column(String(512), nullable=False)
+    type = Column(String(32), default="feature")     # feature | story | epic
+    status = Column(String(32), default="active")    # draft | active | done | deprecated
+    priority = Column(String(32), default="med")     # low | med | high | critical
+    description = Column(Text, nullable=True)
+    owner = Column(String(255), nullable=True)
+    created_at = Column(String(64), nullable=True)
+    created_by = Column(String(255), nullable=True)
+    # External tracker link (populated by Jira sync — Phase 2)
+    external_provider = Column(String(64), nullable=True)   # e.g. "jira"
+    external_key = Column(String(128), nullable=True)       # e.g. "PROJ-45"
+    external_url = Column(String(512), nullable=True)
+
+    tests = relationship("Test", secondary=requirement_tests, back_populates="requirements")
+
+    @property
+    def test_ids(self):
+        return [t.id for t in self.tests]
 
 
 class Comment(Base):
