@@ -192,6 +192,53 @@ class DefectUpdate(BaseModel):
     description: Optional[str] = None
 
 
+class RequirementCoverage(BaseModel):
+    linked: int = 0
+    passed: int = 0
+    failed: int = 0
+    untested: int = 0
+    pass_rate: float = 0.0
+
+
+class RequirementOut(BaseModel):
+    id: str
+    title: str
+    type: str
+    status: str
+    priority: str
+    description: Optional[str] = None
+    owner: Optional[str] = None
+    created_at: Optional[str] = None
+    created_by: Optional[str] = None
+    external_provider: Optional[str] = None
+    external_key: Optional[str] = None
+    external_url: Optional[str] = None
+    test_ids: List[str] = []
+    coverage: RequirementCoverage = RequirementCoverage()
+
+    model_config = {"from_attributes": True}
+
+
+class RequirementCreate(BaseModel):
+    title: str
+    type: str = "feature"
+    status: str = "active"
+    priority: str = "med"
+    description: Optional[str] = None
+    owner: Optional[str] = None
+    test_ids: List[str] = []
+
+
+class RequirementUpdate(BaseModel):
+    title: Optional[str] = None
+    type: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    description: Optional[str] = None
+    owner: Optional[str] = None
+    test_ids: Optional[List[str]] = None
+
+
 class CommentOut(BaseModel):
     id: int
     test_id: Optional[str] = None
