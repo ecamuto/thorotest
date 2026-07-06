@@ -20,7 +20,7 @@ not yet sellable production. Items ordered by priority — work top to bottom.
 | Version | Feature | Status |
 |---|---|---|
 | 1.1 | Requirements & test coverage (features/stories/epics ↔ tests, coverage metrics, YAML/JSON/CSV import, GraphQL) | ✅ Done — `feat/requirements-coverage` |
-| 1.2 | Jira integration (pull stories → requirements, push defects → bugs) — reuses `external_*` fields shipped in 1.1 | ⏳ Next |
+| 1.2 | Jira integration (pull stories → requirements, push defects → bugs) — reuses `external_*` fields shipped in 1.1 | ✅ Done — `feat/jira-integration` |
 
 ## Item detail
 
