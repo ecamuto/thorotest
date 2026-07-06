@@ -21,6 +21,7 @@ window.TH_LOCALES.es = {
     favorites: "Favoritos",
     overview: "Resumen",
     library: "Biblioteca de tests",
+    requirements: "Requisitos",
     runs: "Ejecuciones",
     pipelines: "Pipelines CI",
     defects: "Defectos",

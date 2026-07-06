@@ -37,7 +37,7 @@ from .ws_manager import manager
 from .notifications import notif_manager
 from .auth_utils import SECRET_KEY, ALGORITHM, get_current_user
 from .gql_schema import graphql_router
-from .routers import folders, tests, runs, pipelines, activity, auth, projects, categories, defects, integrations, tokens, webhooks, favorites, import_, attachments, admin, ai, notifications, audit_log, oauth, totp
+from .routers import folders, tests, runs, pipelines, activity, auth, projects, categories, defects, requirements, integrations, tokens, webhooks, favorites, import_, attachments, admin, ai, notifications, audit_log, oauth, totp
 
 # Serve the built frontend (frontend/dist — produced by `npm run build`).
 # Fall back to the source dir so the API can still boot without a build
@@ -86,6 +86,12 @@ def _run_migrations():
         if "defects" in tables:
             for col in ("description", "created_at", "created_by"):
                 _add_column("defects", col)
+            # Phase 1 (v1.1): external tracker link fields (Jira in Phase 2).
+            # The requirements + requirement_tests tables are created by
+            # create_all() in the legacy path, so no manual CREATE TABLE needed.
+            _add_column("defects", "external_provider", ddl_type="VARCHAR(64)")
+            _add_column("defects", "external_key", ddl_type="VARCHAR(128)")
+            _add_column("defects", "external_url", ddl_type="VARCHAR(512)")
         if "users" in tables:
             _add_column("users", "language", default="'en'")
             # Phase 2: migrate legacy "member" role to "tester"
@@ -216,6 +222,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(projects.router, prefix="/api")
 app.include_router(categories.router, prefix="/api")
 app.include_router(defects.router, prefix="/api")
+app.include_router(requirements.router, prefix="/api")
 app.include_router(integrations.router, prefix="/api")
 app.include_router(tokens.router, prefix="/api")
 app.include_router(webhooks.router, prefix="/api")
@@ -363,7 +370,7 @@ async def test_health(days: int = 14, db: Session = Depends(get_db), _: models.U
 # from the paginated list endpoints (which also serve server-side search).
 # The `totals` key in the response carries the real row counts so the UI can
 # tell when it is looking at a capped slice.
-INITIAL_DATA_CAPS = {"tests": 1000, "runs": 500, "pipelines": 200, "activity": 100, "defects": 500}
+INITIAL_DATA_CAPS = {"tests": 1000, "runs": 500, "pipelines": 200, "activity": 100, "defects": 500, "requirements": 500}
 
 
 # Aggregated initial-data endpoint (replaces window.TH_DATA)
@@ -380,6 +387,7 @@ async def initial_data(db: Session = Depends(get_db), _: models.User = Depends(g
         "pipelines": db.query(func.count(models.Pipeline.id)).scalar() or 0,
         "activity": db.query(func.count(models.Activity.id)).scalar() or 0,
         "defects": db.query(func.count(models.Defect.id)).scalar() or 0,
+        "requirements": db.query(func.count(models.Requirement.id)).scalar() or 0,
     }
 
     all_tests = db.query(models.Test).order_by(models.Test.id).limit(INITIAL_DATA_CAPS["tests"]).all()
@@ -429,6 +437,29 @@ async def initial_data(db: Session = Depends(get_db), _: models.User = Depends(g
         for d in all_defects
     ]
 
+    all_requirements = (
+        db.query(models.Requirement)
+        .order_by(models.Requirement.id.desc())
+        .limit(INITIAL_DATA_CAPS["requirements"])
+        .all()
+    )
+    requirements_out = []
+    for r in all_requirements:
+        linked = r.tests
+        passed = sum(1 for t in linked if t.status == "pass")
+        failed = sum(1 for t in linked if t.status == "fail")
+        requirements_out.append({
+            "id": r.id, "title": r.title, "type": r.type, "status": r.status,
+            "priority": r.priority, "owner": r.owner,
+            "externalKey": r.external_key, "externalUrl": r.external_url,
+            "testIds": [t.id for t in linked],
+            "coverage": {
+                "linked": len(linked), "passed": passed, "failed": failed,
+                "untested": len(linked) - passed - failed,
+                "pass_rate": round(passed / len(linked), 4) if linked else 0.0,
+            },
+        })
+
     all_projects = db.query(models.Project).all()
     projects_out = [
         {"id": p.id, "name": p.name, "description": p.description, "created_at": p.created_at}
@@ -448,6 +479,7 @@ async def initial_data(db: Session = Depends(get_db), _: models.User = Depends(g
         "pipelines": pipelines_out,
         "activity": activity_out,
         "defects": defects_out,
+        "requirements": requirements_out,
         "projects": projects_out,
         "categories": categories_out,
         "totals": totals,

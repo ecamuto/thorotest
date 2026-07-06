@@ -21,6 +21,7 @@ window.TH_LOCALES.en = {
     favorites: "Favorites",
     overview: "Overview",
     library: "Test library",
+    requirements: "Requirements",
     runs: "Runs & plans",
     pipelines: "CI pipelines",
     defects: "Defects",

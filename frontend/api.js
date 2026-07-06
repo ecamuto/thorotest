@@ -318,6 +318,73 @@
       return res.json();
     },
 
+    async getRequirements(filters = {}) {
+      const params = new URLSearchParams();
+      if (filters.status && filters.status !== "all") params.set("status", filters.status);
+      if (filters.type && filters.type !== "all") params.set("type", filters.type);
+      if (filters.covered !== undefined && filters.covered !== "all") params.set("covered", filters.covered);
+      if (filters.search) params.set("search", filters.search);
+      const qs = params.toString() ? `?${params}` : "";
+      const res = await fetch(BASE + `/api/requirements${qs}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error("Requirements fetch failed");
+      return res.json();
+    },
+
+    async getRequirement(id) {
+      const res = await fetch(BASE + `/api/requirements/${id}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error("Requirement not found");
+      return res.json();
+    },
+
+    async createRequirement(payload) {
+      const res = await fetch(BASE + "/api/requirements", {
+        method: "POST", headers: authHeaders(), body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Create requirement failed");
+      return res.json();
+    },
+
+    async updateRequirement(id, payload) {
+      const res = await fetch(BASE + `/api/requirements/${id}`, {
+        method: "PATCH", headers: authHeaders(), body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Update requirement failed");
+      return res.json();
+    },
+
+    async deleteRequirement(id) {
+      const res = await fetch(BASE + `/api/requirements/${id}`, { method: "DELETE", headers: authHeaders() });
+      if (!res.ok && res.status !== 204) throw new Error("Delete requirement failed");
+    },
+
+    async getTestRequirements(testId) {
+      const res = await fetch(BASE + `/api/tests/${testId}/requirements`, { headers: authHeaders() });
+      if (!res.ok) throw new Error("Test requirements fetch failed");
+      return res.json();
+    },
+
+    async linkRequirementTest(reqId, testId) {
+      const res = await fetch(BASE + `/api/requirements/${reqId}/tests/${testId}`, { method: "POST", headers: authHeaders() });
+      if (!res.ok) throw new Error("Link test failed");
+      return res.json();
+    },
+
+    async unlinkRequirementTest(reqId, testId) {
+      const res = await fetch(BASE + `/api/requirements/${reqId}/tests/${testId}`, { method: "DELETE", headers: authHeaders() });
+      if (!res.ok) throw new Error("Unlink test failed");
+      return res.json();
+    },
+
+    async listTests(filters = {}) {
+      const params = new URLSearchParams();
+      if (filters.search) params.set("search", filters.search);
+      if (filters.limit) params.set("limit", filters.limit);
+      const qs = params.toString() ? `?${params}` : "";
+      const res = await fetch(BASE + `/api/tests${qs}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error("Tests fetch failed");
+      return res.json();
+    },
+
     async getTestComments(id) {
       const res = await fetch(BASE + `/api/tests/${id}/comments`, { headers: authHeaders() });
       if (!res.ok) throw new Error("Comments fetch failed");

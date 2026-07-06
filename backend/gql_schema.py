@@ -106,6 +106,22 @@ class DefectGQL:
 
 
 @strawberry.type
+class RequirementGQL:
+    id: str
+    title: str
+    type: str
+    status: str
+    priority: str
+    owner: Optional[str]
+    external_key: Optional[str]
+    test_ids: List[str]
+    linked: int
+    passed: int
+    failed: int
+    pass_rate: float
+
+
+@strawberry.type
 class CoverageStat:
     folder: str
     passed: int
@@ -196,6 +212,24 @@ class Query:
         return [DefectGQL(id=d.id, title=d.title, status=d.status, severity=d.severity,
                           test_id=d.test_id, run_id=d.run_id)
                 for d in q.all()]
+
+    @strawberry.field
+    def requirements(self, info: strawberry.types.Info, limit: int = MAX_LIMIT, offset: int = 0) -> List[RequirementGQL]:
+        _require_user(info)
+        db: Session = info.context["db"]
+        q = db.query(models.Requirement).order_by(models.Requirement.id.desc()).offset(max(offset, 0)).limit(min(limit, MAX_LIMIT))
+        out = []
+        for r in q.all():
+            linked = r.tests
+            passed = sum(1 for t in linked if t.status == "pass")
+            failed = sum(1 for t in linked if t.status == "fail")
+            out.append(RequirementGQL(
+                id=r.id, title=r.title, type=r.type, status=r.status, priority=r.priority,
+                owner=r.owner, external_key=r.external_key, test_ids=[t.id for t in linked],
+                linked=len(linked), passed=passed, failed=failed,
+                pass_rate=round(passed / len(linked), 4) if linked else 0.0,
+            ))
+        return out
 
     @strawberry.field
     def insights(self, info: strawberry.types.Info) -> InsightsGQL:

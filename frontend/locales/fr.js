@@ -21,6 +21,7 @@ window.TH_LOCALES.fr = {
     favorites: "Favoris",
     overview: "Vue d'ensemble",
     library: "Bibliothèque de tests",
+    requirements: "Exigences",
     runs: "Exécutions",
     pipelines: "Pipelines CI",
     defects: "Défauts",

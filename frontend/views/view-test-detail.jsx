@@ -9,6 +9,7 @@ function TestDetail({ testId, onBack, currentUser }) {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [defectCount, setDefectCount] = useState(null);
+  const [reqCount, setReqCount] = useState(null);
 
   React.useEffect(() => {
     const id = testId || "TC-2301";
@@ -32,6 +33,9 @@ function TestDetail({ testId, onBack, currentUser }) {
     if (!test) return;
     TH_API.getTestDefects(test.id)
       .then(d => setDefectCount(d.length))
+      .catch(() => {});
+    TH_API.getTestRequirements(test.id)
+      .then(r => setReqCount(r.length))
       .catch(() => {});
   }, [test?.id]);
 
@@ -141,6 +145,7 @@ function TestDetail({ testId, onBack, currentUser }) {
         <div className={"tab" + (tab === "lineage" ? " active" : "")} onClick={() => setTab("lineage")}>Lineage <span className="count">12</span></div>
         <div className={"tab" + (tab === "history" ? " active" : "")} onClick={() => setTab("history")}>Run history</div>
         <div className={"tab" + (tab === "defects" ? " active" : "")} onClick={() => setTab("defects")}>Defects{defectCount !== null && defectCount > 0 ? <span className="count">{defectCount}</span> : null}</div>
+        <div className={"tab" + (tab === "requirements" ? " active" : "")} onClick={() => setTab("requirements")}>Requirements{reqCount !== null && reqCount > 0 ? <span className="count">{reqCount}</span> : null}</div>
         <div className={"tab" + (tab === "comments" ? " active" : "")} onClick={() => setTab("comments")}>Comments</div>
         <div className={"tab" + (tab === "git" ? " active" : "")} onClick={() => setTab("git")}>Git history</div>
       </div>
@@ -150,6 +155,7 @@ function TestDetail({ testId, onBack, currentUser }) {
         {tab === "lineage" && <LineageTab test={test} />}
         {tab === "history" && <HistoryTab test={test} />}
         {tab === "defects" && <DefectsTab test={test} currentUser={currentUser} />}
+        {tab === "requirements" && <RequirementsTab test={test} currentUser={currentUser} onCountChange={setReqCount} />}
         {tab === "comments" && <CommentsTab test={test} />}
         {tab === "git" && <GitHistoryTab test={test} />}
       </div>
@@ -807,6 +813,121 @@ function DefectsTab({ test, currentUser }) {
               <button className="btn" style={{background:"var(--fail)", color:"white", border:"none"}} onClick={() => handleDelete(deleteConfirmId)}>Delete</button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RequirementsTab({ test, currentUser, onCountChange }) {
+  const [reqs, setReqs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [linking, setLinking] = useState(false);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+
+  const canWrite = window.can ? window.can(currentUser, "write") : true;
+
+  const load = () => {
+    setLoading(true);
+    TH_API.getTestRequirements(test.id)
+      .then(data => { setReqs(data); onCountChange && onCountChange(data.length); setLoading(false); })
+      .catch(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, [test.id]);
+
+  const searchReqs = async (q) => {
+    if (!q.trim()) { setResults([]); return; }
+    try {
+      const data = await TH_API.getRequirements({ search: q });
+      const linkedIds = new Set(reqs.map(r => r.id));
+      setResults(data.filter(r => !linkedIds.has(r.id)));
+    } catch (e) { setResults([]); }
+  };
+
+  const link = async (reqId) => {
+    try {
+      await TH_API.linkRequirementTest(reqId, test.id);
+      setQuery(""); setResults([]); setLinking(false);
+      load();
+    } catch (e) {}
+  };
+
+  const unlink = async (reqId) => {
+    try {
+      await TH_API.unlinkRequirementTest(reqId, test.id);
+      load();
+    } catch (e) {}
+  };
+
+  const typeTag = t => t === "epic" ? "priority-high" : t === "story" ? "priority-med" : "priority-low";
+
+  return (
+    <div style={{padding:"18px 22px 32px"}}>
+      <div style={{display:"flex", alignItems:"center", marginBottom:14}}>
+        <div className="card-sub">Requirements this test helps verify.</div>
+        <div className="spacer" />
+        {canWrite && (
+          <button className="btn sm accent" onClick={() => setLinking(v => !v)}><Icon name="link" /> Link requirement</button>
+        )}
+      </div>
+
+      {linking && (
+        <div className="card" style={{padding:12, marginBottom:14}}>
+          <input
+            className="input"
+            style={{width:"100%", boxSizing:"border-box"}}
+            placeholder="Search requirements to link…"
+            value={query}
+            onChange={e => { setQuery(e.target.value); searchReqs(e.target.value); }}
+            autoFocus
+          />
+          {results.length > 0 && (
+            <div style={{marginTop:8, display:"flex", flexDirection:"column", gap:4}}>
+              {results.map(r => (
+                <div key={r.id} className="nav-item" style={{padding:"6px 8px", cursor:"pointer", display:"flex", gap:8, alignItems:"center"}} onClick={() => link(r.id)}>
+                  <span className="mono" style={{fontSize:11, color:"var(--text-dim)"}}>{r.id}</span>
+                  <span style={{fontSize:12}}>{r.title}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="mono dim" style={{padding:"24px 0", textAlign:"center"}}>Loading…</div>
+      ) : reqs.length === 0 ? (
+        <div className="mono dim" style={{padding:"24px 0", textAlign:"center"}}>No requirements linked to this test.</div>
+      ) : (
+        <div className="card" style={{padding:0}}>
+          <table className="table">
+            <thead>
+              <tr>
+                <th style={{width:90}}>ID</th>
+                <th>Title</th>
+                <th style={{width:80}}>Type</th>
+                <th style={{width:200}}>Coverage</th>
+                {canWrite && <th style={{width:32}}></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {reqs.map(r => (
+                <tr key={r.id}>
+                  <td className="mono" style={{fontSize:11.5}}>{r.id}</td>
+                  <td style={{fontWeight:500}}>{r.title}</td>
+                  <td><span className={"tag " + typeTag(r.type)}>{r.type}</span></td>
+                  <td><CoverageBar coverage={r.coverage} /></td>
+                  {canWrite && (
+                    <td>
+                      <button className="btn ghost sm" style={{color:"var(--fail)", padding:"2px 6px"}} onClick={() => unlink(r.id)} title="Unlink"><Icon name="x" /></button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
