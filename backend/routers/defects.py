@@ -96,6 +96,37 @@ def update_defect(defect_id: str, payload: DefectUpdate, db: Session = Depends(g
     return d
 
 
+PUSH_ROLES = require_role("admin", "manager")
+
+
+@router.post("/defects/{defect_id}/push", response_model=DefectOut)
+def push_defect(defect_id: str, current_user: models.User = PUSH_ROLES, db: Session = Depends(get_db)):
+    """Create a Jira bug from this defect and store the external link on it."""
+    from ..jira_sync import push_defect_to_jira
+
+    d = db.query(models.Defect).filter(models.Defect.id == defect_id).first()
+    if not d:
+        raise HTTPException(status_code=404, detail="Defect not found")
+    if d.external_key:
+        raise HTTPException(status_code=409, detail=f"Defect already linked to {d.external_key}")
+
+    intg = db.query(models.Integration).filter(models.Integration.type == "jira").first()
+    if not intg:
+        raise HTTPException(status_code=400, detail="No Jira integration configured")
+
+    try:
+        push_defect_to_jira(db, intg, d)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    actor = current_user.display_name or current_user.username
+    log_activity(db, actor, "pushed defect to Jira", d.id, d.external_key or "")
+    db.commit()
+    return d
+
+
 @router.delete("/defects/{defect_id}", status_code=204)
 def delete_defect(defect_id: str, db: Session = Depends(get_db), _: models.User = ADMIN_ONLY):
     d = db.query(models.Defect).filter(models.Defect.id == defect_id).first()
