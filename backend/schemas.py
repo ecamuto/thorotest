@@ -173,6 +173,9 @@ class DefectOut(BaseModel):
     created_by: Optional[str] = None
     test_id: Optional[str] = None
     run_id: Optional[str] = None
+    external_provider: Optional[str] = None
+    external_key: Optional[str] = None
+    external_url: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

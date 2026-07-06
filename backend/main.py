@@ -433,7 +433,8 @@ async def initial_data(db: Session = Depends(get_db), _: models.User = Depends(g
     all_defects = db.query(models.Defect).order_by(models.Defect.id.desc()).limit(INITIAL_DATA_CAPS["defects"]).all()
     defects_out = [
         {"id": d.id, "title": d.title, "status": d.status, "severity": d.severity,
-         "testId": d.test_id, "runId": d.run_id}
+         "testId": d.test_id, "runId": d.run_id,
+         "externalKey": d.external_key, "externalUrl": d.external_url}
         for d in all_defects
     ]
 
