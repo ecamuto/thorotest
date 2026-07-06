@@ -88,6 +88,33 @@ def test_execution_links_run_case_by_source_id(client, db):
     assert rc.status == "pass"
 
 
+def test_xray_results_link_to_previously_imported_tests(client, db):
+    """A results-only Xray import links cases to test definitions imported
+    earlier, resolved by external_key across imports."""
+    defs = json.dumps([
+        {"testtype": "Manual", "key": "PROJ-1",
+         "xray_test_repository_folder": "/X", "fields": {"summary": "Xray case one"}},
+    ]).encode("utf-8")
+    client.post("/api/import/execute",
+                files={"file": ("defs.json", defs, "application/json")},
+                data={"format": "xray"})
+
+    results = json.dumps({
+        "info": {"summary": "Run A", "testExecutionKey": "PROJ-99"},
+        "tests": [{"testKey": "PROJ-1", "status": "PASS"}],
+    }).encode("utf-8")
+    r = client.post("/api/import/execute",
+                    files={"file": ("results.json", results, "application/json")},
+                    data={"format": "xray"})
+    assert r.json()["imported"]["runs"] == 1
+
+    run = db.query(models.Run).filter(models.Run.source_run_id == "PROJ-99").one()
+    rc = db.query(models.RunCase).filter(models.RunCase.run_id == run.id).one()
+    linked = db.query(models.Test).filter(models.Test.id == rc.test_id).one()
+    assert linked.external_key == "PROJ-1"
+    assert rc.status == "pass"
+
+
 def test_run_dedup_by_cycle_key(client, db):
     """Re-importing executions from the same cycle key must not duplicate the run."""
     content = _zephyr([

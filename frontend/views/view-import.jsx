@@ -8,6 +8,7 @@ const FORMATS = [
   { id: "junit_xml",    label: "JUnit XML",     sub: "Automated test results · Jenkins · GitHub Actions" },
   { id: "json",         label: "JSON",          sub: "Allure · Testomat.io · generic" },
   { id: "zephyr",       label: "Zephyr Scale",  sub: "JSON export / REST API from Zephyr Scale (TM4J)" },
+  { id: "xray",         label: "Xray",          sub: "Xray for Jira — test JSON / execution results" },
 ];
 
 const CONFLICT_OPTIONS = [

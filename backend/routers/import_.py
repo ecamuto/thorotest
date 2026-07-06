@@ -8,7 +8,7 @@ from ..db import get_db
 from .. import models
 from ..importers import (
     detect_format, parse_csv, parse_testrail_xml, parse_junit_xml, parse_json,
-    parse_zephyr, ImportResult,
+    parse_zephyr, parse_xray, ImportResult,
 )
 from ..importers.csv_importer import get_csv_columns
 from ..auth_utils import require_role
@@ -32,12 +32,15 @@ def _run_parser(fmt: str, content: bytes, column_mapping: dict | None) -> Import
         return parse_json(content)
     if fmt == "zephyr":
         return parse_zephyr(content)
+    if fmt == "xray":
+        return parse_xray(content)
     raise HTTPException(status_code=400, detail=f"Unknown format: {fmt}")
 
 
 # Fallback provider token when a parser doesn't set ImportResult.source_provider.
 _FMT_PROVIDER = {
     "zephyr": "zephyr",
+    "xray": "xray",
     "testrail_xml": "testrail",
     "junit_xml": "junit",
     "csv": "csv",
@@ -252,9 +255,19 @@ async def execute_import(
         stats["tests"] += 1
 
     def _resolve_test_id(source_test_id: str, test_title: str) -> str | None:
-        """Link a case/defect to a test by source id first, title as fallback."""
-        if source_test_id and source_test_id in key_to_id:
-            return key_to_id[source_test_id]
+        """Link a case to a test by source id first, then title. Source ids
+        also resolve against tests imported in a previous run (same provider),
+        so a results-only file links to earlier-imported test definitions."""
+        if source_test_id:
+            if source_test_id in key_to_id:
+                return key_to_id[source_test_id]
+            prior = db.query(models.Test).filter(
+                models.Test.external_provider == provider,
+                models.Test.external_key == source_test_id,
+            ).first()
+            if prior is not None:
+                key_to_id[source_test_id] = prior.id  # cache for the rest of this run
+                return prior.id
         return title_to_id.get(test_title)
 
     # ── Runs ──────────────────────────────────────────────────
