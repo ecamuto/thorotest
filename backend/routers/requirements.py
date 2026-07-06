@@ -78,6 +78,14 @@ def list_requirements(
     return out
 
 
+@router.get("/tests/{test_id}/requirements", response_model=List[RequirementOut])
+def list_test_requirements(test_id: str, db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
+    t = db.query(models.Test).filter(models.Test.id == test_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail="Test not found")
+    return [_serialize(r) for r in t.requirements]
+
+
 @router.get("/requirements/{req_id}", response_model=RequirementOut)
 def get_requirement(req_id: str, db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
     r = db.query(models.Requirement).filter(models.Requirement.id == req_id).first()

@@ -357,6 +357,12 @@
       if (!res.ok && res.status !== 204) throw new Error("Delete requirement failed");
     },
 
+    async getTestRequirements(testId) {
+      const res = await fetch(BASE + `/api/tests/${testId}/requirements`, { headers: authHeaders() });
+      if (!res.ok) throw new Error("Test requirements fetch failed");
+      return res.json();
+    },
+
     async linkRequirementTest(reqId, testId) {
       const res = await fetch(BASE + `/api/requirements/${reqId}/tests/${testId}`, { method: "POST", headers: authHeaders() });
       if (!res.ok) throw new Error("Link test failed");

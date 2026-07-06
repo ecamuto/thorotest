@@ -85,6 +85,8 @@ function Overview({ onNav, currentUser }) {
         <Metric label="Active runs" value={String(activeRuns)} delta={`${D.runs.length} runs total`} />
       </div>
 
+      <RequirementCoverageCard requirements={D.requirements || []} onNav={onNav} />
+
       <div className="grid grid-main" style={{marginBottom:14}}>
         {/* Test health */}
         <div className="card">
@@ -279,6 +281,38 @@ function AiSuggestBox({ D }) {
       )}
 
       {err && <div style={{fontSize:12, color:"var(--fail)", marginTop:10}}>{err}</div>}
+    </div>
+  );
+}
+
+function RequirementCoverageCard({ requirements, onNav }) {
+  if (!requirements || requirements.length === 0) return null;
+  const total = requirements.length;
+  const covered = requirements.filter(r => r.coverage && r.coverage.linked > 0).length;
+  const atRisk = requirements.filter(r => r.coverage && r.coverage.failed > 0).length;
+  const uncovered = total - covered;
+  const coveredPct = Math.round((covered / total) * 100);
+
+  return (
+    <div className="card" style={{marginBottom:14, cursor:"pointer"}} onClick={() => onNav && onNav("requirements")}>
+      <div className="card-h">
+        <div>
+          <div className="card-title">Requirement coverage</div>
+          <div className="card-sub">{covered} of {total} requirements have at least one test</div>
+        </div>
+        <div className="card-title" style={{fontSize:22, color: coveredPct === 100 ? "var(--pass)" : coveredPct >= 60 ? "var(--warn)" : "var(--fail)"}}>{coveredPct}%</div>
+      </div>
+      <div className="card-b">
+        <div style={{height:10, borderRadius:5, overflow:"hidden", display:"flex", background:"var(--bg-3)", marginBottom:10}}>
+          {covered > 0 && <div style={{width:`${(covered/total)*100}%`, background:"var(--pass)"}} />}
+          {uncovered > 0 && <div style={{width:`${(uncovered/total)*100}%`, background:"var(--text-dim)"}} />}
+        </div>
+        <div style={{display:"flex", gap:18}}>
+          <Legend color="var(--pass)" label="Covered" value={covered} />
+          <Legend color="var(--text-dim)" label="Uncovered" value={uncovered} />
+          <Legend color="var(--fail)" label="At risk (failing)" value={atRisk} />
+        </div>
+      </div>
     </div>
   );
 }
