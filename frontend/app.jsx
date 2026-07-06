@@ -153,6 +153,10 @@ function App({ currentUser: initialUser, onLogout, onProfileUpdate }) {
       crumbs = [W, "Defects"];
       body = <Defects currentUser={currentUser} />;
       break;
+    case "requirements":
+      crumbs = [W, "Requirements"];
+      body = <Requirements currentUser={currentUser} />;
+      break;
     case "insights":
       crumbs = [W, "Insights"];
       body = <Insights currentUser={currentUser} />;

@@ -21,6 +21,7 @@ window.TH_LOCALES.it = {
     favorites: "Preferiti",
     overview: "Panoramica",
     library: "Libreria test",
+    requirements: "Requisiti",
     runs: "Esecuzioni",
     pipelines: "Pipeline CI",
     defects: "Difetti",

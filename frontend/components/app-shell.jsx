@@ -112,6 +112,7 @@ const NAV_CONFIG = [
   { group: "workspace", items: [
     { id: "overview",     icon: "home" },
     { id: "library",      icon: "flask",   count: "201" },
+    { id: "requirements", icon: "target" },
     { id: "runs",         icon: "play",    badge: true },
     { id: "pipelines",    icon: "branch",  count: "12" },
     { id: "defects",      icon: "bug",     count: "8" },
