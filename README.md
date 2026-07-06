@@ -104,6 +104,7 @@ cp .env.example .env
 | `AI_API_KEY` | _(unset)_ | API key for the OpenAI-compatible endpoint (any value for local servers) |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | _(unset)_ | GitHub OAuth login (optional) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | _(unset)_ | Google OAuth login (optional) |
+| `JIRA_AUTOSYNC_MINUTES` | `0` | Auto-sync all Jira integrations every N minutes (`0` = disabled). Requires outbound reachability to Jira Cloud |
 
 Database URLs:
 
@@ -184,6 +185,12 @@ Two-way link with Jira Cloud, sharing one `jira` integration
 
 Both reuse the `external_provider` / `external_key` / `external_url` fields shipped in
 v1.1 on Requirement and Defect — no schema change.
+
+**Auto-sync (optional):** set `JIRA_AUTOSYNC_MINUTES` > 0 to have the backend pull every
+Jira integration on that interval — no manual Sync needed. Per-integration failures are
+logged and skipped, so one misconfigured integration can't stall the others. Off by
+default (`0`); needs outbound reachability to Jira Cloud (works self-hosted, no public
+endpoint required, unlike an inbound webhook).
 
 **Security:** `api_token` is stored in the integration config and **never returned to
 clients** — the API reports only `api_token_set: true`, and a blank value on edit keeps

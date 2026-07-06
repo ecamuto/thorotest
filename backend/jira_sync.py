@@ -190,6 +190,30 @@ def push_defect_to_jira(db, integration, defect, client: JiraClient | None = Non
     return defect
 
 
+def sync_all_jira_integrations(db) -> dict:
+    """Sync every configured jira integration. Per-integration errors are logged and
+    skipped so one bad integration can't stall the others. Returns aggregate stats."""
+    import logging
+
+    log = logging.getLogger("thorotest.jira")
+    integrations = db.query(models.Integration).filter(models.Integration.type == "jira").all()
+    agg = {"integrations": 0, "created": 0, "updated": 0, "errors": 0}
+    for intg in integrations:
+        try:
+            stats = sync_jira_requirements(db, intg)
+            agg["integrations"] += 1
+            agg["created"] += stats.get("created", 0)
+            agg["updated"] += stats.get("updated", 0)
+            log.info("jira auto-sync %s: %s created, %s updated",
+                     intg.id, stats.get("created", 0), stats.get("updated", 0))
+        except (ValueError, RuntimeError) as e:
+            agg["errors"] += 1
+            intg.status = "error"
+            db.commit()
+            log.warning("jira auto-sync %s failed: %s", intg.id, e)
+    return agg
+
+
 def sync_jira_requirements(db, integration, client: JiraClient | None = None) -> dict:
     """Pull Jira stories/epics into requirements (upsert by external_key)."""
     cfg = integration.config or {}

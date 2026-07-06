@@ -161,6 +161,37 @@ class TestSyncRequirements:
         assert [t.id for t in r.tests] == ["TC-1"]
 
 
+# ── sync_all_jira_integrations ────────────────────────────────────────────────
+
+class TestSyncAll:
+    def _issues(self):
+        return [{"key": "PAY-1", "summary": "Story", "status_category": "new", "issue_type": "Story", "assignee": None}]
+
+    def test_aggregates_and_skips_github(self, db, monkeypatch):
+        _jira_integration(db)
+        db.add(models.Integration(id="int-gh", name="GH", type="github", config={"repo_url": "https://github.com/a/b"}))
+        db.commit()
+        fake = FakeJiraClient(self._issues())
+        monkeypatch.setattr(jira_sync, "_client_from_config", lambda cfg: fake)
+        agg = jira_sync.sync_all_jira_integrations(db)
+        assert agg["integrations"] == 1
+        assert agg["created"] == 1
+        assert agg["errors"] == 0
+        assert db.query(models.Requirement).count() == 1
+
+    def test_error_isolated_per_integration(self, db):
+        # jira integration missing api_token → error, but loop returns cleanly
+        db.add(models.Integration(id="int-jira", name="J", type="jira",
+                                  config={"base_url": "https://x.atlassian.net", "email": "e", "project_key": "P"}))
+        db.commit()
+        agg = jira_sync.sync_all_jira_integrations(db)
+        assert agg["errors"] == 1
+        assert agg["integrations"] == 0
+
+    def test_no_jira_integration_is_noop(self, db):
+        assert jira_sync.sync_all_jira_integrations(db) == {"integrations": 0, "created": 0, "updated": 0, "errors": 0}
+
+
 # ── defect push endpoint (no network paths) ───────────────────────────────────
 
 class TestPushEndpoint:

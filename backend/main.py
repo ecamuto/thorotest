@@ -165,11 +165,52 @@ def _ensure_schema():
         command.stamp(cfg, "head")
 
 
+async def _jira_autosync_loop(interval_seconds: int):
+    """Background loop: periodically sync all jira integrations. Opt-in via
+    JIRA_AUTOSYNC_MINUTES > 0. Requires outbound reachability to Jira Cloud;
+    a no-op when no jira integration is configured."""
+    import asyncio
+
+    from .db import SessionLocal
+    from .jira_sync import sync_all_jira_integrations
+
+    log = logging.getLogger("thorotest.jira")
+    log.info("jira auto-sync enabled — every %s min", interval_seconds // 60)
+    while True:
+        try:
+            await asyncio.sleep(interval_seconds)
+            db = SessionLocal()
+            try:
+                # DB + network calls are blocking; run off the event loop.
+                await asyncio.to_thread(sync_all_jira_integrations, db)
+            finally:
+                db.close()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:  # never let the loop die on an unexpected error
+            log.warning("jira auto-sync tick failed: %s", e)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import asyncio
+
     _ensure_schema()
     init_db()
+
+    task = None
+    minutes = int(os.getenv("JIRA_AUTOSYNC_MINUTES", "0") or "0")
+    if minutes > 0:
+        task = asyncio.create_task(_jira_autosync_loop(minutes * 60))
+
     yield
+
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(title="ThoroTest API", lifespan=lifespan)
