@@ -7,6 +7,7 @@ const FORMATS = [
   { id: "testrail_xml", label: "TestRail XML",  sub: "Native .xml export from TestRail" },
   { id: "junit_xml",    label: "JUnit XML",     sub: "Automated test results · Jenkins · GitHub Actions" },
   { id: "json",         label: "JSON",          sub: "Allure · Testomat.io · generic" },
+  { id: "zephyr",       label: "Zephyr Scale",  sub: "JSON export / REST API from Zephyr Scale (TM4J)" },
 ];
 
 const CONFLICT_OPTIONS = [
