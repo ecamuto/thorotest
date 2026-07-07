@@ -228,6 +228,40 @@ reported as `warnings` rather than failing the import.
 
 ---
 
+## Test import
+
+Bring existing test cases — and, where the source has them, run results — in from other
+test-management tools. Upload a file (the format is **auto-detected**), **preview** the
+parsed counts and a sample before anything is written, then run the import and choose how
+duplicates are handled.
+
+| Source | Format | Notes |
+|---|---|---|
+| TestRail | XML · CSV | Native export; nested sections → folders |
+| TestLink | XML | Nested `<testsuite>` → folders; importance/execution_type mapped |
+| Zephyr Scale (TM4J) | JSON | Test cases + executions → runs (per cycle) |
+| Xray (for Jira) | JSON | Test definitions **and** execution results (results link by issue key) |
+| qTest | JSON | `properties` array flattened; `pid` as identity |
+| JUnit | XML | Automated results → a run with pass/fail/skip |
+| Allure | JSON | Results array → a run |
+| Excel | `.xlsx` | First worksheet, via column mapping |
+| Azure Test Plans / generic | CSV · XLSX | Column mapping (auto-detected aliases, overridable in the UI) |
+
+**Matching & de-duplication.** Imported tests store `external_provider` / `external_key`
+(the source tool and its case id). A re-import matches on that identity — updating or
+skipping rather than duplicating — so re-running the same export is idempotent, and
+same-titled cases in **different folders** stay distinct. Runs de-dupe on the source
+cycle/execution id; defects on `(external_provider, external_key)`. For sources without a
+stable id, matching falls back to `(title, folder)`.
+
+**Endpoints** (`admin` / `manager` / `tester`; 10 MB max):
+
+- `POST /api/import/detect` — detected format (+ column headers for spreadsheets)
+- `POST /api/import/preview` — parsed counts and a sample, **no writes**
+- `POST /api/import/execute` — persist; `conflict` = `skip` | `overwrite` | `rename`
+
+---
+
 ## Project structure
 
 ```
@@ -263,7 +297,7 @@ thorotest/
 │       ├── view-requirements.jsx   # Requirements + test coverage
 │       ├── view-settings.jsx       # Profile, password, tokens, webhooks, integrations
 │       ├── view-admin.jsx          # User and role management (admin only)
-│       ├── view-import.jsx         # Bulk test import (CSV / YAML)
+│       ├── view-import.jsx         # Test import (CSV/XLSX/XML/JSON, auto-detect + mapping)
 │       ├── view-my-work.jsx        # Personal work queue and assignments
 │       ├── view-docs.jsx           # Documentation viewer
 │       ├── view-config.jsx         # Config-as-code view
@@ -303,7 +337,7 @@ thorotest/
 │       ├── ai.py           # AI assistant endpoint (BYOK — Anthropic)
 │       ├── admin.py        # User management, role assignment (admin only)
 │       ├── favorites.py    # Favorite tests per user
-│       ├── import_.py      # Bulk import: CSV / YAML
+│       ├── import_.py      # Test import API (detect/preview/execute) — parsers in ../importers/
 │       ├── pipelines.py    # GET /api/pipelines
 │       ├── activity.py     # GET /api/activity, GET /api/defects
 │       ├── notifications.py # Notifications list/read + per-user config
@@ -329,6 +363,8 @@ thorotest/
 │   ├── suite14-extra/              # Miscellaneous edge cases
 │   ├── suite15-favorites/          # Folder favorites (UI + API)
 │   ├── suite16-notifications/      # Notification bell + config API
+│   ├── suite17-import/             # Test import — CSV/XLSX/JUnit/Allure/JSON/TestRail/TestLink/Zephyr/Xray/qTest
+│   ├── suite18-requirements/       # Requirements + coverage
 │   ├── suite-p1-steps/             # Structured test steps execution
 │   ├── suite-p2-rbac/              # Role-based access control
 │   ├── suite-p3-retest/            # Retest workflow
@@ -375,7 +411,7 @@ All endpoints except `/auth/register`, `/auth/login`, and public pages require `
 | AI assistant | `/api/ai` |
 | Admin | `/api/admin` |
 | Favorites | `/api/favorites` |
-| Import | `/api/import` |
+| Import | `/api/import/{detect,preview,execute}` |
 | Notifications | `/api/notifications`, `/api/notifications/config` |
 | Audit log | `/api/audit-log` |
 | OAuth | `/api/auth/oauth/{github,google}` |
@@ -395,7 +431,7 @@ WebSocket:
 
 ## Tests
 
-### Backend unit tests (329 tests)
+### Backend unit tests (492 tests)
 
 ```bash
 source venv/bin/activate
@@ -424,6 +460,12 @@ backend/tests/
 ├── test_assignment.py        # Test assignment to users
 ├── test_export.py            # CSV / PDF export
 ├── test_github_sync.py       # Tests-as-Code: YAML parse, repo sync upsert, token redaction
+├── test_import_execute.py    # Import execute: external-identity matching, dedup, run linking
+├── test_zephyr_import.py     # Zephyr Scale JSON parser + detection
+├── test_xray_import.py       # Xray JSON parser (definitions + results) + detection
+├── test_qtest_import.py      # qTest JSON parser (properties array) + detection
+├── test_testlink_import.py   # TestLink XML parser + detection precedence
+├── test_xlsx_import.py       # .xlsx parser (openpyxl) + detection
 ├── test_audit_log.py         # Audit log query, filters, admin gating
 ├── test_notifications.py     # Notifications list/read + per-user config
 ├── test_oauth.py             # OAuth login + account linking (GitHub)
@@ -440,7 +482,8 @@ make test-e2e-auth      # auth suite only
 make test-report        # open HTML report
 ```
 
-29 suites covering all major user flows, feature phases, and regression scenarios.
+31 suites covering all major user flows, feature phases, and regression scenarios — including
+`suite17-import` (27 tests across every supported import format).
 
 ---
 
