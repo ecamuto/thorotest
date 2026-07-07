@@ -7,6 +7,7 @@ const PROVIDERS = [
   { id: "playwright", name: "Playwright",  icon: "plug",    type: "runner",        configuredBy: "playwright.config.ts" },
   { id: "cypress",    name: "Cypress",     icon: "plug",    type: "runner",        configuredBy: "cypress.config.js" },
   { id: "jest",       name: "Jest",        icon: "plug",    type: "runner",        configuredBy: "jest.config.js" },
+  { id: "jira",       name: "Jira",        icon: "plug",    type: "issue_tracker", configuredBy: "" },
   { id: "linear",     name: "Linear",      icon: "plug",    type: "defects",       configuredBy: "ACME workspace" },
   { id: "slack",      name: "Slack",       icon: "plug",    type: "notifications", configuredBy: "#qa-alerts" },
   { id: "webhook",    name: "Webhook",     icon: "plug",    type: "outbound",      configuredBy: "" },
@@ -14,7 +15,8 @@ const PROVIDERS = [
 
 const TYPE_LABELS = {
   vcs_ci: "VCS + CI", ci: "CI", runner: "Runner",
-  defects: "Defects", notifications: "Notifications", outbound: "Outbound",
+  defects: "Defects", issue_tracker: "Issue tracker",
+  notifications: "Notifications", outbound: "Outbound",
 };
 
 const WEBHOOK_EVENTS = ["run.completed", "run.failed", "defect.created", "defect.updated"];
@@ -57,12 +59,44 @@ function GithubConfigFields({ form, setForm, tokenSet }) {
   );
 }
 
+function JiraConfigFields({ form, setForm, tokenSet }) {
+  const fld = { marginBottom:12 };
+  const lbl = { display:"block", fontSize:12, fontWeight:500, color:"var(--text-muted)", marginBottom:6 };
+  const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
+  return (
+    <>
+      <div style={fld}>
+        <label style={lbl}>Jira base URL</label>
+        <input className="login-input" value={form.base_url} onChange={set("base_url")} placeholder="https://acme.atlassian.net" style={{width:"100%"}} />
+      </div>
+      <div style={{display:"flex", gap:8}}>
+        <div style={{...fld, flex:2}}>
+          <label style={lbl}>Account email</label>
+          <input className="login-input" value={form.email} onChange={set("email")} placeholder="you@acme.com" style={{width:"100%"}} />
+        </div>
+        <div style={{...fld, flex:1}}>
+          <label style={lbl}>Project key</label>
+          <input className="login-input" value={form.project_key} onChange={set("project_key")} placeholder="PAY" style={{width:"100%"}} />
+        </div>
+      </div>
+      <div style={fld}>
+        <label style={lbl}>API token {tokenSet ? "(leave blank to keep current)" : ""}</label>
+        <input className="login-input" type="password" value={form.api_token} onChange={set("api_token")} placeholder={tokenSet ? "••••••••" : "Atlassian API token"} autoComplete="off" style={{width:"100%"}} />
+      </div>
+      <div style={fld}>
+        <label style={lbl}>Bug issue type</label>
+        <input className="login-input" value={form.issue_type_bug} onChange={set("issue_type_bug")} placeholder="Bug" style={{width:"100%"}} />
+      </div>
+    </>
+  );
+}
+
 function IntRow({ intg, onEdit, onDelete, onSync }) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [syncing, setSyncing] = React.useState(false);
   const [syncMsg, setSyncMsg] = React.useState(null);
   const menuRef = React.useRef(null);
-  const canSync = !!(intg.config && intg.config.repo_url);
+  const canSync = !!(intg.config && (intg.config.repo_url || (intg.type === "jira" && intg.config.base_url)));
 
   const doSync = async () => {
     setSyncing(true); setSyncMsg(null);
@@ -145,10 +179,14 @@ function AddIntegrationModal({ onClose, onSaved, existingIds }) {
   useEscapeClose(onClose);
 
   const isGithub = provider?.id === "github";
+  const isJira = provider?.id === "jira";
 
   const pick = (p) => {
     setProvider(p);
-    setForm({ configured_by: p.configuredBy, repo_url: "", branch: "main", path: "", token: "" });
+    setForm({
+      configured_by: p.configuredBy, repo_url: "", branch: "main", path: "", token: "",
+      base_url: "", email: "", api_token: "", project_key: "", issue_type_bug: "Bug",
+    });
     setStep("configure");
   };
 
@@ -166,6 +204,14 @@ function AddIntegrationModal({ onClose, onSaved, existingIds }) {
           branch: form.branch.trim() || "main",
           path: form.path.trim(),
           token: form.token.trim(),
+        };
+      } else if (isJira) {
+        payload.config = {
+          base_url: form.base_url.trim(),
+          email: form.email.trim(),
+          api_token: form.api_token.trim(),
+          project_key: form.project_key.trim(),
+          issue_type_bug: form.issue_type_bug.trim() || "Bug",
         };
       }
       const created = await TH_API.createIntegration(payload);
@@ -217,6 +263,7 @@ function AddIntegrationModal({ onClose, onSaved, existingIds }) {
               />
             </div>
             {isGithub && <GithubConfigFields form={form} setForm={setForm} tokenSet={false} />}
+            {isJira && <JiraConfigFields form={form} setForm={setForm} tokenSet={false} />}
             {err && <div style={{fontSize:12, color:"var(--fail)", marginBottom:8}}>{err}</div>}
             <div style={{display:"flex", gap:8}}>
               <button className="btn primary" onClick={save} disabled={saving}>{saving ? "Connecting…" : "Connect"}</button>
@@ -233,10 +280,14 @@ function EditIntegrationModal({ intg, onClose, onSaved }) {
   useEscapeClose(onClose);
   const cfg = intg.config || {};
   const isGithub = intg.icon === "github" || !!cfg.repo_url;
+  const isJira = intg.type === "jira";
   const tokenSet = !!cfg.token_set;
+  const apiTokenSet = !!cfg.api_token_set;
   const [form, setForm] = React.useState({
     name: intg.name, configured_by: intg.configured_by || "", status: intg.status,
     repo_url: cfg.repo_url || "", branch: cfg.branch || "main", path: cfg.path || "", token: "",
+    base_url: cfg.base_url || "", email: cfg.email || "", api_token: "",
+    project_key: cfg.project_key || "", issue_type_bug: cfg.issue_type_bug || "Bug",
   });
   const [saving, setSaving] = React.useState(false);
   const [err, setErr] = React.useState(null);
@@ -254,6 +305,15 @@ function EditIntegrationModal({ intg, onClose, onSaved }) {
           branch: form.branch.trim() || "main",
           path: form.path.trim(),
           token: form.token.trim(),
+        };
+      } else if (isJira) {
+        // Empty api_token is preserved server-side (never wiped by a blank field).
+        payload.config = {
+          base_url: form.base_url.trim(),
+          email: form.email.trim(),
+          api_token: form.api_token.trim(),
+          project_key: form.project_key.trim(),
+          issue_type_bug: form.issue_type_bug.trim() || "Bug",
         };
       }
       const updated = await TH_API.updateIntegration(intg.id, payload);
@@ -283,6 +343,7 @@ function EditIntegrationModal({ intg, onClose, onSaved }) {
           </select>
         </div>
         {isGithub && <GithubConfigFields form={form} setForm={setForm} tokenSet={tokenSet} />}
+        {isJira && <JiraConfigFields form={form} setForm={setForm} tokenSet={apiTokenSet} />}
         {err && <div style={{fontSize:12, color:"var(--fail)", marginBottom:8}}>{err}</div>}
         <div style={{display:"flex", gap:8}}>
           <button className="btn primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</button>

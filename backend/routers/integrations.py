@@ -6,6 +6,7 @@ from .. import models
 from ..schemas import IntegrationOut, IntegrationCreate, IntegrationUpdate
 from ..auth_utils import require_role, get_current_user
 from ..github_sync import sync_integration
+from ..jira_sync import sync_jira_requirements
 
 router = APIRouter(tags=["integrations"])
 
@@ -36,14 +37,20 @@ def update_integration(intg_id: str, payload: IntegrationUpdate, db: Session = D
         raise HTTPException(status_code=404, detail="Integration not found")
     updates = payload.model_dump(exclude_unset=True)
     if "config" in updates and updates["config"] is not None:
-        # Merge so a redacted/empty token from the client never wipes the stored one.
+        # Merge so a redacted/empty secret from the client never wipes the stored one.
         merged = dict(intg.config or {})
         incoming = updates.pop("config")
-        new_token = incoming.get("token")
+        prev = intg.config or {}
         merged.update(incoming)
-        if not new_token:
-            merged["token"] = (intg.config or {}).get("token", "")
+        # Preserve stored secrets when the client submits them blank (redacted).
+        for secret_key in ("token", "api_token"):
+            if not incoming.get(secret_key):
+                if prev.get(secret_key):
+                    merged[secret_key] = prev[secret_key]
+                else:
+                    merged.pop(secret_key, None)
         merged.pop("token_set", None)
+        merged.pop("api_token_set", None)
         intg.config = merged
     for field, value in updates.items():
         setattr(intg, field, value)
@@ -54,13 +61,16 @@ def update_integration(intg_id: str, payload: IntegrationUpdate, db: Session = D
 
 @router.post("/integrations/{intg_id}/sync")
 def sync_integration_now(intg_id: str, db: Session = Depends(get_db), _: models.User = WRITE_ROLES):
-    """Pull YAML tests from the integration's git repo (read-only) and upsert them."""
+    """Sync an integration. GitHub → pull YAML tests; Jira → pull stories/epics as requirements."""
     intg = db.query(models.Integration).filter(models.Integration.id == intg_id).first()
     if not intg:
         raise HTTPException(status_code=404, detail="Integration not found")
-    # sync_integration validates the config points at a github.com repo.
     try:
-        stats = sync_integration(db, intg)
+        if intg.type == "jira":
+            stats = sync_jira_requirements(db, intg)
+        else:
+            # sync_integration validates the config points at a github.com repo.
+            stats = sync_integration(db, intg)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:

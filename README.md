@@ -104,6 +104,7 @@ cp .env.example .env
 | `AI_API_KEY` | _(unset)_ | API key for the OpenAI-compatible endpoint (any value for local servers) |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | _(unset)_ | GitHub OAuth login (optional) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | _(unset)_ | Google OAuth login (optional) |
+| `JIRA_AUTOSYNC_MINUTES` | `0` | Auto-sync all Jira integrations every N minutes (`0` = disabled). Requires outbound reachability to Jira Cloud |
 
 Database URLs:
 
@@ -165,6 +166,36 @@ Only `title` is required. Malformed files are skipped and reported in the sync r
 ### Endpoint
 
 `POST /api/integrations/{id}/sync` (admin/manager) → `{ created, updated, skipped, commit, files, warnings, last_sync }`. Sync is restricted to `github.com` repos.
+
+---
+
+## Jira integration
+
+Two-way link with Jira Cloud, sharing one `jira` integration
+(**Settings → Integrations → Add → Jira**). Config: `base_url`, `email`,
+`api_token`, `project_key`, and the bug issue type.
+
+- **Pull** (inbound): **Sync** runs a JQL query (`project = KEY AND issuetype in
+  (Story, Epic)`) and upserts matching issues as requirements — matched by
+  `external_key`, with Jira status/issuetype mapped to requirement status/type. Local
+  test links are preserved across re-syncs.
+- **Push** (outbound): on the Defects view, **Push to Jira** creates a bug from a defect
+  (`POST /api/defects/{id}/push`, admin/manager) and stores the issue key + URL on the
+  defect. Re-pushing a linked defect is rejected (409).
+
+Both reuse the `external_provider` / `external_key` / `external_url` fields shipped in
+v1.1 on Requirement and Defect — no schema change.
+
+**Auto-sync (optional):** set `JIRA_AUTOSYNC_MINUTES` > 0 to have the backend pull every
+Jira integration on that interval — no manual Sync needed. Per-integration failures are
+logged and skipped, so one misconfigured integration can't stall the others. Off by
+default (`0`); needs outbound reachability to Jira Cloud (works self-hosted, no public
+endpoint required, unlike an inbound webhook).
+
+**Security:** `api_token` is stored in the integration config and **never returned to
+clients** — the API reports only `api_token_set: true`, and a blank value on edit keeps
+the stored secret (same handling as the GitHub PAT). `base_url` must be `https`. The push
+endpoint publishes the defect title/description to Jira and is admin/manager only.
 
 ---
 
@@ -254,6 +285,7 @@ thorotest/
 │   ├── emailer.py          # Outbound system email (password resets) via env SMTP
 │   ├── gql_schema.py       # Strawberry GraphQL schema
 │   ├── github_sync.py      # Tests-as-Code: read YAML tests from a GitHub repo
+│   ├── jira_sync.py        # Jira Cloud: pull stories→requirements, push defects→bugs
 │   └── routers/
 │       ├── _pagination.py  # Shared limit/offset + X-Total-Count helper
 │       ├── auth.py         # /auth/register, /auth/login, /me, /users, password reset
@@ -381,6 +413,7 @@ backend/tests/
 ├── test_test_detail_tabs.py  # History, defects, comments endpoints
 ├── test_defects.py           # Defects CRUD, filters, severity/status logic
 ├── test_requirements.py      # Requirements CRUD, coverage, linking, import, roles
+├── test_jira_sync.py         # Jira sync, defect push, config secret redaction
 ├── test_steps.py             # Structured test steps CRUD
 ├── test_step_execution.py    # Step execution and result recording
 ├── test_attachments.py       # File upload/download per test and run
