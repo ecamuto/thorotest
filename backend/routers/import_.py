@@ -7,7 +7,8 @@ from typing import Optional
 from ..db import get_db
 from .. import models
 from ..importers import (
-    detect_format, parse_csv, parse_testrail_xml, parse_junit_xml, parse_json,
+    detect_format, parse_csv, parse_testrail_xml, parse_testlink_xml,
+    parse_junit_xml, parse_json,
     parse_zephyr, parse_xray, parse_qtest, ImportResult,
 )
 from ..importers.csv_importer import get_csv_columns
@@ -26,6 +27,8 @@ def _run_parser(fmt: str, content: bytes, column_mapping: dict | None) -> Import
         return parse_csv(content, column_mapping)
     if fmt == "testrail_xml":
         return parse_testrail_xml(content)
+    if fmt == "testlink_xml":
+        return parse_testlink_xml(content)
     if fmt == "junit_xml":
         return parse_junit_xml(content)
     if fmt == "json":
@@ -45,6 +48,7 @@ _FMT_PROVIDER = {
     "xray": "xray",
     "qtest": "qtest",
     "testrail_xml": "testrail",
+    "testlink_xml": "testlink",
     "junit_xml": "junit",
     "csv": "csv",
     "json": "json",

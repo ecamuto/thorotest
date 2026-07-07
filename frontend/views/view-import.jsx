@@ -5,6 +5,7 @@ const { useState, useRef, useCallback } = React;
 const FORMATS = [
   { id: "csv",          label: "CSV",           sub: "TestRail · Zephyr · Azure · generic" },
   { id: "testrail_xml", label: "TestRail XML",  sub: "Native .xml export from TestRail" },
+  { id: "testlink_xml", label: "TestLink XML",  sub: "Native .xml export from TestLink" },
   { id: "junit_xml",    label: "JUnit XML",     sub: "Automated test results · Jenkins · GitHub Actions" },
   { id: "json",         label: "JSON",          sub: "Allure · Testomat.io · generic" },
   { id: "zephyr",       label: "Zephyr Scale",  sub: "JSON export / REST API from Zephyr Scale (TM4J)" },
