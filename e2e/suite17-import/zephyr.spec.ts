@@ -120,9 +120,7 @@ test.describe('Suite 17 — Import (Zephyr Scale JSON)', () => {
     expect((await first.json()).imported.tests).toBe(2);
 
     // Second identical import: tests matched by (provider, key), run by cycle.
-    // Reload to remount the import view (it stays on the "complete" state
-    // otherwise, with no file input rendered).
-    await page.reload();
+    // Re-clicking the Import nav resets the view to a fresh dropzone.
     await gotoImport(page);
     await dropFile(page, 'zephyr.json', payload);
     const [second] = await Promise.all([

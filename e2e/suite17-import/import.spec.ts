@@ -229,4 +229,20 @@ test.describe('Suite 17 — Import (CSV / JUnit / JSON)', () => {
     expect(body.imported.runs).toBe(1);
     await expect(page.getByText('Import complete')).toBeVisible({ timeout: 5000 });
   });
+
+  // IMP-10 · Re-clicking Import nav resets the completed-import screen [P1]
+  test('IMP-10: clicking Import again clears the result and shows dropzone', async ({ page }) => {
+    await gotoImport(page);
+    await dropFile(page, 'tests.csv', 'text/csv', CSV);
+    await Promise.all([
+      page.waitForResponse(r => r.url().includes('/api/import/execute')),
+      page.click('button:has-text("Import")'),
+    ]);
+    await expect(page.getByText('Import complete')).toBeVisible({ timeout: 5000 });
+
+    // Re-click the sidebar Import item — view should reset to a fresh dropzone.
+    await gotoImport(page);
+    await expect(page.getByText('Drop file here or click to browse')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('Import complete')).toHaveCount(0);
+  });
 });

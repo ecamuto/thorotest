@@ -54,9 +54,8 @@ async function dropFile(page: Page, name: string, body: string) {
 }
 
 async function importFile(page: Page, name: string, body: string) {
-  // Reload to remount the import view — after a completed import it stays on
-  // the "complete" state with no file input, so a fresh mount is needed.
-  await page.reload();
+  // Re-clicking the Import nav resets the view to a fresh dropzone even after
+  // a completed import.
   await gotoImport(page);
   await dropFile(page, name, body);
   const [exec] = await Promise.all([
