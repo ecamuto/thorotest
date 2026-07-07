@@ -9,6 +9,7 @@ const FORMATS = [
   { id: "json",         label: "JSON",          sub: "Allure · Testomat.io · generic" },
   { id: "zephyr",       label: "Zephyr Scale",  sub: "JSON export / REST API from Zephyr Scale (TM4J)" },
   { id: "xray",         label: "Xray",          sub: "Xray for Jira — test JSON / execution results" },
+  { id: "qtest",        label: "qTest",         sub: "Tricentis qTest — test case JSON export / API" },
 ];
 
 const CONFLICT_OPTIONS = [

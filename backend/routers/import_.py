@@ -8,7 +8,7 @@ from ..db import get_db
 from .. import models
 from ..importers import (
     detect_format, parse_csv, parse_testrail_xml, parse_junit_xml, parse_json,
-    parse_zephyr, parse_xray, ImportResult,
+    parse_zephyr, parse_xray, parse_qtest, ImportResult,
 )
 from ..importers.csv_importer import get_csv_columns
 from ..auth_utils import require_role
@@ -34,6 +34,8 @@ def _run_parser(fmt: str, content: bytes, column_mapping: dict | None) -> Import
         return parse_zephyr(content)
     if fmt == "xray":
         return parse_xray(content)
+    if fmt == "qtest":
+        return parse_qtest(content)
     raise HTTPException(status_code=400, detail=f"Unknown format: {fmt}")
 
 
@@ -41,6 +43,7 @@ def _run_parser(fmt: str, content: bytes, column_mapping: dict | None) -> Import
 _FMT_PROVIDER = {
     "zephyr": "zephyr",
     "xray": "xray",
+    "qtest": "qtest",
     "testrail_xml": "testrail",
     "junit_xml": "junit",
     "csv": "csv",

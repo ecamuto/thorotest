@@ -22,12 +22,24 @@ def _is_xray_json(content: bytes) -> bool:
     )
 
 
+def _is_qtest_json(content: bytes) -> bool:
+    """Heuristic: qTest carries a 'pid'/'test_case_version_id' and a
+    'properties' array of field_name/field_value_name entries."""
+    head = content[:4000].decode("utf-8", errors="ignore")
+    return any(
+        marker in head
+        for marker in ('"test_case_version_id"', '"field_value_name"')
+    ) or ('"pid"' in head and '"properties"' in head)
+
+
 def _classify_json(content: bytes) -> str:
     # Zephyr's 'values' envelope is the most specific, check it first.
     if _is_zephyr_json(content):
         return "zephyr"
     if _is_xray_json(content):
         return "xray"
+    if _is_qtest_json(content):
+        return "qtest"
     return "json"
 
 
