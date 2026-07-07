@@ -4,6 +4,7 @@ const { useState, useRef, useCallback } = React;
 
 const FORMATS = [
   { id: "csv",          label: "CSV",           sub: "TestRail · Zephyr · Azure · generic" },
+  { id: "xlsx",         label: "Excel (.xlsx)", sub: "Spreadsheet export · first worksheet · column mapping" },
   { id: "testrail_xml", label: "TestRail XML",  sub: "Native .xml export from TestRail" },
   { id: "testlink_xml", label: "TestLink XML",  sub: "Native .xml export from TestLink" },
   { id: "junit_xml",    label: "JUnit XML",     sub: "Automated test results · Jenkins · GitHub Actions" },
@@ -89,12 +90,12 @@ function DropZone({ onFile }) {
       <div style={{ fontSize: 28, marginBottom: 8 }}>⬆</div>
       <div style={{ fontWeight: 600, marginBottom: 4 }}>Drop file here or click to browse</div>
       <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-        .csv · .xml · .json — max 10 MB
+        .csv · .xlsx · .xml · .json — max 10 MB
       </div>
       <input
         ref={inputRef}
         type="file"
-        accept=".csv,.xml,.json"
+        accept=".csv,.xlsx,.xml,.json"
         style={{ display: "none" }}
         onChange={e => handle(e.target.files[0])}
       />
@@ -272,6 +273,8 @@ function Import() {
   const [error, setError] = useState(null);
 
   const effectiveFmt = format || detectedFmt;
+  // Spreadsheet formats share the column-mapping UI.
+  const isTabular = effectiveFmt === "csv" || effectiveFmt === "xlsx";
 
   const handleFile = async (f) => {
     setFile(f);
@@ -434,7 +437,7 @@ function Import() {
       )}
 
       {/* Step 3: Column mapping (CSV only) */}
-      {file && effectiveFmt === "csv" && csvMeta && (
+      {file && isTabular && csvMeta && (
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card-title" style={{ marginBottom: 12 }}>3 · Column mapping</div>
           <ColumnMapper
@@ -449,7 +452,7 @@ function Import() {
       {file && effectiveFmt && (
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card-title" style={{ marginBottom: 12 }}>
-            {effectiveFmt === "csv" && csvMeta ? "4" : "3"} · Duplicate handling
+            {isTabular && csvMeta ? "4" : "3"} · Duplicate handling
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {CONFLICT_OPTIONS.map(o => (

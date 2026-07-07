@@ -62,7 +62,10 @@ def detect_format(filename: str, content: bytes) -> str:
     'zephyr', 'xray', or 'qtest'."""
     name = filename.lower()
 
-    if name.endswith(".csv") or name.endswith(".xlsx"):
+    if name.endswith(".xlsx"):
+        return "xlsx"
+
+    if name.endswith(".csv"):
         return "csv"
 
     if name.endswith(".json"):
@@ -72,6 +75,9 @@ def detect_format(filename: str, content: bytes) -> str:
         return _classify_xml(content)
 
     # Sniff content type by magic bytes / first chars
+    # .xlsx is a ZIP container — starts with "PK\x03\x04".
+    if content[:2] == b"PK":
+        return "xlsx"
     head = content[:512].decode("utf-8", errors="ignore").strip()
     if head.startswith("{") or head.startswith("["):
         return _classify_json(content)

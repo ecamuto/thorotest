@@ -64,15 +64,13 @@ def _detect_tool(headers: list[str]) -> str:
     return "generic"
 
 
-def parse_csv(content: bytes, column_mapping: dict | None = None) -> ImportResult:
-    """
-    Parse a CSV export from TestRail, Zephyr Scale, Azure Test Plans, or generic CSV.
-    column_mapping: optional override {canonical_name: actual_header}.
-    """
-    text = content.decode("utf-8-sig", errors="replace")
-    reader = csv.DictReader(io.StringIO(text))
-    headers = reader.fieldnames or []
+def _result_from_rows(headers: list[str], rows, column_mapping: dict | None,
+                      label: str) -> ImportResult:
+    """Build an ImportResult from tabular rows (list of {header: value} dicts).
 
+    Shared by the CSV and XLSX importers. `label` is the format prefix
+    ("csv" / "xlsx") used in format_detected.
+    """
     auto_mapping = _detect_columns(headers)
     mapping = {**auto_mapping, **(column_mapping or {})}
 
@@ -81,25 +79,25 @@ def parse_csv(content: bytes, column_mapping: dict | None = None) -> ImportResul
     warnings: list[str] = []
 
     if "title" not in mapping:
-        warnings.append("No title column detected — cannot import test cases from this CSV")
-        return ImportResult(format_detected=f"csv ({tool})", warnings=warnings,
+        warnings.append("No title column detected — cannot import test cases from this file")
+        return ImportResult(format_detected=f"{label} ({tool})", warnings=warnings,
                             source_provider=tool)
 
-    for row in reader:
-        title = row.get(mapping["title"], "").strip()
+    for row in rows:
+        title = str(row.get(mapping["title"], "") or "").strip()
         if not title:
             continue
 
         folder_path = ""
         if "folder_path" in mapping:
-            folder_path = row.get(mapping["folder_path"], "").strip()
+            folder_path = str(row.get(mapping["folder_path"], "") or "").strip()
             # Azure uses " > " separator, TestRail uses " / " — normalise to "/"
             folder_path = folder_path.replace(" > ", "/").strip("/")
 
-        raw_priority = row.get(mapping.get("priority", ""), "").strip()
-        raw_type = row.get(mapping.get("type", ""), "").strip()
+        raw_priority = str(row.get(mapping.get("priority", ""), "") or "").strip()
+        raw_type = str(row.get(mapping.get("type", ""), "") or "").strip()
 
-        raw_tags = row.get(mapping.get("tags", ""), "").strip()
+        raw_tags = str(row.get(mapping.get("tags", ""), "") or "").strip()
         tags = [t.strip() for t in raw_tags.replace(";", ",").split(",") if t.strip()] if raw_tags else []
 
         tests.append(TestData(
@@ -108,24 +106,76 @@ def parse_csv(content: bytes, column_mapping: dict | None = None) -> ImportResul
             type=_normalise_type(raw_type) if raw_type else "manual",
             status="pending",
             priority=_normalise_priority(raw_priority) if raw_priority else "med",
-            owner=row.get(mapping.get("owner", ""), "").strip(),
+            owner=str(row.get(mapping.get("owner", ""), "") or "").strip(),
             tags=tags,
-            source_id=row.get(mapping.get("source_id", ""), "").strip(),
+            source_id=str(row.get(mapping.get("source_id", ""), "") or "").strip(),
         ))
 
     return ImportResult(
         tests=tests,
-        format_detected=f"csv ({tool})",
+        format_detected=f"{label} ({tool})",
         warnings=warnings,
         source_provider=tool,
     )
 
 
-def get_csv_columns(content: bytes) -> dict:
-    """Return detected headers and column mapping for UI display."""
+def _csv_rows(content: bytes) -> tuple[list[str], list[dict]]:
     text = content.decode("utf-8-sig", errors="replace")
     reader = csv.DictReader(io.StringIO(text))
-    headers = list(reader.fieldnames or [])
-    mapping = _detect_columns(headers)
-    tool = _detect_tool(headers)
-    return {"headers": headers, "mapping": mapping, "tool": tool}
+    return list(reader.fieldnames or []), list(reader)
+
+
+def _xlsx_rows(content: bytes) -> tuple[list[str], list[dict]]:
+    """Read the first worksheet of an .xlsx into (headers, row dicts)."""
+    from openpyxl import load_workbook  # lazy: only needed for .xlsx imports
+
+    wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+    ws = wb.active
+    rows_iter = ws.iter_rows(values_only=True)
+    try:
+        header_row = next(rows_iter)
+    except StopIteration:
+        wb.close()
+        return [], []
+    headers = [str(h).strip() if h is not None else "" for h in header_row]
+    rows = []
+    for values in rows_iter:
+        if values is None or all(v is None for v in values):
+            continue
+        rows.append({headers[i]: values[i] for i in range(min(len(headers), len(values)))})
+    wb.close()
+    return headers, rows
+
+
+def parse_csv(content: bytes, column_mapping: dict | None = None) -> ImportResult:
+    """
+    Parse a CSV export from TestRail, Zephyr Scale, Azure Test Plans, or generic CSV.
+    column_mapping: optional override {canonical_name: actual_header}.
+    """
+    headers, rows = _csv_rows(content)
+    return _result_from_rows(headers, rows, column_mapping, "csv")
+
+
+def parse_xlsx(content: bytes, column_mapping: dict | None = None) -> ImportResult:
+    """Parse an .xlsx export (first worksheet), reusing the CSV column logic."""
+    try:
+        headers, rows = _xlsx_rows(content)
+    except Exception as e:
+        return ImportResult(format_detected="xlsx",
+                            warnings=[f"Could not read .xlsx file: {e}"])
+    return _result_from_rows(headers, rows, column_mapping, "xlsx")
+
+
+def get_csv_columns(content: bytes) -> dict:
+    """Return detected headers and column mapping for UI display."""
+    headers, _ = _csv_rows(content)
+    return {"headers": headers, "mapping": _detect_columns(headers), "tool": _detect_tool(headers)}
+
+
+def get_xlsx_columns(content: bytes) -> dict:
+    """Return detected headers and column mapping for UI display (.xlsx)."""
+    try:
+        headers, _ = _xlsx_rows(content)
+    except Exception:
+        headers = []
+    return {"headers": headers, "mapping": _detect_columns(headers), "tool": _detect_tool(headers)}

@@ -11,7 +11,8 @@ from ..importers import (
     parse_junit_xml, parse_json,
     parse_zephyr, parse_xray, parse_qtest, ImportResult,
 )
-from ..importers.csv_importer import get_csv_columns
+from ..importers.csv_importer import get_csv_columns, get_xlsx_columns
+from ..importers import parse_xlsx
 from ..auth_utils import require_role
 
 router = APIRouter(tags=["import"])
@@ -25,6 +26,8 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 def _run_parser(fmt: str, content: bytes, column_mapping: dict | None) -> ImportResult:
     if fmt == "csv":
         return parse_csv(content, column_mapping)
+    if fmt == "xlsx":
+        return parse_xlsx(content, column_mapping)
     if fmt == "testrail_xml":
         return parse_testrail_xml(content)
     if fmt == "testlink_xml":
@@ -72,6 +75,8 @@ async def detect_file(file: UploadFile = File(...), _: models.User = WRITE_ROLES
 
     if fmt == "csv":
         result["csv_meta"] = get_csv_columns(content)
+    elif fmt == "xlsx":
+        result["csv_meta"] = get_xlsx_columns(content)
 
     return result
 
