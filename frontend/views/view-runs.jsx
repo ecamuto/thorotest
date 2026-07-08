@@ -88,7 +88,6 @@ function RunsList({runs, onOpenRun, active}) {
             <th style={{width:140}}>Branch</th>
             <th style={{width:80}}>Owner</th>
             <th style={{width:90}}>Started</th>
-            <th style={{width:40}}></th>
           </tr>
         </thead>
         <tbody>
@@ -110,7 +109,6 @@ function RunsList({runs, onOpenRun, active}) {
               <td className="mono dim">{r.branch}</td>
               <td className="mono dim">{r.owner}</td>
               <td className="mono dim">{r.started}</td>
-              <td><button className="btn ghost icon sm"><Icon name="more" /></button></td>
             </tr>
           ))}
         </tbody>

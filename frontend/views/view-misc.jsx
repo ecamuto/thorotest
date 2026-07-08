@@ -22,9 +22,6 @@ function Pipelines() {
           <h1 className="page-title">CI pipelines</h1>
           <div className="page-sub">Every CI run that touched your tests, alongside the manual results. Same timeline, one source of truth.</div>
         </div>
-        <div className="actions">
-          <button className="btn"><Icon name="plus" /> Connect provider</button>
-        </div>
       </div>
 
       <div className="card" style={{marginBottom:14}}>
@@ -101,10 +98,6 @@ function Insights() {
         <div>
           <h1 className="page-title">Insights</h1>
           <div className="page-sub">Test health, coverage, and where your team is losing time.</div>
-        </div>
-        <div className="actions">
-          <div className="chip">Last 30 days <Icon name="chevD" /></div>
-          <button className="btn">Export</button>
         </div>
       </div>
 

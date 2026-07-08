@@ -301,10 +301,6 @@ function Library({ onNav, onOpenTest, currentUser }) {
           <div style={{padding:"6px 22px", background:"var(--accent-soft)", borderBottom:"1px solid var(--border)", display:"flex", alignItems:"center", gap:10, fontSize:12, position:"relative"}}>
             <b className="mono">{selected.size} selected</b>
             {window.can && window.can(currentUser, "write") && (
-              <button className="btn sm">Add to run</button>
-            )}
-
-            {window.can && window.can(currentUser, "write") && (
               <div style={{position:"relative"}}>
                 <button className="btn sm" onClick={() => { setBulkFolderOpen(o => !o); setBulkStatusOpen(false); }}>Move to folder</button>
                 {bulkFolderOpen && (

@@ -124,12 +124,8 @@ function TestDetail({ testId, onBack, currentUser }) {
             </div>
           </div>
           <div style={{display:"flex", gap:6}}>
-            <button className="btn"><Icon name="link" /> Copy link</button>
             {window.can && window.can(currentUser, "delete") && (
               <button className="btn" style={{color:"var(--fail)"}} onClick={() => setDeleteConfirm(true)}><Icon name="x" /> Delete</button>
-            )}
-            {window.can && window.can(currentUser, "write") && (
-              <button className="btn accent"><Icon name="play" /> Run now</button>
             )}
           </div>
         </div>
