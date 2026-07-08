@@ -131,6 +131,25 @@ class MyWorkGroupOut(BaseModel):
     cases: List[MyWorkCaseOut] = []
 
 
+class PlanOut(BaseModel):
+    id: str
+    name: str
+    env: Optional[str] = None
+    owner: Optional[str] = None
+    schedule: Optional[str] = None
+    test_ids: List[str] = []
+    created_at: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class PlanCreate(BaseModel):
+    name: str
+    env: Optional[str] = None
+    schedule: Optional[str] = None
+    test_ids: List[str] = []
+
+
 class PipelineOut(BaseModel):
     id: str
     name: str

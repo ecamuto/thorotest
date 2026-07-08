@@ -147,6 +147,17 @@ class Pipeline(Base):
     when = Column(String(64), nullable=True)
 
 
+class TestPlan(Base):
+    __tablename__ = "test_plans"
+    id = Column(String(255), primary_key=True)
+    name = Column(String(512), nullable=False)
+    env = Column(String(255), nullable=True)
+    owner = Column(String(255), nullable=True)
+    schedule = Column(String(255), nullable=True)   # informational cron/trigger; execution is external (CI)
+    test_ids = Column(JSON, default=list)            # list[str] of Test.id
+    created_at = Column(String(64), nullable=True)   # ISO UTC
+
+
 class Activity(Base):
     __tablename__ = "activity"
     id = Column(Integer, primary_key=True, autoincrement=True)

@@ -231,6 +231,33 @@
       return res.json();
     },
 
+    async listPlans() {
+      const res = await fetch(BASE + "/api/plans", { headers: authHeaders() });
+      if (!res.ok) throw new Error("Load plans failed");
+      return res.json();
+    },
+
+    async createPlan(payload) {
+      const res = await fetch(BASE + "/api/plans", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Create plan failed");
+      return res.json();
+    },
+
+    async runPlan(id) {
+      const res = await fetch(BASE + `/api/plans/${id}/run`, { method: "POST", headers: authHeaders() });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || "Run plan failed");
+      return res.json();
+    },
+
+    async deletePlan(id) {
+      const res = await fetch(BASE + `/api/plans/${id}`, { method: "DELETE", headers: authHeaders() });
+      if (!res.ok) throw new Error("Delete plan failed");
+    },
+
     async deleteTest(id) {
       const res = await fetch(BASE + `/api/tests/${id}`, { method: "DELETE", headers: authHeaders() });
       if (!res.ok && res.status !== 204) throw new Error("Delete failed");

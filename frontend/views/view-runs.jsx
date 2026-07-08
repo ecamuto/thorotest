@@ -4,6 +4,13 @@ function Runs({ onOpenRun, currentUser }) {
   const { data: D, loading, error } = useInitialData();
   const [tab, setTab] = useState("active");
   const [showNewRun, setShowNewRun] = React.useState(false);
+  const [showNewPlan, setShowNewPlan] = React.useState(false);
+  const [plans, setPlans] = React.useState([]);
+
+  const loadPlans = React.useCallback(() => {
+    window.TH_API.listPlans().then(setPlans).catch(() => setPlans([]));
+  }, []);
+  React.useEffect(() => { loadPlans(); }, [loadPlans]);
 
   if (loading) return (
     <div style={{display:"flex", height:"100%", alignItems:"center", justifyContent:"center"}}>
@@ -28,7 +35,7 @@ function Runs({ onOpenRun, currentUser }) {
         </div>
         <div className="actions">
           {window.can && window.can(currentUser, "write") && (
-            <button className="btn"><Icon name="plus" /> New plan</button>
+            <button className="btn" onClick={() => setShowNewPlan(true)}><Icon name="plus" /> New plan</button>
           )}
           {window.can && window.can(currentUser, "write") && (
             <button className="btn accent" onClick={() => setShowNewRun(true)}><Icon name="play" /> Start run</button>
@@ -39,18 +46,26 @@ function Runs({ onOpenRun, currentUser }) {
       <div className="tabs" style={{paddingLeft:22}}>
         <div className={"tab" + (tab === "active" ? " active" : "")} onClick={() => setTab("active")}>Active <span className="count">{activeCount}</span></div>
         <div className={"tab" + (tab === "history" ? " active" : "")} onClick={() => setTab("history")}>History <span className="count">{D.runs.length}</span></div>
-        <div className={"tab" + (tab === "plans" ? " active" : "")} onClick={() => setTab("plans")}>Test plans <span className="count">14</span></div>
-        <div className={"tab" + (tab === "scheduled" ? " active" : "")} onClick={() => setTab("scheduled")}>Scheduled <span className="count">3</span></div>
+        <div className={"tab" + (tab === "plans" ? " active" : "")} onClick={() => setTab("plans")}>Test plans <span className="count">{plans.length}</span></div>
       </div>
 
       <div style={{overflowY:"auto", flex:1, padding:"14px 22px 32px"}}>
-        {tab === "plans" ? <PlansList /> : tab === "scheduled" ? <ScheduledList /> : <RunsList runs={D.runs} onOpenRun={onOpenRun} active={tab === "active"} />}
+        {tab === "plans"
+          ? <PlansList plans={plans} onReload={loadPlans} onOpenRun={onOpenRun} currentUser={currentUser} onNewPlan={() => setShowNewPlan(true)} />
+          : <RunsList runs={D.runs} onOpenRun={onOpenRun} active={tab === "active"} />}
       </div>
 
       {showNewRun && window.can && window.can(currentUser, "write") && (
         <NewRunModal
           onClose={() => setShowNewRun(false)}
           onCreated={(id) => { setShowNewRun(false); onOpenRun(id); }}
+        />
+      )}
+
+      {showNewPlan && window.can && window.can(currentUser, "write") && (
+        <NewPlanModal
+          onClose={() => setShowNewPlan(false)}
+          onCreated={() => { setShowNewPlan(false); setTab("plans"); loadPlans(); }}
         />
       )}
     </div>
@@ -104,27 +119,57 @@ function RunsList({runs, onOpenRun, active}) {
   );
 }
 
-function PlansList() {
-  const plans = [
-    { id: "PLAN-12", name: "Release regression — full", cases: 142, env: "staging", owner: "MR", schedule: "Manual", lastRun: "31m ago" },
-    { id: "PLAN-11", name: "Nightly smoke", cases: 38, env: "preview", owner: "ci-bot", schedule: "0 2 * * *", lastRun: "8h ago" },
-    { id: "PLAN-9", name: "Mobile checkout sweep", cases: 24, env: "staging", owner: "AR", schedule: "Manual", lastRun: "1d ago" },
-    { id: "PLAN-7", name: "API contract regression", cases: 89, env: "preview", owner: "ci-bot", schedule: "On every PR to main", lastRun: "2d ago" },
-    { id: "PLAN-4", name: "Exploratory — admin panel", cases: 8, env: "local", owner: "MR", schedule: "Manual", lastRun: "3d ago" },
-  ];
+function PlansList({ plans, onReload, onOpenRun, currentUser, onNewPlan }) {
+  const [busy, setBusy] = React.useState(null);   // plan id currently running/deleting
+  const canWrite = window.can && window.can(currentUser, "write");
+
+  const runPlan = async (p) => {
+    setBusy(p.id);
+    try {
+      const run = await window.TH_API.runPlan(p.id);
+      onOpenRun(run.id);
+    } catch (e) {
+      alert(e.message);
+      setBusy(null);
+    }
+  };
+
+  const deletePlan = async (p) => {
+    if (!window.confirm(`Delete plan "${p.name}"?`)) return;
+    setBusy(p.id);
+    try {
+      await window.TH_API.deletePlan(p.id);
+      onReload();
+    } catch (e) {
+      alert(e.message);
+    }
+    setBusy(null);
+  };
+
+  if (!plans.length) {
+    return (
+      <div className="empty" style={{padding:"48px 18px", textAlign:"center"}}>
+        <div style={{fontSize:13, marginBottom:6}}>No test plans yet.</div>
+        <div className="mono dim" style={{fontSize:11, marginBottom:16}}>
+          A plan is a reusable set of tests you run on demand.
+        </div>
+        {canWrite && <button className="btn accent" onClick={onNewPlan}><Icon name="plus" /> New plan</button>}
+      </div>
+    );
+  }
+
   return (
     <div className="card">
       <table className="table">
         <thead>
           <tr>
-            <th style={{width:80}}>ID</th>
+            <th style={{width:110}}>ID</th>
             <th>Name</th>
-            <th style={{width:80}}>Cases</th>
+            <th style={{width:70}}>Tests</th>
             <th style={{width:100}}>Env</th>
-            <th style={{width:80}}>Owner</th>
+            <th style={{width:90}}>Owner</th>
             <th>Schedule</th>
-            <th style={{width:100}}>Last run</th>
-            <th style={{width:100}}></th>
+            <th style={{width:150}}></th>
           </tr>
         </thead>
         <tbody>
@@ -132,31 +177,34 @@ function PlansList() {
             <tr key={p.id}>
               <td className="mono">{p.id}</td>
               <td>{p.name}</td>
-              <td className="mono">{p.cases}</td>
-              <td><span className="tag">{p.env}</span></td>
-              <td className="mono dim">{p.owner}</td>
-              <td className="mono dim">{p.schedule}</td>
-              <td className="mono dim">{p.lastRun}</td>
-              <td><button className="btn sm accent"><Icon name="play" /> Run</button></td>
+              <td className="mono">{(p.test_ids || []).length}</td>
+              <td>{p.env ? <span className="tag">{p.env}</span> : <span className="mono dim">—</span>}</td>
+              <td className="mono dim">{p.owner || "—"}</td>
+              <td className="mono dim">{p.schedule || "Manual"}</td>
+              <td style={{textAlign:"right", whiteSpace:"nowrap"}}>
+                {canWrite && (
+                  <>
+                    <button
+                      className="btn sm accent"
+                      disabled={busy === p.id || !(p.test_ids || []).length}
+                      onClick={() => runPlan(p)}
+                    >
+                      <Icon name="play" /> {busy === p.id ? "…" : "Run"}
+                    </button>
+                    <button
+                      className="btn sm ghost icon"
+                      style={{marginLeft:6}}
+                      disabled={busy === p.id}
+                      onClick={() => deletePlan(p)}
+                      title="Delete plan"
+                    >
+                      <Icon name="x" />
+                    </button>
+                  </>
+                )}
+              </td>
             </tr>
           ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function ScheduledList() {
-  return (
-    <div className="card">
-      <table className="table">
-        <thead>
-          <tr><th>Plan</th><th>Trigger</th><th>Next run</th><th>Last result</th><th>Owner</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>Nightly smoke</td><td className="mono dim">cron 0 2 * * *</td><td className="mono">in 9h 12m</td><td><StatusBadge s="fail" /></td><td className="mono dim">ci-bot</td></tr>
-          <tr><td>API contract regression</td><td className="mono dim">on PR → main</td><td className="mono dim">on demand</td><td><StatusBadge s="fail" /></td><td className="mono dim">ci-bot</td></tr>
-          <tr><td>Weekly load probe</td><td className="mono dim">cron 0 4 * * 1</td><td className="mono">in 3d 14h</td><td><StatusBadge s="pass" /></td><td className="mono dim">ci-bot</td></tr>
         </tbody>
       </table>
     </div>
@@ -752,6 +800,131 @@ function TimelineItem({time, text, warn}) {
     <div style={{display:"flex", gap:8, alignItems:"baseline"}}>
       <span className="mono dim" style={{fontSize:10, width:54, flexShrink:0}}>{time}</span>
       <span style={{color: warn ? "var(--fail)" : "var(--text-muted)"}}>{text}</span>
+    </div>
+  );
+}
+
+function NewPlanModal({ onClose, onCreated }) {
+  const [tests, setTests] = React.useState([]);
+  const [search, setSearch] = React.useState("");
+  const [selected, setSelected] = React.useState(new Set());
+  const [name, setName] = React.useState("");
+  const [env, setEnv] = React.useState("staging");
+  const [schedule, setSchedule] = React.useState("Manual");
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState(null);
+
+  React.useEffect(() => {
+    fetch("/api/tests", { headers: window.authHeaders() })
+      .then(r => r.json())
+      .then(data => setTests(data))
+      .catch(() => { if (window.TH_DATA) setTests(window.TH_DATA.tests || []); });
+  }, []);
+
+  const filtered = tests.filter(t =>
+    !search ||
+    t.title.toLowerCase().includes(search.toLowerCase()) ||
+    t.id.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const toggleSel = (id) => {
+    setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
+
+  const handleSave = async () => {
+    if (!name.trim()) { setError("Plan name is required."); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      await window.TH_API.createPlan({
+        name: name.trim(),
+        env,
+        schedule: schedule.trim() || "Manual",
+        test_ids: [...selected],
+      });
+      onCreated();
+    } catch (e) {
+      setError(e.message);
+      setSaving(false);
+    }
+  };
+
+  const overlayStyle = {
+    position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 1000,
+    display: "flex", alignItems: "center", justifyContent: "center",
+  };
+  const panelStyle = {
+    background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 8,
+    width: 560, maxHeight: "80vh", display: "flex", flexDirection: "column", overflow: "hidden",
+  };
+
+  return (
+    <div style={overlayStyle} onClick={onClose}>
+      <div style={panelStyle} onClick={e => e.stopPropagation()}>
+        <div style={{display:"flex", alignItems:"center", padding:"16px 18px 14px", borderBottom:"1px solid var(--border)"}}>
+          <div>
+            <div style={{fontSize:14, fontWeight:600}}>New test plan</div>
+            <div style={{fontSize:11, color:"var(--text-dim)", marginTop:2}}>{selected.size} test{selected.size !== 1 ? "s" : ""} selected</div>
+          </div>
+          <button className="btn ghost icon sm" style={{marginLeft:"auto"}} onClick={onClose}><Icon name="x" /></button>
+        </div>
+
+        <div style={{padding:"14px 18px", display:"flex", flexDirection:"column", gap:12, borderBottom:"1px solid var(--border)"}}>
+          <div>
+            <div style={{fontSize:11, fontWeight:500, color:"var(--text-dim)", marginBottom:5}}>Plan name *</div>
+            <input className="input" style={{width:"100%", boxSizing:"border-box"}} value={name}
+              onChange={e => setName(e.target.value)} placeholder="e.g. Release regression — full" autoFocus />
+          </div>
+          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:12}}>
+            <div>
+              <div style={{fontSize:11, fontWeight:500, color:"var(--text-dim)", marginBottom:5}}>Environment</div>
+              <select className="input" value={env} onChange={e => setEnv(e.target.value)} style={{width:"100%"}}>
+                <option value="staging">staging</option>
+                <option value="preview">preview</option>
+                <option value="local">local</option>
+                <option value="production">production</option>
+              </select>
+            </div>
+            <div>
+              <div style={{fontSize:11, fontWeight:500, color:"var(--text-dim)", marginBottom:5}}>Schedule (label)</div>
+              <input className="input" style={{width:"100%", boxSizing:"border-box"}} value={schedule}
+                onChange={e => setSchedule(e.target.value)} placeholder="Manual / 0 2 * * * / on PR" />
+            </div>
+          </div>
+        </div>
+
+        <div style={{padding:"10px 14px", borderBottom:"1px solid var(--border)"}}>
+          <input className="input" style={{width:"100%", boxSizing:"border-box"}}
+            placeholder="Search tests by title or ID…" value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+        <div style={{overflowY:"auto", flex:1}}>
+          {filtered.length === 0 && <div className="empty" style={{padding:"24px 18px", fontSize:12}}>No tests match.</div>}
+          {filtered.map(t => (
+            <label key={t.id} style={{
+              display:"grid", gridTemplateColumns:"20px 1fr auto", gap:10, alignItems:"center",
+              padding:"8px 18px", cursor:"pointer", fontSize:12.5,
+              background: selected.has(t.id) ? "var(--surface-2)" : "transparent",
+            }}>
+              <input type="checkbox" checked={selected.has(t.id)} onChange={() => toggleSel(t.id)} />
+              <div>
+                <div style={{fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{t.title}</div>
+                <div className="mono dim" style={{fontSize:10.5}}>{t.id}{t.folder ? ` · ${t.folder}` : ""}</div>
+              </div>
+              <StatusBadge s={t.status} />
+            </label>
+          ))}
+        </div>
+
+        <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 18px", borderTop:"1px solid var(--border)"}}>
+          {error ? <span className="mono" style={{fontSize:11, color:"var(--danger)"}}>{error}</span> : <span className="mono dim" style={{fontSize:11}}>{selected.size} selected</span>}
+          <div style={{display:"flex", alignItems:"center", gap:10}}>
+            <button className="btn ghost" onClick={onClose}>Cancel</button>
+            <button className="btn accent" onClick={handleSave} disabled={saving || !name.trim()}>
+              {saving ? "Saving…" : "Create plan"}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
