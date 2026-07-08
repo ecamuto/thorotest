@@ -78,8 +78,6 @@ function TestDetail({ testId, onBack, currentUser }) {
         <div style={{display:"flex", alignItems:"center", gap:8, fontSize:11.5, color:"var(--text-dim)", marginBottom:8}}>
           <button className="btn ghost sm" onClick={onBack}><span style={{transform:"rotate(180deg)", display:"inline-flex"}}><Icon name="chev" /></span> Library</button>
           <span>/</span>
-          <span className="mono">Checkout / Payment</span>
-          <span>/</span>
           <span className="mono" style={{color:"var(--text-muted)"}}>{test.id}</span>
         </div>
 
@@ -121,10 +119,8 @@ function TestDetail({ testId, onBack, currentUser }) {
               <span className="mono">{test.id}</span>
               <span className="dim">·</span>
               <span>Owned by <b style={{color:"var(--text)"}}>{test.owner || "unassigned"}</b></span>
-              <span className="dim">·</span>
-              <span>Updated <span className="mono">{test.updated}</span> ago</span>
-              <span className="dim">·</span>
-              <span className="mono" style={{color:"var(--accent)"}}>tests/checkout/payment/stripe-charge.yml</span>
+              {test.updated_at && <><span className="dim">·</span><span>Updated <span className="mono">{new Date(test.updated_at).toLocaleDateString()}</span></span></>}
+              {test.source_path && <><span className="dim">·</span><span className="mono" style={{color:"var(--accent)"}}>{test.source_path}</span></>}
             </div>
           </div>
           <div style={{display:"flex", gap:6}}>
@@ -142,7 +138,6 @@ function TestDetail({ testId, onBack, currentUser }) {
       {/* Tabs */}
       <div className="tabs">
         <div className={"tab" + (tab === "definition" ? " active" : "")} onClick={() => setTab("definition")}>Definition</div>
-        <div className={"tab" + (tab === "lineage" ? " active" : "")} onClick={() => setTab("lineage")}>Lineage <span className="count">12</span></div>
         <div className={"tab" + (tab === "history" ? " active" : "")} onClick={() => setTab("history")}>Run history</div>
         <div className={"tab" + (tab === "defects" ? " active" : "")} onClick={() => setTab("defects")}>Defects{defectCount !== null && defectCount > 0 ? <span className="count">{defectCount}</span> : null}</div>
         <div className={"tab" + (tab === "requirements" ? " active" : "")} onClick={() => setTab("requirements")}>Requirements{reqCount !== null && reqCount > 0 ? <span className="count">{reqCount}</span> : null}</div>
@@ -152,7 +147,6 @@ function TestDetail({ testId, onBack, currentUser }) {
 
       <div style={{overflowY:"auto", flex:1}}>
         {tab === "definition" && <DefinitionTab test={test} currentUser={currentUser} />}
-        {tab === "lineage" && <LineageTab test={test} />}
         {tab === "history" && <HistoryTab test={test} />}
         {tab === "defects" && <DefectsTab test={test} currentUser={currentUser} />}
         {tab === "requirements" && <RequirementsTab test={test} currentUser={currentUser} onCountChange={setReqCount} />}
@@ -337,36 +331,17 @@ function DefinitionTab({ test, currentUser }) {
         <div className="card">
           <div className="card-h"><div className="card-title">Details</div></div>
           <div className="card-b" style={{display:"flex", flexDirection:"column", gap:10, fontSize:12}}>
-            <Detail label="Folder" value="Checkout / Payment" />
-            <Detail label="Created" value="Mar 12, 2026" />
-            <Detail label="Last passed" value="12 min ago" />
-            <Detail label="Mean duration" value="00:52" mono />
-            <Detail label="Flakiness" value={
-              <span style={{display:"inline-flex", alignItems:"center", gap:6}}>
-                <span className="mono" style={{color:"var(--warn)"}}>2.4%</span>
-                <span style={{width:60, height:4, background:"var(--surface-2)", borderRadius:2, overflow:"hidden"}}>
-                  <span style={{display:"block", width:"24%", height:"100%", background:"var(--warn)"}} />
-                </span>
-              </span>
+            <Detail label="Type" value={<span className="tag">{test.type || "manual"}</span>} />
+            <Detail label="Priority" value={test.priority || "—"} />
+            <Detail label="Status" value={test.status ? <StatusBadge s={test.status} /> : "—"} />
+            <Detail label="Owner" value={test.owner || "unassigned"} />
+            <Detail label="Last run" value={test.last_run_at ? new Date(test.last_run_at).toLocaleString() : "—"} mono />
+            <Detail label="Updated" value={test.updated_at ? new Date(test.updated_at).toLocaleString() : "—"} mono />
+            <Detail label="Tags" value={
+              (test.tags && test.tags.length)
+                ? <span style={{display:"flex", gap:4, flexWrap:"wrap"}}>{test.tags.map(t => <span key={t} className="tag">{t}</span>)}</span>
+                : <span className="dim">—</span>
             } />
-            <Detail label="Environments" value={<><span className="tag">staging</span> <span className="tag">preview</span></>} />
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-h"><div className="card-title">Linked requirements</div></div>
-          <div className="card-b" style={{padding:0}}>
-            <ReqRow id="REQ-PAY-001" title="Accept credit card payments via Stripe" />
-            <ReqRow id="REQ-PAY-014" title="Charge captures within 5 seconds" />
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-h"><div className="card-title">Touches source files</div><div className="card-sub">3 files</div></div>
-          <div style={{padding:"8px 0"}}>
-            <FileRow path="src/checkout/stripe-adapter.ts" hits="14 runs" />
-            <FileRow path="src/checkout/payment-form.tsx" hits="14 runs" />
-            <FileRow path="src/api/webhooks/stripe.ts" hits="14 runs" />
           </div>
         </div>
       </div>
@@ -394,25 +369,6 @@ function Detail({label, value, mono}) {
     <div style={{display:"flex", alignItems:"center", gap:10}}>
       <div style={{color:"var(--text-dim)", fontSize:11, textTransform:"uppercase", letterSpacing:"0.06em", width:120, flexShrink:0}}>{label}</div>
       <div className={mono ? "mono" : ""} style={{flex:1, minWidth:0}}>{value}</div>
-    </div>
-  );
-}
-
-function ReqRow({id, title}) {
-  return (
-    <div style={{display:"flex", alignItems:"center", gap:10, padding:"9px 14px", borderBottom:"1px solid var(--border)"}}>
-      <span className="mono dim" style={{fontSize:10.5}}>{id}</span>
-      <span style={{fontSize:12, flex:1}}>{title}</span>
-      <Icon name="link" />
-    </div>
-  );
-}
-
-function FileRow({path, hits}) {
-  return (
-    <div style={{display:"flex", alignItems:"center", gap:8, padding:"6px 14px", fontSize:11.5, color:"var(--text-muted)"}}>
-      <span className="mono" style={{color:"var(--text)"}}>{path}</span>
-      <span className="dim mono" style={{marginLeft:"auto", fontSize:10.5}}>{hits}</span>
     </div>
   );
 }
@@ -446,74 +402,6 @@ function YamlSourceCard({test}) {
           ? <pre className="code"><code>{test.source_body}</code></pre>
           : <div className="mono dim" style={{fontSize:11.5}}>No file contents cached. Re-run sync.</div>}
       </div>
-    </div>
-  );
-}
-
-function LineageTab({test}) {
-  return (
-    <div style={{padding:"18px 22px 32px"}}>
-      <div className="card" style={{marginBottom:14}}>
-        <div className="card-h">
-          <div>
-            <div className="card-title">Lineage graph</div>
-            <div className="card-sub">Where {test.id} sits across requirements → code → CI → defects</div>
-          </div>
-          <div className="spacer" />
-          <button className="btn sm">Expand</button>
-        </div>
-        <div className="lineage">
-          <LineageCol title="Requirements">
-            <LineageNode title="REQ-PAY-001" sub="Stripe payments" />
-            <LineageNode title="REQ-PAY-014" sub="5s capture SLA" />
-          </LineageCol>
-          <LineageCol title="Test case">
-            <LineageNode title={test.id} sub={test.title} highlight />
-          </LineageCol>
-          <LineageCol title="Source files">
-            <LineageNode title="stripe-adapter.ts" sub="src/checkout" />
-            <LineageNode title="payment-form.tsx" sub="src/checkout" />
-            <LineageNode title="webhooks/stripe.ts" sub="src/api" />
-          </LineageCol>
-          <LineageCol title="CI / Runs">
-            <LineageNode title="R-1287 · running" sub="release/4.2.0" />
-            <LineageNode title="R-1283 · failed" sub="API regression v2" />
-            <LineageNode title="e2e.yml" sub="github · passed 12m" />
-          </LineageCol>
-          <LineageCol title="Defects">
-            <LineageNode title="BUG-441" sub="3DS timeout (open)" />
-            <LineageNode title="BUG-298" sub="resolved · v4.1.3" />
-          </LineageCol>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-h"><div className="card-title">Impact preview</div><div className="card-sub">If this test fails, the following are blocked</div></div>
-        <div className="card-b" style={{display:"flex", gap:10, flexWrap:"wrap"}}>
-          <span className="tag" style={{color:"var(--fail)", borderColor:"oklch(from var(--fail) l c h / 0.3)"}}>Release 4.2.0 cannot ship</span>
-          <span className="tag">REQ-PAY-001 unverified</span>
-          <span className="tag">3 downstream tests skipped</span>
-          <span className="tag">2 environments mark degraded</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function LineageCol({title, children}) {
-  return (
-    <div className="lineage-col">
-      <div className="lineage-col-h">{title}</div>
-      {children}
-    </div>
-  );
-}
-
-function LineageNode({title, sub, highlight}) {
-  return (
-    <div className={"lineage-node" + (highlight ? " highlight" : "")}>
-      <div className="mono" style={{fontSize:11}}>{title}</div>
-      {sub && <div className="sub">{sub}</div>}
     </div>
   );
 }

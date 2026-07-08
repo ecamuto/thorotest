@@ -111,11 +111,11 @@ function SidebarSearch({ onOpenTest }) {
 const NAV_CONFIG = [
   { group: "workspace", items: [
     { id: "overview",     icon: "home" },
-    { id: "library",      icon: "flask",   count: "201" },
+    { id: "library",      icon: "flask" },
     { id: "requirements", icon: "target" },
     { id: "runs",         icon: "play",    badge: true },
-    { id: "pipelines",    icon: "branch",  count: "12" },
-    { id: "defects",      icon: "bug",     count: "8" },
+    { id: "pipelines",    icon: "branch" },
+    { id: "defects",      icon: "bug" },
     { id: "insights",     icon: "chart" },
     { id: "my-work",      icon: "play" },
   ]},
