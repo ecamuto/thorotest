@@ -600,6 +600,21 @@
       return res.json();
     },
 
+    // Trigger the integration's GitHub Actions workflow; returns { job_id, … }.
+    async ciRun(id, body) {
+      const res = await fetch(BASE + `/api/integrations/${id}/ci/run`, {
+        method: "POST", headers: authHeaders(), body: JSON.stringify(body || {}),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "CI dispatch failed"); }
+      return res.json();
+    },
+
+    async ciJobStatus(id, jobId) {
+      const res = await fetch(BASE + `/api/integrations/${id}/ci/jobs/${jobId}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error("Job not found");
+      return res.json();
+    },
+
     async getTokens() {
       const res = await fetch(BASE + "/api/tokens", { headers: authHeaders() });
       if (!res.ok) throw new Error("Failed to load tokens");

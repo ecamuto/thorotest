@@ -52,8 +52,18 @@ function GithubConfigFields({ form, setForm, tokenSet }) {
         </div>
       </div>
       <div style={fld}>
-        <label style={lbl}>Personal access token {tokenSet ? "(leave blank to keep current)" : "(only for private repos)"}</label>
+        <label style={lbl}>Personal access token {tokenSet ? "(leave blank to keep current)" : "(private repos + Run CI need the actions scope)"}</label>
         <input className="login-input" type="password" value={form.token} onChange={set("token")} placeholder={tokenSet ? "••••••••" : "ghp_…"} autoComplete="off" style={{width:"100%"}} />
+      </div>
+      <div style={{display:"flex", gap:8}}>
+        <div style={{...fld, flex:1}}>
+          <label style={lbl}>Workflow (for Run CI)</label>
+          <input className="login-input" value={form.workflow || ""} onChange={set("workflow")} placeholder="ci.yml" style={{width:"100%"}} />
+        </div>
+        <div style={{...fld, flex:1}}>
+          <label style={lbl}>JUnit artifact name</label>
+          <input className="login-input" value={form.junit_artifact || ""} onChange={set("junit_artifact")} placeholder="junit" style={{width:"100%"}} />
+        </div>
       </div>
     </>
   );
@@ -95,8 +105,11 @@ function IntRow({ intg, onEdit, onDelete, onSync }) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [syncing, setSyncing] = React.useState(false);
   const [syncMsg, setSyncMsg] = React.useState(null);
+  const [ciBusy, setCiBusy] = React.useState(false);
+  const [ciMsg, setCiMsg] = React.useState(null);
   const menuRef = React.useRef(null);
   const canSync = !!(intg.config && (intg.config.repo_url || (intg.type === "jira" && intg.config.base_url)));
+  const isGithub = !!(intg.config && intg.config.repo_url) && intg.type !== "jira";
 
   const doSync = async () => {
     setSyncing(true); setSyncMsg(null);
@@ -106,6 +119,28 @@ function IntRow({ intg, onEdit, onDelete, onSync }) {
     } catch (e) {
       setSyncMsg({ ok: false, text: e.message });
     } finally { setSyncing(false); }
+  };
+
+  const doCI = async () => {
+    setCiBusy(true); setCiMsg({ ok: true, text: "dispatching…" });
+    try {
+      const { job_id } = await window.TH_API.ciRun(intg.id, {});
+      // Poll the background job until it finishes.
+      const started = Date.now();
+      while (Date.now() - started < 35 * 60 * 1000) {
+        await new Promise(r => setTimeout(r, 5000));
+        const job = await window.TH_API.ciJobStatus(intg.id, job_id);
+        if (job.status === "done") {
+          const s = job.imported || {};
+          setCiMsg({ ok: true, text: `imported ${s.tests || 0} tests · ${s.runs || 0} run` });
+          break;
+        }
+        if (job.status === "error") { setCiMsg({ ok: false, text: job.error || "CI run failed" }); break; }
+        setCiMsg({ ok: true, text: job.status.replace("_", " ") + "…" });
+      }
+    } catch (e) {
+      setCiMsg({ ok: false, text: e.message });
+    } finally { setCiBusy(false); }
   };
 
   React.useEffect(() => {
@@ -133,8 +168,14 @@ function IntRow({ intg, onEdit, onDelete, onSync }) {
       <td className="mono dim">
         {intg.last_sync || "—"}
         {syncMsg && <div style={{fontSize:10.5, color: syncMsg.ok ? "var(--pass)" : "var(--fail)"}}>{syncMsg.text}</div>}
+        {ciMsg && <div style={{fontSize:10.5, color: ciMsg.ok ? "var(--accent)" : "var(--fail)"}}>CI: {ciMsg.text}</div>}
       </td>
       <td style={{position:"relative", textAlign:"right", whiteSpace:"nowrap"}} ref={menuRef}>
+        {isGithub && (
+          <button className="btn sm" style={{marginRight:6}} disabled={ciBusy} onClick={doCI} title="Dispatch the GitHub Actions workflow and import its results">
+            {ciBusy ? "Running…" : "Run CI"}
+          </button>
+        )}
         {canSync && (
           <button className="btn sm" style={{marginRight:6}} disabled={syncing} onClick={doSync}>
             {syncing ? "Syncing…" : "Sync"}
@@ -185,6 +226,7 @@ function AddIntegrationModal({ onClose, onSaved, existingIds }) {
     setProvider(p);
     setForm({
       configured_by: p.configuredBy, repo_url: "", branch: "main", path: "", token: "",
+      workflow: "ci.yml", junit_artifact: "junit",
       base_url: "", email: "", api_token: "", project_key: "", issue_type_bug: "Bug",
     });
     setStep("configure");
@@ -204,6 +246,8 @@ function AddIntegrationModal({ onClose, onSaved, existingIds }) {
           branch: form.branch.trim() || "main",
           path: form.path.trim(),
           token: form.token.trim(),
+          workflow: (form.workflow || "").trim() || "ci.yml",
+          junit_artifact: (form.junit_artifact || "").trim() || "junit",
         };
       } else if (isJira) {
         payload.config = {
@@ -286,6 +330,7 @@ function EditIntegrationModal({ intg, onClose, onSaved }) {
   const [form, setForm] = React.useState({
     name: intg.name, configured_by: intg.configured_by || "", status: intg.status,
     repo_url: cfg.repo_url || "", branch: cfg.branch || "main", path: cfg.path || "", token: "",
+    workflow: cfg.workflow || "ci.yml", junit_artifact: cfg.junit_artifact || "junit",
     base_url: cfg.base_url || "", email: cfg.email || "", api_token: "",
     project_key: cfg.project_key || "", issue_type_bug: cfg.issue_type_bug || "Bug",
   });
@@ -305,6 +350,8 @@ function EditIntegrationModal({ intg, onClose, onSaved }) {
           branch: form.branch.trim() || "main",
           path: form.path.trim(),
           token: form.token.trim(),
+          workflow: (form.workflow || "").trim() || "ci.yml",
+          junit_artifact: (form.junit_artifact || "").trim() || "junit",
         };
       } else if (isJira) {
         // Empty api_token is preserved server-side (never wiped by a blank field).
