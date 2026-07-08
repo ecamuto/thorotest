@@ -35,7 +35,7 @@ test.describe('Suite P16 — Tests as Code (GitHub sync)', () => {
 
     // Configure step — github config fields are rendered
     await expect(page.locator('text=Configure GitHub')).toBeVisible({ timeout: 5000 });
-    await page.fill('input[placeholder*="github.com/acme/web"]', REPO);
+    await page.fill('input[placeholder*="github.com/org/repo"]', REPO);
     await page.fill('input[placeholder="main"]', 'main');
     await page.fill('input[placeholder="tests/"]', 'tests/');
     await page.fill('input[placeholder="ghp_…"]', 'ghp_e2e_secret_token');

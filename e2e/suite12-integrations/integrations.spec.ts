@@ -43,7 +43,7 @@ test.describe('Suite 12 — Integrations, API Tokens, Webhooks', () => {
 
     // Step 2: configure
     await expect(page.locator('text=Configure Slack')).toBeVisible({ timeout: 5000 });
-    await page.fill('input[placeholder*="acme"]', '#e2e-test-channel');
+    await page.fill('input[placeholder*="org/repo"]', '#e2e-test-channel');
     const [intResponse] = await Promise.all([
       page.waitForResponse(r => r.url().includes('/api/integrations') && r.request().method() === 'POST'),
       page.click('button:has-text("Connect")'),
