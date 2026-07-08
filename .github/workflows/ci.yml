@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:      # lets ThoroTest (Configure ▸ Integrations ▸ Run CI) trigger this
 
 # A new push to the same ref cancels the previous in-flight run.
 concurrency:
@@ -25,8 +26,16 @@ jobs:
           python -m venv venv
           ./venv/bin/pip install --upgrade pip
           ./venv/bin/pip install -r requirements.txt
-      - name: Run pytest
-        run: ./venv/bin/pytest backend/tests/ -q
+      - name: Run pytest → JUnit XML
+        run: ./venv/bin/pytest backend/tests/ -q --junitxml=junit.xml
+      - name: Upload JUnit artifact
+        # `!cancelled()` runs even if pytest failed, so results publish while
+        # the job still goes red — the CI gate is preserved.
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit                     # ThoroTest's default "JUnit artifact" name
+          path: junit.xml
 
   e2e:
     name: End-to-end tests (Playwright)
@@ -52,10 +61,17 @@ jobs:
         run: npx playwright install --with-deps chromium
       # playwright.config.ts boots its own isolated server (e2e.db, rate-limit off).
       # CI=true => clean server (no reuse), forbidOnly, 1 retry.
-      - name: Run Playwright suite
-        run: npx playwright test
+      - name: Run Playwright suite → JUnit XML
+        run: npx playwright test --reporter=list,html,junit
         env:
           CI: 'true'
+          PLAYWRIGHT_JUNIT_OUTPUT_NAME: junit-e2e.xml
+      - name: Upload JUnit artifact
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-e2e                 # set the integration's "JUnit artifact" to this to import e2e
+          path: junit-e2e.xml
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
