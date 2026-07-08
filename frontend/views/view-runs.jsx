@@ -228,6 +228,8 @@ function RunDetail({ runId, onBack, currentUser }) {
   const [retesting, setRetesting] = React.useState(false);
   const [exportOpen, setExportOpen] = React.useState(false);
   const [exporting, setExporting] = React.useState(false);
+  const [caseNote, setCaseNote] = React.useState("");
+  const [marking, setMarking] = React.useState(false);
 
   // Load users list for assignment dropdown
   React.useEffect(() => {
@@ -322,6 +324,59 @@ function RunDetail({ runId, onBack, currentUser }) {
     } catch (_) {}
     return () => { if (ws) ws.close(); };
   }, [liveRun?.id, liveRun?.status]);
+
+  // Recompute run counters/status/progress locally from the case list, so the
+  // UI reacts instantly to a manual mark (the server broadcasts the same values
+  // over the WebSocket to any other viewer).
+  const recomputeRun = (arr) => {
+    const total = (liveRun && liveRun.total) || arr.length;
+    const passed = arr.filter(c => c.status === "pass").length;
+    const failed = arr.filter(c => c.status === "fail").length;
+    const blocked = arr.filter(c => c.status === "blocked" || c.status === "skip").length;
+    const done = arr.filter(c => c.status !== "pending").length;
+    const complete = total > 0 && done >= total;
+    return {
+      passed, failed, blocked,
+      progress: complete ? 100 : (total ? Math.round(done / total * 100) : 0),
+      status: complete ? (failed > 0 ? "fail" : "pass") : "running",
+    };
+  };
+
+  const markCase = async (status) => {
+    const c = cases[activeIdx];
+    if (!c || marking) return;
+    setMarking(true);
+    try {
+      await window.TH_API.markCase(liveRun.id, c.id, status, caseNote.trim() || null);
+    } catch (e) {
+      alert(e.message);
+      setMarking(false);
+      return;
+    }
+    const nextCases = cases.map(x => x.id === c.id ? { ...x, status } : x);
+    setCases(nextCases);
+    setLiveRun(prev => ({ ...prev, ...recomputeRun(nextCases) }));
+    setCaseNote("");
+    const after = nextCases.findIndex((x, i) => i > activeIdx && x.status === "pending");
+    const anyPending = after >= 0 ? after : nextCases.findIndex(x => x.status === "pending");
+    if (anyPending >= 0) setActiveIdx(anyPending);
+    setMarking(false);
+  };
+
+  // Keyboard shortcuts: P = pass, F = fail (only when a case is selected and the
+  // user is not typing into a field).
+  React.useEffect(() => {
+    if (!window.can || !window.can(currentUser, "write")) return;
+    const onKey = (e) => {
+      const tag = (e.target.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || e.metaKey || e.ctrlKey) return;
+      const k = e.key.toLowerCase();
+      if (k === "p") { e.preventDefault(); markCase("pass"); }
+      else if (k === "f") { e.preventDefault(); markCase("fail"); }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [cases, activeIdx, caseNote, marking, currentUser]);
 
   const handlePause = async () => {
     try {
@@ -568,8 +623,8 @@ function RunDetail({ runId, onBack, currentUser }) {
                 <div className="spacer" />
                 {window.can && window.can(currentUser, "write") && (
                   <>
-                    <button className="btn sm">Skip</button>
-                    <button className="btn sm" style={{color:"var(--warn)"}}>Block</button>
+                    <button className="btn sm" disabled={marking} onClick={() => markCase("skip")}>Skip</button>
+                    <button className="btn sm" style={{color:"var(--warn)"}} disabled={marking} onClick={() => markCase("blocked")}>Block</button>
                   </>
                 )}
               </div>
@@ -680,10 +735,10 @@ function RunDetail({ runId, onBack, currentUser }) {
 
             {window.can && window.can(currentUser, "write") && (
               <div style={{padding:"12px 22px", borderTop:"1px solid var(--border)", display:"flex", gap:8, background:"var(--bg-2)"}}>
-                <textarea className="textarea" placeholder="Note for this step / case..." style={{flex:1, minHeight:38, padding:"8px 10px"}}></textarea>
+                <textarea className="textarea" placeholder="Note for this case (optional)..." value={caseNote} onChange={e => setCaseNote(e.target.value)} style={{flex:1, minHeight:38, padding:"8px 10px"}}></textarea>
                 <div style={{display:"flex", flexDirection:"column", gap:6}}>
-                  <button className="btn sm" style={{background:"var(--fail-soft)", color:"var(--fail)", borderColor:"oklch(from var(--fail) l c h / 0.3)"}}>Mark fail <span className="kbd">F</span></button>
-                  <button className="btn sm" style={{background:"var(--pass-soft)", color:"var(--pass)", borderColor:"oklch(from var(--pass) l c h / 0.3)"}}>Mark pass <span className="kbd">P</span></button>
+                  <button className="btn sm" style={{background:"var(--fail-soft)", color:"var(--fail)", borderColor:"oklch(from var(--fail) l c h / 0.3)"}} disabled={marking} onClick={() => markCase("fail")}>Mark fail <span className="kbd">F</span></button>
+                  <button className="btn sm" style={{background:"var(--pass-soft)", color:"var(--pass)", borderColor:"oklch(from var(--pass) l c h / 0.3)"}} disabled={marking} onClick={() => markCase("pass")}>Mark pass <span className="kbd">P</span></button>
                 </div>
               </div>
             )}

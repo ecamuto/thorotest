@@ -118,6 +118,13 @@ class RunCaseAssign(BaseModel):
     assigned_to: Optional[str] = None  # username or None to unassign
 
 
+class RunCaseUpdate(BaseModel):
+    # All optional; only the fields actually sent are applied (model_fields_set).
+    status: Optional[str] = None            # pass | fail | blocked | skip | pending
+    actual_result: Optional[str] = None
+    assigned_to: Optional[str] = None
+
+
 class MyWorkCaseOut(BaseModel):
     id: int
     test_id: str

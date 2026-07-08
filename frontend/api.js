@@ -791,6 +791,20 @@
       return res.json();
     },
 
+    // Manual result marking. status: pass | fail | blocked | skip. The server
+    // recomputes run counters and broadcasts the update over the run WebSocket.
+    async markCase(runId, caseId, status, actualResult) {
+      const body = { status };
+      if (actualResult != null) body.actual_result = actualResult;
+      const res = await fetch(BASE + `/api/runs/${runId}/cases/${caseId}`, {
+        method: "PATCH",
+        headers: authHeaders(),
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || "Mark failed");
+      return res.json();
+    },
+
     async getMyCases() {
       const res = await fetch(BASE + "/api/runs/my-cases", { headers: authHeaders() });
       if (!res.ok) throw new Error("My cases fetch failed");
