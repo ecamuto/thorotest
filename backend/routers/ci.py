@@ -18,6 +18,11 @@ from ..auth_utils import require_role
 from ..github_actions import (
     GitHubActionsClient, ci_config, pick_dispatched_run, collect_run_results,
 )
+from ..gitlab_actions import (
+    GitLabActionsClient, ci_config as gitlab_ci_config, collect_pipeline_results,
+    _TERMINAL as GITLAB_TERMINAL,
+)
+from ..vcs import detect_provider
 
 logger = logging.getLogger("thorotest.ci")
 router = APIRouter(tags=["ci"])
@@ -108,12 +113,80 @@ def _orchestrate(job_id: str, cfg: dict, since: datetime, run_name: Optional[str
         job["error"] = str(e)
 
 
+def _do_dispatch_gitlab(cfg: dict) -> dict:
+    with GitLabActionsClient(cfg["api_base"], cfg["token"]) as client:
+        return client.trigger_pipeline(cfg["project"], cfg["ref"])
+
+
+def _orchestrate_gitlab(job_id: str, cfg: dict, run_name: Optional[str]) -> None:
+    """Blocking: poll the pipeline until it finishes, then import its test
+    report. Runs in a worker thread."""
+    job = _JOBS[job_id]
+    pipeline_id = job["gl_pipeline_id"]
+    try:
+        with GitLabActionsClient(cfg["api_base"], cfg["token"]) as client:
+            job["status"] = "running"
+            deadline = time.time() + RUN_TIMEOUT
+            while time.time() < deadline:
+                detail = client.get_pipeline(cfg["project"], pipeline_id)
+                if detail.get("status") in GITLAB_TERMINAL:
+                    job["conclusion"] = detail.get("status")
+                    break
+                time.sleep(POLL_INTERVAL)
+            else:
+                raise RuntimeError("pipeline did not complete within timeout")
+
+            job["status"] = "collecting"
+            db = SessionLocal()
+            try:
+                stats = collect_pipeline_results(db, client, cfg["project"], pipeline_id, run_name)
+            finally:
+                db.close()
+
+            job["status"] = "done"
+            job["imported"] = stats
+    except Exception as e:
+        logger.warning("CI job %s failed: %s", job_id, e)
+        job["status"] = "error"
+        job["error"] = str(e)
+
+
 @router.post("/integrations/{intg_id}/ci/run")
 async def ci_run(intg_id: str, payload: CIRunRequest, db: Session = Depends(get_db), _: models.User = WRITE_ROLES):
-    """Dispatch a workflow and start collecting its results in the background."""
+    """Dispatch a workflow/pipeline and start collecting its results in the background."""
     intg = db.query(models.Integration).filter(models.Integration.id == intg_id).first()
     if not intg:
         raise HTTPException(status_code=404, detail="Integration not found")
+
+    try:
+        provider = detect_provider(intg.config or {})
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Not a VCS integration: {e}")
+
+    if provider == "gitlab":
+        try:
+            cfg = gitlab_ci_config(intg)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Not a GitLab integration: {e}")
+        since = datetime.now(timezone.utc)
+        try:
+            pipeline = await asyncio.to_thread(_do_dispatch_gitlab, cfg)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Dispatch failed: {e}")
+
+        job_id = uuid.uuid4().hex[:12]
+        _JOBS[job_id] = {
+            "id": job_id,
+            "integration_id": intg_id,
+            "workflow": "pipeline",
+            "ref": cfg["ref"],
+            "status": "running",
+            "started_at": since.isoformat(),
+            "gl_pipeline_id": pipeline.get("id"),
+            "gh_run_url": pipeline.get("web_url"),
+        }
+        asyncio.create_task(asyncio.to_thread(_orchestrate_gitlab, job_id, cfg, payload.run_name))
+        return {"job_id": job_id, "status": "dispatched", "workflow": "pipeline", "ref": cfg["ref"]}
 
     try:
         cfg = _resolve_cfg(intg, payload)

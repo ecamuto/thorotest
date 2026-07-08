@@ -35,3 +35,5 @@ test-results/
 
 # Local-only notes (never commit)
 *.local.md
+
+*.log

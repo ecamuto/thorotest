@@ -163,13 +163,15 @@ def test_sync_endpoint(client, db, monkeypatch):
     assert db.query(models.Test).filter_by(id="TC-9").first() is not None
 
 
-def test_sync_endpoint_rejects_non_github_repo(client, db):
+def test_sync_endpoint_rejects_unknown_provider(client, db):
+    # A host that is neither github nor gitlab, with no explicit provider, can't
+    # be routed → 400. (gitlab.com is now a supported provider, see test_gitlab_sync.)
     db.add(models.Integration(
-        id="int-gl", name="GitLab", type="ci", icon="gitlab",
-        config={"repo_url": "https://gitlab.com/acme/web"},
+        id="int-unknown", name="Mystery", type="vcs_ci", icon="plug",
+        config={"repo_url": "https://example.com/acme/web"},
     ))
     db.commit()
-    r = client.post("/api/integrations/int-gl/sync")
+    r = client.post("/api/integrations/int-unknown/sync")
     assert r.status_code == 400
 
 
