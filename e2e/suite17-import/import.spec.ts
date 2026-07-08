@@ -29,6 +29,35 @@ const JSON_GENERIC = JSON.stringify({
   ],
 });
 
+// TestRail native XML: <suite><sections><section><cases><case>. Nested
+// section exercises the folder-hierarchy walk.
+const TESTRAIL_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<suite>
+  <name>${TAG} testrail suite</name>
+  <sections>
+    <section>
+      <name>Auth</name>
+      <cases>
+        <case><id>C1</id><title>${TAG} tr login</title><priority_id>4</priority_id></case>
+      </cases>
+      <sections>
+        <section>
+          <name>OAuth</name>
+          <cases>
+            <case><id>C2</id><title>${TAG} tr oauth google</title><priority_id>3</priority_id></case>
+          </cases>
+        </section>
+      </sections>
+    </section>
+  </sections>
+</suite>`;
+
+// Allure results array: each object with a status → grouped into one run.
+const ALLURE_JSON = JSON.stringify([
+  { name: `${TAG} allure pass`, status: 'passed', labels: [{ name: 'suite', value: 'Imported/Allure' }] },
+  { name: `${TAG} allure fail`, status: 'failed', labels: [{ name: 'suite', value: 'Imported/Allure' }] },
+]);
+
 async function token(page: Page): Promise<string> {
   return page.evaluate(() => localStorage.getItem('th_token') || '');
 }
@@ -160,5 +189,60 @@ test.describe('Suite 17 — Import (CSV / JUnit / JSON)', () => {
       });
       expect(res.status(), `${path} should reject anonymous`).toBe(401);
     }
+  });
+
+  // IMP-08 · TestRail XML detects + imports nested sections as folders [P1]
+  test('IMP-08: TestRail XML import creates tests with nested folders', async ({ page }) => {
+    await gotoImport(page);
+    await dropFile(page, 'suite.xml', 'application/xml', TESTRAIL_XML);
+    await expect(page.locator('button:has-text("TestRail XML")')).toBeVisible({ timeout: 5000 });
+    const [exec] = await Promise.all([
+      page.waitForResponse(r => r.url().includes('/api/import/execute')),
+      page.click('button:has-text("Import")'),
+    ]);
+    const body = await exec.json();
+    expect(exec.status()).toBe(200);
+    expect(body.format).toBe('testrail_xml');
+    expect(body.imported.tests).toBe(2);
+    await expect(page.getByText('Import complete')).toBeVisible({ timeout: 5000 });
+
+    // Nested case landed under the Auth/OAuth hierarchy.
+    const res = await page.request.fetch(
+      `${BASE}/api/tests?search=${encodeURIComponent(`${TAG} tr oauth google`)}`,
+      { headers: { Authorization: `Bearer ${await token(page)}` } },
+    );
+    expect((await res.json()).some((t: any) => t.title === `${TAG} tr oauth google`)).toBeTruthy();
+  });
+
+  // IMP-09 · Allure JSON creates tests + a run with results [P1]
+  test('IMP-09: Allure JSON import creates tests and a run', async ({ page }) => {
+    await gotoImport(page);
+    await dropFile(page, 'allure.json', 'application/json', ALLURE_JSON);
+    const [exec] = await Promise.all([
+      page.waitForResponse(r => r.url().includes('/api/import/execute')),
+      page.click('button:has-text("Import")'),
+    ]);
+    const body = await exec.json();
+    expect(exec.status()).toBe(200);
+    expect(body.format).toBe('json');
+    expect(body.imported.tests).toBe(2);
+    expect(body.imported.runs).toBe(1);
+    await expect(page.getByText('Import complete')).toBeVisible({ timeout: 5000 });
+  });
+
+  // IMP-10 · Re-clicking Import nav resets the completed-import screen [P1]
+  test('IMP-10: clicking Import again clears the result and shows dropzone', async ({ page }) => {
+    await gotoImport(page);
+    await dropFile(page, 'tests.csv', 'text/csv', CSV);
+    await Promise.all([
+      page.waitForResponse(r => r.url().includes('/api/import/execute')),
+      page.click('button:has-text("Import")'),
+    ]);
+    await expect(page.getByText('Import complete')).toBeVisible({ timeout: 5000 });
+
+    // Re-click the sidebar Import item — view should reset to a fresh dropzone.
+    await gotoImport(page);
+    await expect(page.getByText('Drop file here or click to browse')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('Import complete')).toHaveCount(0);
   });
 });

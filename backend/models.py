@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, Integer, Boolean, ForeignKey, JSON, Table, UniqueConstraint
+from sqlalchemy import Column, String, Text, Integer, Boolean, ForeignKey, JSON, Table, UniqueConstraint, Index
 from sqlalchemy.orm import relationship, backref
 from .db import Base
 
@@ -75,6 +75,15 @@ class Test(Base):
     source_ref = Column(String(255), nullable=True)      # commit sha the file was synced at
     source_body = Column(Text, nullable=True)            # raw YAML content
     source_synced_at = Column(String(64), nullable=True) # ISO timestamp of last sync
+    # External source identity (populated by file import — TestRail/Zephyr/etc.)
+    # Used to match/dedupe re-imports instead of matching by title.
+    external_provider = Column(String(64), nullable=True)   # e.g. "zephyr", "testrail"
+    external_key = Column(String(128), nullable=True)       # source tool's case key/id
+    external_url = Column(String(512), nullable=True)
+
+    __table_args__ = (
+        Index("ix_test_external", "external_provider", "external_key"),
+    )
 
     folder_rel = relationship("Folder", back_populates="tests")
     project_rel = relationship("Project", back_populates="tests")

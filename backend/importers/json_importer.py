@@ -65,6 +65,7 @@ def _parse_allure(data: list) -> ImportResult:
         runs=[run] if cases else [],
         warnings=warnings,
         format_detected="json (allure)",
+        source_provider="allure",
     )
 
 
@@ -123,6 +124,7 @@ def _parse_generic(data: dict) -> ImportResult:
         defects=defects,
         warnings=warnings,
         format_detected="json (generic)",
+        source_provider="generic",
     )
 
 

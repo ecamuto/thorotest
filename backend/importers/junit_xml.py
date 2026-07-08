@@ -80,4 +80,5 @@ def parse_junit_xml(content: bytes) -> ImportResult:
         runs=runs,
         warnings=warnings,
         format_detected="junit_xml",
+        source_provider="junit",
     )

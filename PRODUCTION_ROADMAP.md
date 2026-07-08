@@ -120,7 +120,8 @@ S3 attachment storage remains a v1.1 item.
 ## Strengths (keep selling these)
 
 - Manual + automated runs in one timeline (differentiator vs TestRail/Zephyr).
-- Import pipeline: TestRail XML, JUnit, CSV, YAML, JSON + auto-detect.
+- Import pipeline: TestRail (XML/CSV), TestLink XML, Zephyr Scale, Xray, qTest,
+  JUnit, Allure, CSV/XLSX + auto-detect, external-identity matching & re-import dedup.
 - REST + GraphQL + API tokens + HMAC webhooks.
 - Auth stack: argon2id, token revocation, TOTP 2FA, OAuth (GitHub/Google),
   RBAC, audit log, login rate limiting, prod boot-refusal on default secret.

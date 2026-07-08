@@ -55,6 +55,7 @@ function App({ currentUser: initialUser, onLogout, onProfileUpdate }) {
   const initial = parseHash(window.location.hash);
   const safeInitialView = (initial.view === "admin" && initialUser?.role !== "admin") ? "overview" : initial.view;
   const [view, setView] = useState(safeInitialView);
+  const [importNonce, setImportNonce] = useState(0);
   const [testId, setTestId] = useState(initial.testId);
   const [runId, setRunId] = useState(initial.runId);
   const currentUser = initialUser;
@@ -108,6 +109,9 @@ function App({ currentUser: initialUser, onLogout, onProfileUpdate }) {
     }
     if (id === "library" && testId) setTestId(null);
     if (id === "runs" && runId) setRunId(null);
+    // Re-clicking Import (even while already on it) starts a fresh import,
+    // clearing any completed-import result screen. Bumping the key remounts.
+    if (id === "import") setImportNonce(n => n + 1);
     setView(id);
   };
 
@@ -176,7 +180,7 @@ function App({ currentUser: initialUser, onLogout, onProfileUpdate }) {
       break;
     case "import":
       crumbs = [W, "Import"];
-      body = <Import currentUser={currentUser} />;
+      body = <Import key={importNonce} currentUser={currentUser} />;
       break;
     case "settings":
       crumbs = [W, "Settings"];

@@ -26,6 +26,7 @@ class RunData:
     status: str = "done"
     env: str = ""
     cases: list = field(default_factory=list)   # list[CaseResult]
+    source_id: str = ""         # original run/cycle ID in source tool (dedup key)
 
 
 @dataclass
@@ -45,6 +46,7 @@ class ImportResult:
     defects: list = field(default_factory=list)     # list[DefectData]
     warnings: list = field(default_factory=list)    # list[str]
     format_detected: str = "unknown"
+    source_provider: str = ""    # normalised tool name for external identity (e.g. "zephyr")
 
     def summary(self) -> dict:
         folder_paths = {t.folder_path for t in self.tests if t.folder_path}
