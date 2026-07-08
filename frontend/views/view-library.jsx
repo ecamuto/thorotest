@@ -301,10 +301,6 @@ function Library({ onNav, onOpenTest, currentUser }) {
           <div style={{padding:"6px 22px", background:"var(--accent-soft)", borderBottom:"1px solid var(--border)", display:"flex", alignItems:"center", gap:10, fontSize:12, position:"relative"}}>
             <b className="mono">{selected.size} selected</b>
             {window.can && window.can(currentUser, "write") && (
-              <button className="btn sm">Add to run</button>
-            )}
-
-            {window.can && window.can(currentUser, "write") && (
               <div style={{position:"relative"}}>
                 <button className="btn sm" onClick={() => { setBulkFolderOpen(o => !o); setBulkStatusOpen(false); }}>Move to folder</button>
                 {bulkFolderOpen && (
@@ -549,7 +545,7 @@ function NewTestModal({ folders, defaultFolderId, onClose, onCreate }) {
             </FormField>
           </div>
           <FormField label="Owner" hint="initials or username">
-            <input className="input" value={form.owner} onChange={e => setF("owner", e.target.value)} placeholder="MR" />
+            <input className="input" value={form.owner} onChange={e => setF("owner", e.target.value)} placeholder="e.g. QA" />
           </FormField>
           <FormField label="Tags" hint="comma-separated">
             <input className="input" value={form.tags} onChange={e => setF("tags", e.target.value)} placeholder="smoke, payment, p0" />

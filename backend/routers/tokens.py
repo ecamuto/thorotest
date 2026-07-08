@@ -25,7 +25,7 @@ def list_tokens(db: Session = Depends(get_db), _: models.User = ADMIN_ONLY):
 
 
 @router.post("/tokens", response_model=ApiTokenCreated, status_code=201)
-def create_token(payload: ApiTokenCreate, db: Session = Depends(get_db), _: models.User = ADMIN_ONLY):
+def create_token(payload: ApiTokenCreate, db: Session = Depends(get_db), current_user: models.User = ADMIN_ONLY):
     raw = "th_" + secrets.token_urlsafe(32)
     prefix = raw[:12]
     token_hash = _hash_token(raw)
@@ -35,6 +35,7 @@ def create_token(payload: ApiTokenCreate, db: Session = Depends(get_db), _: mode
         token_hash=token_hash,
         token_prefix=prefix,
         scope=payload.scope,
+        user_id=current_user.id,   # token authenticates as its creator
         created_at=now,
     )
     db.add(tok)

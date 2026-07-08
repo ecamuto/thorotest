@@ -262,6 +262,15 @@ stable id, matching falls back to `(title, folder)`.
 
 ---
 
+## GitHub Actions CI
+
+Trigger a project's GitHub Actions workflow from ThoroTest and import its JUnit
+results automatically when the run finishes (Configure ▸ Integrations ▸ **Run
+CI**). See **[docs/github-actions-ci.md](docs/github-actions-ci.md)** for the
+workflow requirements, token setup, and API usage.
+
+---
+
 ## Project structure
 
 ```

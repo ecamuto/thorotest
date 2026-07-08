@@ -118,7 +118,7 @@ function App({ currentUser: initialUser, onLogout, onProfileUpdate }) {
   const openTest = (id) => { setTestId(id); setView("test-detail"); };
   const openRun = (id) => { setRunId(id); setView("run-detail"); };
 
-  const W = { label: "acme/web", href: "#/overview" };
+  const W = { label: "ThoroTest", href: "#/overview" };
   let crumbs = [W, "Overview"];
   let actions = null;
   let body = null;

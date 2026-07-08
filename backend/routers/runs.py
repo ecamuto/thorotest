@@ -1,3 +1,4 @@
+import asyncio
 import csv
 import io
 from datetime import datetime, timezone
@@ -6,10 +7,12 @@ from sqlalchemy.orm import Session
 from typing import List
 from ..db import get_db
 from .. import models
-from ..schemas import RunOut, RunDetailOut, RunCreate, DefectOut, StepResultOut, StepResultIn, RunCaseAssign, RunCaseOut
+from ..schemas import RunOut, RunDetailOut, RunCreate, DefectOut, StepResultOut, StepResultIn, RunCaseAssign, RunCaseUpdate, RunCaseOut
 from ..auth_utils import require_role, get_current_user
 from ..audit_utils import log_event, EVT_RUN_STARTED, EVT_RUN_COMPLETED
 from ..activity_utils import log_activity, actor_name
+from ..ws_manager import manager
+from ..notifications import _notify_run_events, _fire_webhooks
 from ._pagination import paginate, MAX_LIMIT
 from fpdf import FPDF
 from fpdf.fonts import FontFace
@@ -165,22 +168,100 @@ def retest_run(
     return new_run
 
 
+_VALID_CASE_STATUS = {"pass", "fail", "blocked", "skip", "pending"}
+
+
 @router.patch("/runs/{run_id}/cases/{case_id}", response_model=RunCaseOut)
-def update_run_case(
+async def update_run_case(
     run_id: str,
     case_id: int,
-    payload: RunCaseAssign,
+    payload: RunCaseUpdate,
     db: Session = Depends(get_db),
-    _: models.User = LEAD_ROLES,
+    current_user: models.User = WRITE_ROLES,
 ):
+    """Update a case in a run. Assignment (`assigned_to`) and manual result
+    (`status` + optional `actual_result`) share this endpoint. Marking a
+    result recomputes the run's counters/progress and broadcasts a live
+    update over the run WebSocket — this is the real-time run path (the
+    DEMO_MODE simulator emits the same messages, but here results are real)."""
     rc = db.query(models.RunCase).filter(
         models.RunCase.id == case_id,
         models.RunCase.run_id == run_id,
     ).first()
     if not rc:
         raise HTTPException(status_code=404, detail="RunCase not found")
-    rc.assigned_to = payload.assigned_to
+
+    fields = payload.model_fields_set
+    if "assigned_to" in fields:
+        # Assignment stays a lead action; result marking is open to testers.
+        if current_user.role not in ("admin", "manager"):
+            raise HTTPException(status_code=403, detail="Only leads can assign cases")
+        rc.assigned_to = payload.assigned_to
+    if "actual_result" in fields:
+        rc.actual_result = payload.actual_result
+
+    status_changed = "status" in fields and payload.status is not None
+    if status_changed:
+        if payload.status not in _VALID_CASE_STATUS:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {payload.status}")
+        rc.status = payload.status
+
     db.commit()
+
+    if not status_changed:
+        db.refresh(rc)
+        return rc
+
+    # ── Recompute run counters + progress from all cases ──────────
+    run = db.query(models.Run).filter(models.Run.id == run_id).first()
+    cases = db.query(models.RunCase).filter(models.RunCase.run_id == run_id).all()
+    total = run.total or len(cases)
+    run.passed = sum(1 for c in cases if c.status == "pass")
+    run.failed = sum(1 for c in cases if c.status == "fail")
+    run.blocked = sum(1 for c in cases if c.status in ("blocked", "skip"))
+    done = sum(1 for c in cases if c.status != "pending")
+    complete = done >= total and total > 0
+    run.progress = 100 if complete else (int(done / total * 100) if total else 0)
+    if run.status in (None, "pending"):
+        run.status = "running"
+    if complete:
+        run.status = "fail" if run.failed > 0 else "pass"
+    db.commit()
+
+    test = db.query(models.Test).filter(models.Test.id == rc.test_id).first()
+    await manager.broadcast(run_id, {
+        "event": "step",
+        "caseId": rc.id,
+        "testId": rc.test_id,
+        "testTitle": test.title if test else rc.test_id,
+        "status": rc.status,
+        "progress": run.progress,
+        "passed": run.passed,
+        "failed": run.failed,
+        "blocked": run.blocked,
+        "done": done,
+        "total": total,
+    })
+
+    if complete:
+        await manager.broadcast(run_id, {
+            "event": "complete",
+            "status": run.status,
+            "passed": run.passed,
+            "failed": run.failed,
+            "blocked": run.blocked,
+        })
+        log_event(
+            EVT_RUN_COMPLETED,
+            actor_id=current_user.id,
+            actor_email=current_user.email,
+            description=f"Run '{run.name}' completed: {run.passed} passed, {run.failed} failed",
+            target_type="run",
+            target_id=str(run.id),
+        )
+        asyncio.create_task(_notify_run_events(run_id))
+        asyncio.create_task(_fire_webhooks(run_id))
+
     db.refresh(rc)
     return rc
 

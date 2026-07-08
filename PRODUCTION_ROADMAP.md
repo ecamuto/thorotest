@@ -22,6 +22,7 @@ not yet sellable production. Items ordered by priority — work top to bottom.
 | 1.1 | Requirements & test coverage (features/stories/epics ↔ tests, coverage metrics, YAML/JSON/CSV import, GraphQL) | ✅ Done — `feat/requirements-coverage` |
 | 1.2 | Jira integration (pull stories → requirements, push defects → bugs) — reuses `external_*` fields shipped in 1.1 | ✅ Done — `feat/jira-integration` |
 | 1.3 | External importers (TestRail/TestLink XML, qTest/Xray/Zephyr JSON, real .xlsx) + external-identity matching/dedup | ✅ Done — `feat/external-importers` |
+| 1.4 | Test Plans, real-time run execution over WebSocket, API-token auth, pipeline ingest, GitHub Actions CI (trigger + collect), UI-honesty cleanup | ✅ Done — `feat/test-plans` |
 
 ## Item detail
 

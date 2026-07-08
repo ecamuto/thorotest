@@ -118,6 +118,13 @@ class RunCaseAssign(BaseModel):
     assigned_to: Optional[str] = None  # username or None to unassign
 
 
+class RunCaseUpdate(BaseModel):
+    # All optional; only the fields actually sent are applied (model_fields_set).
+    status: Optional[str] = None            # pass | fail | blocked | skip | pending
+    actual_result: Optional[str] = None
+    assigned_to: Optional[str] = None
+
+
 class MyWorkCaseOut(BaseModel):
     id: int
     test_id: str
@@ -129,6 +136,25 @@ class MyWorkCaseOut(BaseModel):
 class MyWorkGroupOut(BaseModel):
     run: RunOut
     cases: List[MyWorkCaseOut] = []
+
+
+class PlanOut(BaseModel):
+    id: str
+    name: str
+    env: Optional[str] = None
+    owner: Optional[str] = None
+    schedule: Optional[str] = None
+    test_ids: List[str] = []
+    created_at: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class PlanCreate(BaseModel):
+    name: str
+    env: Optional[str] = None
+    schedule: Optional[str] = None
+    test_ids: List[str] = []
 
 
 class PipelineOut(BaseModel):
@@ -143,6 +169,18 @@ class PipelineOut(BaseModel):
     when: Optional[str] = None
 
     model_config = {"from_attributes": True}
+
+
+class PipelineCreate(BaseModel):
+    id: Optional[str] = None            # provide to upsert (CI: same id for start + finish)
+    name: str
+    platform: str = "github"            # github | gitlab | jenkins
+    status: str = "running"             # running | pass | fail
+    duration: Optional[str] = None
+    commit: Optional[str] = None
+    author: Optional[str] = None
+    branch: Optional[str] = None
+    when: Optional[str] = None
 
 
 class ActivityOut(BaseModel):

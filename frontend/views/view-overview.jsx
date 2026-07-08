@@ -65,7 +65,7 @@ function Overview({ onNav, currentUser }) {
     <div className="page fade-in">
       <div className="page-h">
         <div>
-          <div className="eyebrow"><span className="dot" /> Workspace · acme/web</div>
+          <div className="eyebrow"><span className="dot" /> Workspace</div>
           <h1 className="page-title" style={{marginTop:8}}>Good {daypart}{firstName ? `, ${firstName}` : ""}.</h1>
           <div className="page-sub">
             {subParts.map((p, i) => <React.Fragment key={i}>{i > 0 && (i === subParts.length - 1 ? " and " : ", ")}{p}</React.Fragment>)}.

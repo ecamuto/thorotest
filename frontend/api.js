@@ -231,6 +231,33 @@
       return res.json();
     },
 
+    async listPlans() {
+      const res = await fetch(BASE + "/api/plans", { headers: authHeaders() });
+      if (!res.ok) throw new Error("Load plans failed");
+      return res.json();
+    },
+
+    async createPlan(payload) {
+      const res = await fetch(BASE + "/api/plans", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Create plan failed");
+      return res.json();
+    },
+
+    async runPlan(id) {
+      const res = await fetch(BASE + `/api/plans/${id}/run`, { method: "POST", headers: authHeaders() });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || "Run plan failed");
+      return res.json();
+    },
+
+    async deletePlan(id) {
+      const res = await fetch(BASE + `/api/plans/${id}`, { method: "DELETE", headers: authHeaders() });
+      if (!res.ok) throw new Error("Delete plan failed");
+    },
+
     async deleteTest(id) {
       const res = await fetch(BASE + `/api/tests/${id}`, { method: "DELETE", headers: authHeaders() });
       if (!res.ok && res.status !== 204) throw new Error("Delete failed");
@@ -573,6 +600,21 @@
       return res.json();
     },
 
+    // Trigger the integration's GitHub Actions workflow; returns { job_id, … }.
+    async ciRun(id, body) {
+      const res = await fetch(BASE + `/api/integrations/${id}/ci/run`, {
+        method: "POST", headers: authHeaders(), body: JSON.stringify(body || {}),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "CI dispatch failed"); }
+      return res.json();
+    },
+
+    async ciJobStatus(id, jobId) {
+      const res = await fetch(BASE + `/api/integrations/${id}/ci/jobs/${jobId}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error("Job not found");
+      return res.json();
+    },
+
     async getTokens() {
       const res = await fetch(BASE + "/api/tokens", { headers: authHeaders() });
       if (!res.ok) throw new Error("Failed to load tokens");
@@ -761,6 +803,20 @@
         body: JSON.stringify({ assigned_to: assignedTo }),
       });
       if (!res.ok) throw new Error("Assign failed");
+      return res.json();
+    },
+
+    // Manual result marking. status: pass | fail | blocked | skip. The server
+    // recomputes run counters and broadcasts the update over the run WebSocket.
+    async markCase(runId, caseId, status, actualResult) {
+      const body = { status };
+      if (actualResult != null) body.actual_result = actualResult;
+      const res = await fetch(BASE + `/api/runs/${runId}/cases/${caseId}`, {
+        method: "PATCH",
+        headers: authHeaders(),
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || "Mark failed");
       return res.json();
     },
 

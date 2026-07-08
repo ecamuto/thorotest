@@ -111,11 +111,11 @@ function SidebarSearch({ onOpenTest }) {
 const NAV_CONFIG = [
   { group: "workspace", items: [
     { id: "overview",     icon: "home" },
-    { id: "library",      icon: "flask",   count: "201" },
+    { id: "library",      icon: "flask" },
     { id: "requirements", icon: "target" },
     { id: "runs",         icon: "play",    badge: true },
-    { id: "pipelines",    icon: "branch",  count: "12" },
-    { id: "defects",      icon: "bug",     count: "8" },
+    { id: "pipelines",    icon: "branch" },
+    { id: "defects",      icon: "bug" },
     { id: "insights",     icon: "chart" },
     { id: "my-work",      icon: "play" },
   ]},
@@ -162,7 +162,6 @@ function Sidebar({ current, onNav, onOpenTest, density, currentUser, onLogout })
       <div className="sidebar-brand" onClick={() => onNav("overview")}>
         <div className="brand-mark">T</div>
         <div className="brand-name">ThoroTest</div>
-        <div className="brand-workspace">acme/web</div>
       </div>
 
       <div className="sidebar-search">
@@ -213,7 +212,7 @@ function Sidebar({ current, onNav, onOpenTest, density, currentUser, onLogout })
         </div>
         <div style={{lineHeight:1.15, minWidth:0, flex:1}}>
           <div className="user-name">{currentUser ? (currentUser.display_name || currentUser.username) : "—"}</div>
-          <div className="user-org">acme · {currentUser ? currentUser.role : ""}</div>
+          <div className="user-org">{currentUser ? currentUser.role : ""}</div>
         </div>
         {NotifBell && <NotifBell currentUser={currentUser} />}
         <button className="btn ghost icon" style={{marginLeft:"auto", flexShrink:0}} title={t("common.signOut")} onClick={onLogout}>

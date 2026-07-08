@@ -147,6 +147,17 @@ class Pipeline(Base):
     when = Column(String(64), nullable=True)
 
 
+class TestPlan(Base):
+    __tablename__ = "test_plans"
+    id = Column(String(255), primary_key=True)
+    name = Column(String(512), nullable=False)
+    env = Column(String(255), nullable=True)
+    owner = Column(String(255), nullable=True)
+    schedule = Column(String(255), nullable=True)   # informational cron/trigger; execution is external (CI)
+    test_ids = Column(JSON, default=list)            # list[str] of Test.id
+    created_at = Column(String(64), nullable=True)   # ISO UTC
+
+
 class Activity(Base):
     __tablename__ = "activity"
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -244,9 +255,12 @@ class ApiToken(Base):
     __tablename__ = "api_tokens"
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
-    token_hash = Column(String(255), nullable=False)
+    token_hash = Column(String(255), nullable=False, index=True)
     token_prefix = Column(String(64), nullable=False)
     scope = Column(String(512), default="")
+    # The token authenticates as this user (inherits their role). A token with
+    # no owner (legacy) can no longer authenticate.
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(String(64), nullable=True)
     last_used_at = Column(String(64), nullable=True)
 
