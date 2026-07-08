@@ -187,11 +187,15 @@ function Overview({ onNav, currentUser }) {
 // Compact AI coverage widget — analyzes a folder's tests via /api/ai/suggest-edge-cases
 // and can create pending draft tests from the suggestions.
 function AiSuggestBox({ D }) {
+  // Map every folder id → name across the whole tree (any depth). Imported
+  // folders nest several levels deep, so a shallow walk left leaf ids showing
+  // as raw "F-…" in the picker.
   const folderNames = {};
-  D.folders.forEach(f => {
+  const walkFolders = (list) => (list || []).forEach(f => {
     folderNames[f.id] = f.name;
-    (f.children || []).forEach(c => { folderNames[c.id] = c.name; });
+    walkFolders(f.children);
   });
+  walkFolders(D.folders);
   const folderIds = [...new Set(D.tests.map(t => t.folder).filter(Boolean))];
 
   const [folderId, setFolderId] = React.useState(folderIds[0] || "");
