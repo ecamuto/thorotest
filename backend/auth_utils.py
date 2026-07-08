@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 from datetime import datetime, timedelta, timezone
@@ -64,12 +65,30 @@ def create_access_token(user_id: int, token_version: int = 0) -> str:
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
+def _user_from_api_token(raw: str, db: Session) -> Optional[models.User]:
+    """Resolve a `th_`-prefixed API token to its owning user, or None. The token
+    authenticates as that user (inherits their role); last_used_at is stamped."""
+    token_hash = hashlib.sha256(raw.encode()).hexdigest()
+    tok = db.query(models.ApiToken).filter(models.ApiToken.token_hash == token_hash).first()
+    if not tok or not tok.user_id:
+        return None
+    user = db.query(models.User).filter(models.User.id == tok.user_id).first()
+    if user is None:
+        return None
+    tok.last_used_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    db.commit()
+    return user
+
+
 def get_optional_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> Optional[models.User]:
     if not credentials:
         return None
+    # Long-lived API tokens (th_…) for CI / scripts, resolved before JWT.
+    if credentials.credentials.startswith("th_"):
+        return _user_from_api_token(credentials.credentials, db)
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = int(payload.get("sub"))

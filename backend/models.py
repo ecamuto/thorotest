@@ -255,9 +255,12 @@ class ApiToken(Base):
     __tablename__ = "api_tokens"
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
-    token_hash = Column(String(255), nullable=False)
+    token_hash = Column(String(255), nullable=False, index=True)
     token_prefix = Column(String(64), nullable=False)
     scope = Column(String(512), default="")
+    # The token authenticates as this user (inherits their role). A token with
+    # no owner (legacy) can no longer authenticate.
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(String(64), nullable=True)
     last_used_at = Column(String(64), nullable=True)
 
