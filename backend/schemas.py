@@ -171,6 +171,18 @@ class PipelineOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class PipelineCreate(BaseModel):
+    id: Optional[str] = None            # provide to upsert (CI: same id for start + finish)
+    name: str
+    platform: str = "github"            # github | gitlab | jenkins
+    status: str = "running"             # running | pass | fail
+    duration: Optional[str] = None
+    commit: Optional[str] = None
+    author: Optional[str] = None
+    branch: Optional[str] = None
+    when: Optional[str] = None
+
+
 class ActivityOut(BaseModel):
     id: int
     who: str
