@@ -500,7 +500,7 @@ function WebhooksSection() {
       <CodeBlock>{`{
   "event":   "run.completed",
   "ts":      "2025-05-26T14:03:00Z",
-  "project": "acme-web",
+  "project": "my-project",
   "data": {
     "run_id": "R-0042",
     "status": "failed",

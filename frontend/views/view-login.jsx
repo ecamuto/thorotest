@@ -2,8 +2,8 @@
 
 function LoginPage({ onLogin, oauthError, onDismissOAuthError }) {
   const { t } = useI18n();
-  const [email, setEmail] = useState("marco@acme.com");
-  const [password, setPassword] = useState("demo123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(null);
@@ -65,7 +65,7 @@ function LoginPage({ onLogin, oauthError, onDismissOAuthError }) {
           <div className="brand-mark" style={{ width: 36, height: 36, fontSize: 18 }}>T</div>
           <div>
             <div className="brand-name" style={{ fontSize: 18, fontWeight: 700 }}>ThoroTest</div>
-            <div className="brand-workspace" style={{ fontSize: 11 }}>acme / web</div>
+            <div className="brand-workspace" style={{ fontSize: 11 }}>Test management</div>
           </div>
         </div>
 
@@ -223,30 +223,6 @@ function LoginPage({ onLogin, oauthError, onDismissOAuthError }) {
           </button>
         </div>
 
-        <div className="login-demo">
-          <div className="login-demo-label">{t("login.demoAccounts")}</div>
-          {[
-            { name: "Marco Rossi", email: "marco@acme.com", role: "admin" },
-            { name: "Lisa Park", email: "lisa@acme.com", role: "member" },
-            { name: "Alex Rivera", email: "alex@acme.com", role: "member" },
-          ].map(u => (
-            <button
-              key={u.email}
-              className="login-demo-row"
-              type="button"
-              onClick={() => { setEmail(u.email); setPassword("demo123"); }}
-            >
-              <div className="avatar" style={{ width: 24, height: 24, fontSize: 9 }}>
-                {u.name.split(" ").map(n => n[0]).join("")}
-              </div>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 500 }}>{u.name}</div>
-                <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{u.email} · {u.role}</div>
-              </div>
-            </button>
-          ))}
-          <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 8 }}>{t("login.demoPassword")}</div>
-        </div>
         </React.Fragment>)}
       </div>
     </div>
@@ -280,7 +256,7 @@ function OAuthConfirmScreen({ pendingToken, onLinked, onCancel }) {
           <div className="brand-mark" style={{ width: 36, height: 36, fontSize: 18 }}>T</div>
           <div>
             <div className="brand-name" style={{ fontSize: 18, fontWeight: 700 }}>ThoroTest</div>
-            <div className="brand-workspace" style={{ fontSize: 11 }}>acme / web</div>
+            <div className="brand-workspace" style={{ fontSize: 11 }}>Test management</div>
           </div>
         </div>
 
@@ -363,7 +339,7 @@ function TwoFAStep({ partialToken, onVerified, onBack }) {
           <div className="brand-mark" style={{ width: 36, height: 36, fontSize: 18 }}>T</div>
           <div>
             <div className="brand-name" style={{ fontSize: 18, fontWeight: 700 }}>ThoroTest</div>
-            <div className="brand-workspace" style={{ fontSize: 11 }}>acme / web</div>
+            <div className="brand-workspace" style={{ fontSize: 11 }}>Test management</div>
           </div>
         </div>
 

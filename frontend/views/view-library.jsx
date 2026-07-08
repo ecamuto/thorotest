@@ -549,7 +549,7 @@ function NewTestModal({ folders, defaultFolderId, onClose, onCreate }) {
             </FormField>
           </div>
           <FormField label="Owner" hint="initials or username">
-            <input className="input" value={form.owner} onChange={e => setF("owner", e.target.value)} placeholder="MR" />
+            <input className="input" value={form.owner} onChange={e => setF("owner", e.target.value)} placeholder="e.g. QA" />
           </FormField>
           <FormField label="Tags" hint="comma-separated">
             <input className="input" value={form.tags} onChange={e => setF("tags", e.target.value)} placeholder="smoke, payment, p0" />

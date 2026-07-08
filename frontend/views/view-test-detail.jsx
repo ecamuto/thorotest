@@ -120,7 +120,7 @@ function TestDetail({ testId, onBack, currentUser }) {
             <div style={{fontSize:12.5, color:"var(--text-muted)", display:"flex", alignItems:"center", gap:10}}>
               <span className="mono">{test.id}</span>
               <span className="dim">·</span>
-              <span>Owned by <b style={{color:"var(--text)"}}>{test.owner === "MR" ? "Marco Rossi" : test.owner === "LP" ? "Luca Pace" : "Anna Ricci"}</b></span>
+              <span>Owned by <b style={{color:"var(--text)"}}>{test.owner || "unassigned"}</b></span>
               <span className="dim">·</span>
               <span>Updated <span className="mono">{test.updated}</span> ago</span>
               <span className="dim">·</span>
@@ -1095,66 +1095,42 @@ function CommentsTab({test}) {
   );
 }
 
-function seededRng(seed) {
-  let s = seed | 0;
-  return () => {
-    s = Math.imul(s ^ (s >>> 15), s | 1) ^ (Math.imul(s ^ (s >>> 7), s | 61) >>> 0);
-    return ((s ^ (s >>> 14)) >>> 0) / 0x100000000;
-  };
-}
-
 function GitHistoryTab({test}) {
-  const seed = test.id.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-  const rng = seededRng(seed);
+  const ref = test.source_ref || "";
+  const base = test.repo_url ? test.repo_url.replace(/\.git$/, "").replace(/\/$/, "") : "";
+  const fileUrl = base && ref && test.source_path ? `${base}/blob/${ref}/${test.source_path}` : null;
+  const historyUrl = base && test.source_path ? `${base}/commits/${ref || ""}/${test.source_path}` : null;
 
-  const authors = ["luca.p", "marco.r", "anna.r", "ci-bot"];
-  const msgTemplates = [
-    "tighten expected assertion on step {n}",
-    "add {env} environment to test matrix",
-    "fix flaky selector in step {n}",
-    "update pre-conditions for {env} setup",
-    "refactor: extract shared setup into fixture",
-    "initial test case",
-  ];
-  const envs = ["staging", "preview", "ci"];
-  const count = 3 + Math.floor(rng() * 3);
-  const commits = Array.from({length: count}, (_, i) => {
-    const sha = Math.floor(rng() * 0xfffffff).toString(16).padStart(7, "0");
-    const who = authors[Math.floor(rng() * authors.length)];
-    const tmpl = msgTemplates[Math.floor(rng() * msgTemplates.length)];
-    const msg = tmpl
-      .replace("{n}", Math.floor(rng() * 5) + 1)
-      .replace("{env}", envs[Math.floor(rng() * envs.length)]);
-    const added = Math.floor(rng() * 20) + 1;
-    const removed = Math.floor(rng() * 10);
-    const age = i === count - 1
-      ? `${Math.floor(rng() * 8) + 3}w`
-      : i === 0 ? `${Math.floor(rng() * 6) + 1}d` : `${Math.floor(rng() * 14) + 3}d`;
-    return { sha, who, msg: i === count - 1 ? "initial test case" : msg, when: age, lines: `+${added} −${removed}` };
-  });
-
-  const filePath = `tests/${(test.folder_id || "misc").replace("-", "/").replace("-", "/") || "misc"}/${test.id.toLowerCase()}.yml`;
+  if (!test.source_path) {
+    return (
+      <div style={{padding:"18px 22px 32px"}}>
+        <div className="empty" style={{padding:"48px 18px", textAlign:"center"}}>
+          <div style={{fontSize:13, marginBottom:6}}>No linked source.</div>
+          <div className="mono dim" style={{fontSize:11}}>
+            Sync a repository (Configure → GitHub) to link this test to a file and its commit history.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{padding:"18px 22px 32px"}}>
       <div className="card">
         <div className="card-h">
-          <div className="card-title mono" style={{fontSize:11.5}}>{filePath}</div>
+          <div className="card-title mono" style={{fontSize:11.5}}>{test.source_path}</div>
           <div className="spacer" />
-          <div className="mono dim" style={{fontSize:11}}>on main</div>
+          {ref && <div className="mono dim" style={{fontSize:11}}>@ {ref.slice(0, 8)}</div>}
         </div>
-        <div>
-          {commits.map(c => (
-            <div key={c.sha} style={{display:"grid", gridTemplateColumns:"80px 1fr 80px 80px", gap:12, padding:"12px 14px", borderBottom:"1px solid var(--border)", alignItems:"center", fontSize:12.5}}>
-              <span className="mono" style={{color:"var(--accent)"}}>{c.sha}</span>
-              <div>
-                <div>{c.msg}</div>
-                <div className="mono dim" style={{fontSize:10.5, marginTop:2}}>@{c.who}</div>
-              </div>
-              <span className="mono dim">{c.lines}</span>
-              <span className="mono dim" style={{textAlign:"right"}}>{c.when} ago</span>
-            </div>
-          ))}
+        <div style={{padding:"14px", display:"flex", flexDirection:"column", gap:10, fontSize:12.5}}>
+          <Detail label="Repository" value={base
+            ? <a href={base} target="_blank" rel="noreferrer" className="mono">{base.replace(/^https?:\/\//, "")}</a>
+            : <span className="mono dim">—</span>} />
+          <Detail label="Ref" value={<span className="mono">{ref || "—"}</span>} />
+          <div style={{display:"flex", gap:8, marginTop:4}}>
+            {fileUrl && <a href={fileUrl} target="_blank" rel="noreferrer" className="btn sm"><Icon name="github" /> View file</a>}
+            {historyUrl && <a href={historyUrl} target="_blank" rel="noreferrer" className="btn sm ghost">Commit history</a>}
+          </div>
         </div>
       </div>
     </div>

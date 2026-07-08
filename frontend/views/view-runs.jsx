@@ -97,7 +97,7 @@ function RunsList({runs, onOpenRun, active}) {
               <td className="mono">{r.id}</td>
               <td>
                 <div>{r.name}</div>
-                {r.status === "running" && <div className="mono dim" style={{fontSize:10.5}}>ETA ~4m · executor: marco.r</div>}
+                {r.owner && <div className="mono dim" style={{fontSize:10.5}}>{r.owner}</div>}
               </td>
               <td>
                 <ProgressBar run={r} />
@@ -700,23 +700,10 @@ function RunDetail({ runId, onBack, currentUser }) {
         <div style={{padding:14, borderBottom:"1px solid var(--border)"}}>
           <div className="card-title" style={{marginBottom:8}}>Environment</div>
           <div style={{display:"flex", flexDirection:"column", gap:6, fontSize:11.5}}>
-            <Detail label="Env" value={<span className="tag">{run.env}</span>} />
-            <Detail label="Branch" value={<span className="mono">{run.branch}</span>} />
-            <Detail label="Build" value={<span className="mono" style={{color:"var(--accent)"}}>a3c9f1d</span>} />
-            <Detail label="Test data" value={<span className="mono">seed-checkout-v3</span>} />
-            <Detail label="Browser" value="Chrome 128 · macOS" />
+            <Detail label="Env" value={run.env ? <span className="tag">{run.env}</span> : <span className="mono dim">—</span>} />
+            <Detail label="Branch" value={<span className="mono">{run.branch || "—"}</span>} />
+            <Detail label="Owner" value={<span className="mono">{run.owner || "—"}</span>} />
           </div>
-        </div>
-
-        <div style={{padding:14, borderBottom:"1px solid var(--border)"}}>
-          <div className="card-title" style={{marginBottom:8}}>Collaborators</div>
-          <div style={{display:"flex", gap:-4, alignItems:"center", marginBottom:6}}>
-            <div className="avatar" style={{marginRight:-6, border:"2px solid var(--bg-2)"}}>MR</div>
-            <div className="avatar" style={{marginRight:-6, border:"2px solid var(--bg-2)", background:"linear-gradient(135deg, var(--info), var(--purple))"}}>AR</div>
-            <div className="avatar" style={{marginRight:-6, border:"2px solid var(--bg-2)", background:"linear-gradient(135deg, var(--warn), var(--accent))"}}>LP</div>
-            <span className="mono dim" style={{fontSize:10.5, marginLeft:10}}>3 testers</span>
-          </div>
-          <div style={{fontSize:11, color:"var(--text-dim)"}}>Live cursors visible · keyboard shortcuts active</div>
         </div>
 
         <div style={{padding:14, borderBottom:"1px solid var(--border)"}}>
@@ -758,10 +745,7 @@ function RunDetail({ runId, onBack, currentUser }) {
         <div style={{padding:14}}>
           <div className="card-title" style={{marginBottom:8}}>Run timeline</div>
           <div style={{display:"flex", flexDirection:"column", gap:6, fontSize:11.5}}>
-            <TimelineItem time="12:05:23" text="Step 3 passed (Marco R.)" />
-            <TimelineItem time="12:04:48" text="Step 2 passed (Marco R.)" />
-            <TimelineItem time="12:04:32" text="Step 1 passed (Marco R.)" />
-            <TimelineItem time="12:04:11" text={`Case ${current?.test_id || "—"} started`} />
+            <TimelineItem time="" text={`Case ${current?.test_id || "—"} started`} />
           </div>
         </div>
       </div>

@@ -1,14 +1,14 @@
 // Integrations (config-as-code), AI, Defects
 
 const PROVIDERS = [
-  { id: "github",     name: "GitHub",      icon: "github",  type: "vcs_ci",        configuredBy: "acme/web · main" },
+  { id: "github",     name: "GitHub",      icon: "github",  type: "vcs_ci",        configuredBy: "" },
   { id: "gitlab",     name: "GitLab CI",   icon: "gitlab",  type: "ci",            configuredBy: "external runner" },
-  { id: "jenkins",    name: "Jenkins",     icon: "jenkins", type: "ci",            configuredBy: "ci.acme.test" },
+  { id: "jenkins",    name: "Jenkins",     icon: "jenkins", type: "ci",            configuredBy: "" },
   { id: "playwright", name: "Playwright",  icon: "plug",    type: "runner",        configuredBy: "playwright.config.ts" },
   { id: "cypress",    name: "Cypress",     icon: "plug",    type: "runner",        configuredBy: "cypress.config.js" },
   { id: "jest",       name: "Jest",        icon: "plug",    type: "runner",        configuredBy: "jest.config.js" },
   { id: "jira",       name: "Jira",        icon: "plug",    type: "issue_tracker", configuredBy: "" },
-  { id: "linear",     name: "Linear",      icon: "plug",    type: "defects",       configuredBy: "ACME workspace" },
+  { id: "linear",     name: "Linear",      icon: "plug",    type: "defects",       configuredBy: "" },
   { id: "slack",      name: "Slack",       icon: "plug",    type: "notifications", configuredBy: "#qa-alerts" },
   { id: "webhook",    name: "Webhook",     icon: "plug",    type: "outbound",      configuredBy: "" },
 ];
@@ -39,7 +39,7 @@ function GithubConfigFields({ form, setForm, tokenSet }) {
     <>
       <div style={fld}>
         <label style={lbl}>Repository URL</label>
-        <input className="login-input" value={form.repo_url} onChange={set("repo_url")} placeholder="https://github.com/acme/web" style={{width:"100%"}} />
+        <input className="login-input" value={form.repo_url} onChange={set("repo_url")} placeholder="https://github.com/org/repo" style={{width:"100%"}} />
       </div>
       <div style={{display:"flex", gap:8}}>
         <div style={{...fld, flex:1}}>
@@ -67,12 +67,12 @@ function JiraConfigFields({ form, setForm, tokenSet }) {
     <>
       <div style={fld}>
         <label style={lbl}>Jira base URL</label>
-        <input className="login-input" value={form.base_url} onChange={set("base_url")} placeholder="https://acme.atlassian.net" style={{width:"100%"}} />
+        <input className="login-input" value={form.base_url} onChange={set("base_url")} placeholder="https://your-org.atlassian.net" style={{width:"100%"}} />
       </div>
       <div style={{display:"flex", gap:8}}>
         <div style={{...fld, flex:2}}>
           <label style={lbl}>Account email</label>
-          <input className="login-input" value={form.email} onChange={set("email")} placeholder="you@acme.com" style={{width:"100%"}} />
+          <input className="login-input" value={form.email} onChange={set("email")} placeholder="you@example.com" style={{width:"100%"}} />
         </div>
         <div style={{...fld, flex:1}}>
           <label style={lbl}>Project key</label>
@@ -258,7 +258,7 @@ function AddIntegrationModal({ onClose, onSaved, existingIds }) {
                 className="login-input"
                 value={form.configured_by}
                 onChange={e => setForm(f => ({...f, configured_by: e.target.value}))}
-                placeholder="e.g. acme/web · main"
+                placeholder="e.g. org/repo · main"
                 style={{width:"100%"}}
               />
             </div>
@@ -332,7 +332,7 @@ function EditIntegrationModal({ intg, onClose, onSaved }) {
         </div>
         <div style={{marginBottom:12}}>
           <label style={{display:"block", fontSize:12, fontWeight:500, color:"var(--text-muted)", marginBottom:6}}>Configured by</label>
-          <input className="login-input" value={form.configured_by} onChange={e => setForm(f => ({...f, configured_by: e.target.value}))} style={{width:"100%"}} placeholder="e.g. acme/web · main" />
+          <input className="login-input" value={form.configured_by} onChange={e => setForm(f => ({...f, configured_by: e.target.value}))} style={{width:"100%"}} placeholder="e.g. org/repo · main" />
         </div>
         <div style={{marginBottom:16}}>
           <label style={{display:"block", fontSize:12, fontWeight:500, color:"var(--text-muted)", marginBottom:6}}>Status</label>
@@ -583,7 +583,7 @@ function Integrations() {
           <div style={{padding:14}}>
             <pre className="code">
 {`# `}<span className="c">ThoroTest workspace config — checked into git</span>{`
-`}<span className="k">workspace</span>{`: `}<span className="s">"acme/web"</span>{`
+`}<span className="k">workspace</span>{`: `}<span className="s">"org/repo"</span>{`
 `}<span className="k">version</span>{`: `}<span className="n">1</span>{`
 
 `}<span className="k">tests</span>{`:
@@ -592,7 +592,7 @@ function Integrations() {
 
 `}<span className="k">environments</span>{`:
   - `}<span className="k">id</span>{`: `}<span className="s">"staging"</span>{`
-    `}<span className="k">url</span>{`: `}<span className="s">"https://staging.acme.test"</span>{`
+    `}<span className="k">url</span>{`: `}<span className="s">"https://staging.example.test"</span>{`
 
 `}<span className="k">runners</span>{`:
   - `}<span className="k">name</span>{`: `}<span className="s">"playwright"</span>{`
