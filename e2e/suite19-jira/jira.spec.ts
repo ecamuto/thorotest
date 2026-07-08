@@ -73,7 +73,7 @@ test.describe('Suite 19 — Jira integration (no live Jira)', () => {
     await expect(page.locator('h1:has-text("Integrations")')).toBeVisible({ timeout: 10000 });
     await page.click('button:has-text("Add integration")');
     await page.click('button:has-text("Jira")');
-    await expect(page.locator('input[placeholder="https://acme.atlassian.net"]')).toBeVisible({ timeout: 8000 });
+    await expect(page.locator('input[placeholder="https://your-org.atlassian.net"]')).toBeVisible({ timeout: 8000 });
     await expect(page.locator('input[placeholder="PAY"]')).toBeVisible();
     await expect(page.locator('input[placeholder="Atlassian API token"]')).toBeVisible();
   });

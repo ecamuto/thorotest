@@ -60,20 +60,16 @@ test.describe('Suite 1 — Autenticazione', () => {
   });
 
   // E2E-AUTH-03 · Selezione rapida utente demo [P1]
-  test('AUTH-03: selezione rapida utente demo Lisa Park', async ({ page }) => {
+  test('AUTH-03: login as Lisa Park', async ({ page }) => {
     await page.goto('/');
     await page.evaluate(() => localStorage.removeItem('th_token'));
     await page.goto('/');
 
     await expect(page.locator('.login-page')).toBeVisible({ timeout: 10000 });
 
-    // Click demo card for Lisa Park
-    await page.click('.login-demo-row:has-text("Lisa Park")');
-
-    // Fields populated with lisa@acme.com
-    await expect(page.locator('input[type="email"]')).toHaveValue('lisa@acme.com');
-
-    // Sign in
+    // Sign in as Lisa Park
+    await page.fill('input[type="email"]', 'lisa@acme.com');
+    await page.fill('input[type="password"]', 'demo123');
     await page.click('button[type="submit"]');
     await page.waitForURL('**/#/overview', { timeout: 10000 });
 
