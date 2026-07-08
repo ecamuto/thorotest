@@ -19,6 +19,25 @@ def _junit_status(case_el) -> str:
     return "pass"
 
 
+def _folder_for(suite_name: str, classname: str) -> str:
+    """Slash path used as a test's folder.
+
+    The testcase `classname` is the finest grouping JUnit carries — the test's
+    class/file — so prefer it. pytest reports a single generic suite
+    ("pytest") but a dotted classname per module
+    (``backend.tests.test_admin.TestAdmin``); convert the dots to slashes so
+    the importer builds a nested tree instead of one flat folder. Playwright
+    already reports a slash path (``suite/foo.spec.ts``) — leave it untouched.
+    Fall back to the suite name when a case has no classname.
+    """
+    if classname:
+        path = classname.replace("::", ".")
+        if "/" not in path:
+            path = path.replace(".", "/")
+        return path.strip("/")
+    return suite_name.strip("/")
+
+
 def parse_junit_xml(content: bytes) -> ImportResult:
     tests_map: dict[str, TestData] = {}   # title → TestData (deduped)
     runs: list[RunData] = []
@@ -50,7 +69,7 @@ def parse_junit_xml(content: bytes) -> ImportResult:
             if not title:
                 continue
 
-            folder_path = suite_name or classname or ""
+            folder_path = _folder_for(suite_name, classname)
             status = _junit_status(case_el)
 
             if title not in tests_map:
