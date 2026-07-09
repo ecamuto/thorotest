@@ -75,13 +75,16 @@ function Pipelines() {
             </thead>
             <tbody>
               {list.map(p => (
-                <tr key={p.id} style={{cursor:"pointer"}}>
+                <tr key={p.id}
+                    style={p.url ? {cursor:"pointer"} : undefined}
+                    title={p.url ? "Open the run on the CI provider" : undefined}
+                    onClick={p.url ? () => window.open(p.url, "_blank", "noopener,noreferrer") : undefined}>
                   <td>
                     <span style={{display:"inline-flex", width:18, height:18}}>
                       {p.platform === "github" ? I.github : p.platform === "gitlab" ? I.gitlab : I.jenkins}
                     </span>
                   </td>
-                  <td>{p.name}</td>
+                  <td>{p.name}{p.url && <span className="dim" style={{marginLeft:6, fontSize:11}}>↗</span>}</td>
                   <td><StatusBadge s={p.status} /></td>
                   <td className="mono dim">{p.duration}</td>
                   <td className="mono" style={{color:"var(--accent)"}}>{p.commit}</td>

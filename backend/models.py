@@ -145,6 +145,7 @@ class Pipeline(Base):
     author = Column(String(255), nullable=True)
     branch = Column(String(255), nullable=True)
     when = Column(String(64), nullable=True)
+    url = Column(String(512), nullable=True)   # link to the run on GitHub/GitLab
 
 
 class TestPlan(Base):

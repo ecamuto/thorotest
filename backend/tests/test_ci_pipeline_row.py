@@ -25,10 +25,12 @@ def test_upsert_pipeline_creates_then_updates(db):
     pid = "gl-pipeline-42"
     # dispatch: running row appears
     _upsert_pipeline(db, pid, name="GitLab pipeline #42", platform="gitlab",
-                     status="running", commit="abc1234", branch="main", when="just now")
+                     status="running", commit="abc1234", branch="main", when="just now",
+                     url="http://gl/42")
     p = db.query(models.Pipeline).filter_by(id=pid).first()
     assert p is not None and p.status == "running" and p.platform == "gitlab"
     assert p.commit == "abc1234" and p.duration is None
+    assert p.url == "http://gl/42"
 
     # completion: same id updated in place, no duplicate
     _upsert_pipeline(db, pid, status="fail", duration=_fmt_duration(252))
@@ -66,6 +68,7 @@ def test_ci_run_creates_running_pipeline_row(client, db, monkeypatch):
     assert p.status == "running" and p.platform == "gitlab"
     assert p.commit == "deadbee" and p.branch == "main"
     assert p.name == "My run"
+    assert p.url == "http://x/99"   # links to the run on GitLab
 
 
 def test_ci_run_unknown_integration_404(client, db):

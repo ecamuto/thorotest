@@ -132,6 +132,7 @@ def _orchestrate(job_id: str, cfg: dict, since: datetime, run_name: Optional[str
                     branch=run.get("head_branch") or cfg["ref"],
                     author=(run.get("actor") or {}).get("login"),
                     when="just now",
+                    url=run.get("html_url"),
                 )
             finally:
                 db0.close()
@@ -249,6 +250,7 @@ async def ci_run(intg_id: str, payload: CIRunRequest, db: Session = Depends(get_
             platform="gitlab", status="running",
             commit=(pipeline.get("sha") or "")[:7] or None,
             branch=pipeline.get("ref") or cfg["ref"], when="just now",
+            url=pipeline.get("web_url"),
         )
         _JOBS[job_id] = {
             "id": job_id,

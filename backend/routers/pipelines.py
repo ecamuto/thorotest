@@ -35,7 +35,7 @@ def upsert_pipeline(payload: PipelineCreate, db: Session = Depends(get_db), _: m
         existing = db.query(models.Pipeline).filter(models.Pipeline.id == payload.id).first()
 
     if existing:
-        for field in ("name", "platform", "status", "duration", "commit", "author", "branch", "when"):
+        for field in ("name", "platform", "status", "duration", "commit", "author", "branch", "when", "url"):
             value = getattr(payload, field)
             if value is not None:
                 setattr(existing, field, value)
@@ -53,6 +53,7 @@ def upsert_pipeline(payload: PipelineCreate, db: Session = Depends(get_db), _: m
         author=payload.author,
         branch=payload.branch,
         when=payload.when or "just now",
+        url=payload.url,
     )
     db.add(pipe)
     db.commit()

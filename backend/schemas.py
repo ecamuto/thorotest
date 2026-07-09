@@ -167,6 +167,7 @@ class PipelineOut(BaseModel):
     author: Optional[str] = None
     branch: Optional[str] = None
     when: Optional[str] = None
+    url: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -181,6 +182,7 @@ class PipelineCreate(BaseModel):
     author: Optional[str] = None
     branch: Optional[str] = None
     when: Optional[str] = None
+    url: Optional[str] = None
 
 
 class ActivityOut(BaseModel):
