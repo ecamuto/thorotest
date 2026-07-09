@@ -3,7 +3,7 @@ import csv
 import io
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Response
-from sqlalchemy import or_
+from sqlalchemy import or_, cast, String
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from ..db import get_db
@@ -33,6 +33,7 @@ def list_tests(
     search: Optional[str] = None,
     status: Optional[str] = None,
     type: Optional[str] = None,
+    tag: Optional[str] = None,
     limit: int = MAX_LIMIT,
     offset: int = 0,
     db: Session = Depends(get_db),
@@ -43,11 +44,19 @@ def list_tests(
         child_ids = [c.id for c in db.query(models.Folder).filter(models.Folder.parent_id == folder_id).all()]
         q = q.filter(models.Test.folder_id.in_([folder_id] + child_ids))
     if search:
-        q = q.filter(or_(models.Test.title.ilike(f"%{search}%"), models.Test.id.ilike(f"%{search}%")))
+        q = q.filter(or_(
+            models.Test.title.ilike(f"%{search}%"),
+            models.Test.id.ilike(f"%{search}%"),
+            cast(models.Test.tags, String).ilike(f"%{search}%"),
+        ))
     if status and status != "all":
         q = q.filter(models.Test.status == status)
     if type and type != "all":
         q = q.filter(models.Test.type == type)
+    if tag and tag != "all":
+        # tags stored as a JSON string list, e.g. ["ai-draft","smoke"] — match the
+        # quoted token so "ai" doesn't hit "ai-draft".
+        q = q.filter(cast(models.Test.tags, String).ilike(f'%"{tag}"%'))
     return paginate(q.order_by(models.Test.id), response, limit, offset)
 
 

@@ -8,8 +8,10 @@ function Library({ onNav, onOpenTest, currentUser }) {
   const [favoritedIds, setFavoritedIds] = useState(new Set());
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterType, setFilterType] = useState("all");
+  const [filterTag, setFilterTag] = useState("all");
   const [filterStatusOpen, setFilterStatusOpen] = useState(false);
   const [filterTypeOpen, setFilterTypeOpen] = useState(false);
+  const [filterTagOpen, setFilterTagOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [tests, setTests] = useState(null);
@@ -54,6 +56,7 @@ function Library({ onNav, onOpenTest, currentUser }) {
     if (debouncedSearch) params.set("search", debouncedSearch);
     if (filterStatus !== "all") params.set("status", filterStatus);
     if (filterType !== "all") params.set("type", filterType);
+    if (filterTag !== "all") params.set("tag", filterTag);
     setTestsLoading(true);
     fetch(`/api/tests?${params}`, { headers: window.authHeaders() })
       .then(r => r.json())
@@ -62,7 +65,7 @@ function Library({ onNav, onOpenTest, currentUser }) {
         setTestsLoading(false);
       })
       .catch(() => setTestsLoading(false));
-  }, [activeFolder, debouncedSearch, filterStatus, filterType, refreshKey]);
+  }, [activeFolder, debouncedSearch, filterStatus, filterType, filterTag, refreshKey]);
 
   const selectFolder = (id) => {
     window.__currentFolderId = id;  // expose for AIAssistant cross-view navigation
@@ -79,6 +82,12 @@ function Library({ onNav, onOpenTest, currentUser }) {
       if (f.children) f.children.forEach(c => result.push(c.id));
     });
     return result;
+  }, [D]);
+
+  const allTags = useMemo(() => {
+    const s = new Set();
+    (D?.tests || []).forEach(t => (t.tags || []).forEach(tg => s.add(tg)));
+    return [...s].sort();
   }, [D]);
 
   const filtered = tests ?? [];
@@ -267,6 +276,26 @@ function Library({ onNav, onOpenTest, currentUser }) {
                       {label}
                     </div>
                   ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div style={{position:"relative"}}>
+            <div className={"chip" + (filterTag !== "all" ? " active" : "")} onClick={() => { setFilterTagOpen(o => !o); setFilterStatusOpen(false); setFilterTypeOpen(false); }}>
+              Tag: <b style={{color:"var(--text)", marginLeft:2}}>{filterTag}</b>
+            </div>
+            {filterTagOpen && (
+              <>
+                <div style={{position:"fixed", inset:0, zIndex:99}} onClick={() => setFilterTagOpen(false)} />
+                <div style={{position:"absolute", top:"100%", right:0, zIndex:100, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:"var(--radius)", minWidth:130, maxHeight:280, overflowY:"auto", marginTop:4, boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
+                  {["all", ...allTags].map(tg => (
+                    <div key={tg} style={{padding:"7px 12px", cursor:"pointer", background: tg === filterTag ? "var(--accent-soft)" : "transparent", fontSize:12}}
+                      onClick={() => { setFilterTag(tg); setFilterTagOpen(false); }}>
+                      {tg === "all" ? "All tags" : tg}
+                    </div>
+                  ))}
+                  {allTags.length === 0 && <div style={{padding:"7px 12px", fontSize:12, color:"var(--text-muted)"}}>No tags yet</div>}
                 </div>
               </>
             )}

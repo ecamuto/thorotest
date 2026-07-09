@@ -218,7 +218,7 @@ function AiSuggestBox({ D }) {
     let n = 0;
     try {
       for (const s of result.suggestions) {
-        await TH_API.createTest({ title: s.title, folder_id: folderId, status: "pending" });
+        await TH_API.createTest({ title: s.title, folder_id: folderId, status: "pending", tags: ["ai-draft"] });
         n++;
       }
       setCreatedCount(n);
