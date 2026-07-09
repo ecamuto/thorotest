@@ -105,6 +105,7 @@ function Pipelines() {
                   <td className="mono dim">{p.when}</td>
                   <td>
                     <button className="btn ghost icon sm" title="Remove from list"
+                            style={{color:"var(--fail)"}}
                             onClick={e => del(p.id, p.name, e)}>
                       {I.x}
                     </button>
