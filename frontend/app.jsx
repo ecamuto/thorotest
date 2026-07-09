@@ -228,7 +228,10 @@ function App({ currentUser: initialUser, onLogout, onProfileUpdate }) {
 
       <TweaksPanel title="Tweaks">
         <TweakSection label="Appearance">
-          <TweakRadio label="Theme" value={tweaks.theme} onChange={v => setTweak("theme", v)} options={[
+          <TweakRadio label="Theme" value={theme} onChange={v => {
+            setTheme(v);
+            try { localStorage.setItem("tt-theme", v); } catch (e) {}
+          }} options={[
             { value: "dark", label: "Dark" },
             { value: "light", label: "Light" },
           ]} />
