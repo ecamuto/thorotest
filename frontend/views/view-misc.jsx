@@ -2,6 +2,24 @@
 
 function Pipelines() {
   const { data: D, loading, error } = useInitialData();
+  const [rows, setRows] = React.useState(null);
+
+  // Seed the table from initial-data on first load.
+  React.useEffect(() => { if (D?.pipelines) setRows(D.pipelines); }, [D]);
+
+  // While a dispatch is still running, poll so it flips to pass/fail live
+  // (a "Run CI" writes a running row that finishes a bit later).
+  const anyRunning = (rows || []).some(p => p.status === "running");
+  React.useEffect(() => {
+    if (!anyRunning) return;
+    const id = setInterval(async () => {
+      try {
+        const res = await fetch('/api/pipelines', { headers: window.authHeaders() });
+        if (res.ok) setRows(await res.json());
+      } catch {}
+    }, 4000);
+    return () => clearInterval(id);
+  }, [anyRunning]);
 
   if (loading) return (
     <div className="page fade-in">
@@ -15,6 +33,8 @@ function Pipelines() {
     </div>
   );
 
+  const list = rows || D.pipelines;
+
   return (
     <div className="page fade-in">
       <div className="page-h">
@@ -22,6 +42,7 @@ function Pipelines() {
           <h1 className="page-title">CI pipelines</h1>
           <div className="page-sub">Every CI run that touched your tests, alongside the manual results. Same timeline, one source of truth.</div>
         </div>
+        {anyRunning && <div className="card-sub" style={{alignSelf:"center"}}>● live — refreshing…</div>}
       </div>
 
       <div className="card" style={{marginBottom:14}}>
@@ -31,7 +52,7 @@ function Pipelines() {
             <div className="card-sub">CI pipeline results imported into ThoroTest</div>
           </div>
         </div>
-        {D.pipelines.length === 0 ? (
+        {list.length === 0 ? (
           <div className="empty" style={{padding:"48px 18px", textAlign:"center"}}>
             <div style={{fontSize:13, marginBottom:6}}>No pipeline runs yet.</div>
             <div className="mono dim" style={{fontSize:11}}>
@@ -53,7 +74,7 @@ function Pipelines() {
               </tr>
             </thead>
             <tbody>
-              {D.pipelines.map(p => (
+              {list.map(p => (
                 <tr key={p.id} style={{cursor:"pointer"}}>
                   <td>
                     <span style={{display:"inline-flex", width:18, height:18}}>

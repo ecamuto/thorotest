@@ -281,8 +281,8 @@ supported:
   import its JUnit artifact. See **[docs/github-actions-ci.md](docs/github-actions-ci.md)**
   for workflow requirements, token setup, and API usage.
 - **GitLab CI** — create a pipeline, poll it, and import its `test_report`
-  (jobs just need `artifacts: reports: junit:`). A local, dockerised demo lives
-  in **[demo/gitlab/](demo/gitlab/)**.
+  (jobs just need `artifacts: reports: junit:`). See **[docs/gitlab-ci.md](docs/gitlab-ci.md)**;
+  a local, dockerised demo lives in **[demo/gitlab/](demo/gitlab/)**.
 
 Each dispatch also appears on the **Pipelines** page (running → pass/fail, with
 commit, branch, and duration) — not only as an imported Run.
