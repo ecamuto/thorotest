@@ -52,6 +52,19 @@ function buildHash(view, testId, runId) {
 
 function App({ currentUser: initialUser, onLogout, onProfileUpdate }) {
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  // Theme is user-toggleable from the topbar and persisted (the Tweaks panel
+  // isn't reachable in the standalone app, so it can't own this).
+  const [theme, setTheme] = React.useState(() => {
+    try { return localStorage.getItem("tt-theme") || TWEAK_DEFAULTS.theme; }
+    catch (e) { return TWEAK_DEFAULTS.theme; }
+  });
+  const toggleTheme = React.useCallback(() => {
+    setTheme(t => {
+      const next = t === "dark" ? "light" : "dark";
+      try { localStorage.setItem("tt-theme", next); } catch (e) {}
+      return next;
+    });
+  }, []);
   const initial = parseHash(window.location.hash);
   const safeInitialView = (initial.view === "admin" && initialUser?.role !== "admin") ? "overview" : initial.view;
   const [view, setView] = useState(safeInitialView);
@@ -72,9 +85,9 @@ function App({ currentUser: initialUser, onLogout, onProfileUpdate }) {
 
   // Apply theme + density to <html>
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", tweaks.theme);
+    document.documentElement.setAttribute("data-theme", theme);
     document.documentElement.setAttribute("data-density", tweaks.density);
-  }, [tweaks.theme, tweaks.density]);
+  }, [theme, tweaks.density]);
 
   // Sync URL hash when view/id changes
   useEffect(() => {
@@ -205,7 +218,7 @@ function App({ currentUser: initialUser, onLogout, onProfileUpdate }) {
     <div className="app" data-screen-label={view}>
       <Sidebar current={view === "test-detail" ? "library" : view === "run-detail" ? "runs" : view} onNav={nav} onOpenTest={openTest} density={tweaks.density} currentUser={currentUser} onLogout={onLogout} />
       <div className="main">
-        {!hideTopbar && <Topbar crumbs={crumbs} actions={actions} />}
+        {!hideTopbar && <Topbar crumbs={crumbs} actions={actions} theme={theme} onToggleTheme={toggleTheme} />}
         <div className="content" style={hideTopbar ? {} : {}}>
           {body}
         </div>

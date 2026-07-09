@@ -223,8 +223,7 @@ function Sidebar({ current, onNav, onOpenTest, density, currentUser, onLogout })
   );
 }
 
-function Topbar({ crumbs, actions }) {
-  const { t } = useI18n();
+function Topbar({ crumbs, actions, theme, onToggleTheme }) {
   return (
     <div className="topbar">
       <div className="breadcrumb">
@@ -242,9 +241,13 @@ function Topbar({ crumbs, actions }) {
       </div>
       <div className="topbar-right">
         {actions}
-        <span className="kbd">⌘</span>
-        <span className="kbd">N</span>
-        <span className="muted" style={{fontSize:11.5, marginLeft:4}}>{t("common.newTest")}</span>
+        {onToggleTheme && (
+          <button className="btn ghost icon sm" onClick={onToggleTheme}
+                  title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+                  aria-label="Toggle theme">
+            <Icon name={theme === "dark" ? "sun" : "moon"} />
+          </button>
+        )}
       </div>
     </div>
   );
