@@ -160,6 +160,36 @@ def test_github_push_test_conflict(db, monkeypatch):
 
 # ── gitlab push_test ────────────────────────────────────────────
 
+def test_github_push_test_creates_new_file(db, monkeypatch):
+    class _New(_FakeGH):
+        def get_file_meta(self, owner, repo, path, ref):
+            return None, None   # file doesn't exist yet → create, no conflict
+
+    monkeypatch.setattr(github_sync, "GitHubClient", _New)
+    t = _make_test(db, source_body=None)   # never synced content
+    intg = models.Integration(id="i-new", name="GH", type="vcs_ci", icon="github",
+                              config={"repo_url": t.repo_url, "branch": "main"})
+    stats = github_sync.push_test(db, intg, t)
+    assert stats["committed"] is True
+    assert _FakeGH.instance.written["sha"] is None   # create path: no blob sha
+
+
+# ── gitlab push_test ────────────────────────────────────────────
+
+def test_gitlab_push_test_creates_new_file(db, monkeypatch):
+    class _New(_FakeGL):
+        def get_file_opt(self, project, path, ref):
+            return None   # file absent → POST (create)
+
+    monkeypatch.setattr(gitlab_sync, "GitLabClient", _New)
+    t = _make_test(db, id="TC-GLN", repo_url="https://gitlab.com/acme/web", source_body=None)
+    intg = models.Integration(id="i-gln", name="GL", type="vcs_ci", icon="gitlab",
+                              config={"provider": "gitlab", "repo_url": t.repo_url, "branch": "main"})
+    stats = gitlab_sync.push_test(db, intg, t)
+    assert stats["commit"] == "glnewsha"
+    assert _FakeGL.instance.written["update"] is False   # create, not update
+
+
 def test_gitlab_push_test_commits_and_updates_row(db, monkeypatch):
     monkeypatch.setattr(gitlab_sync, "GitLabClient", _FakeGL)
     t = _make_test(db, id="TC-GL", repo_url="https://gitlab.com/acme/web",
@@ -212,6 +242,21 @@ def test_push_endpoint_no_matching_integration(client, db):
     _make_test(db, id="TC-NOINT", repo_url="https://github.com/nomatch/repo")
     r = client.post("/api/tests/TC-NOINT/push-to-git")
     assert r.status_code == 400
+
+
+def test_find_vcs_integration_skips_jira(db):
+    # A jira integration must never be treated as the test's VCS source, even if
+    # its config happens to carry a matching repo_url.
+    db.add(models.Integration(id="jira", name="Jira", type="jira", icon="jira",
+                              config={"repo_url": "https://github.com/acme/web"}))
+    db.commit()
+    t = _make_test(db, id="TC-J", repo_url="https://github.com/acme/web")
+    assert git_push.find_vcs_integration(db, t) is None
+    # add the real vcs integration → now found
+    db.add(models.Integration(id="gh", name="GH", type="vcs_ci", icon="github",
+                              config={"repo_url": "https://github.com/acme/web"}))
+    db.commit()
+    assert git_push.find_vcs_integration(db, t).id == "gh"
 
 
 # ── A↔B link: CI run results attach to the YAML scheda ──────────

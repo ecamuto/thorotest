@@ -39,3 +39,56 @@ def test_upsert_pipeline_creates_then_updates(db):
     # None fields don't clobber existing values
     assert p.name == "GitLab pipeline #42"
     assert p.commit == "abc1234"
+
+
+# ── ci_run endpoint: dispatch + error paths ─────────────────────
+
+def _gl_integration(db, iid="int-gl"):
+    db.add(models.Integration(
+        id=iid, name="GitLab", type="vcs_ci", icon="gitlab",
+        config={"provider": "gitlab", "repo_url": "https://gitlab.com/acme/web",
+                "branch": "main", "token": "glpat-x"}))
+    db.commit()
+
+
+def test_ci_run_creates_running_pipeline_row(client, db, monkeypatch):
+    from backend.routers import ci as ci_router
+    monkeypatch.setattr(ci_router, "_do_dispatch_gitlab",
+                        lambda cfg: {"id": 99, "web_url": "http://x/99", "sha": "deadbeef123", "ref": "main"})
+    monkeypatch.setattr(ci_router, "_orchestrate_gitlab", lambda *a, **k: None)
+    _gl_integration(db)
+
+    r = client.post("/api/integrations/int-gl/ci/run", json={"run_name": "My run"})
+    assert r.status_code == 200, r.text
+    # a running row now shows on the pipelines page
+    p = db.query(models.Pipeline).filter_by(id="gl-pipeline-99").first()
+    assert p is not None
+    assert p.status == "running" and p.platform == "gitlab"
+    assert p.commit == "deadbee" and p.branch == "main"
+    assert p.name == "My run"
+
+
+def test_ci_run_unknown_integration_404(client, db):
+    r = client.post("/api/integrations/nope/ci/run", json={})
+    assert r.status_code == 404
+
+
+def test_ci_run_non_vcs_integration_400(client, db):
+    db.add(models.Integration(id="mystery", name="Mystery", type="vcs_ci", icon="plug",
+                              config={"repo_url": "https://example.com/a/b"}))
+    db.commit()
+    r = client.post("/api/integrations/mystery/ci/run", json={})
+    assert r.status_code == 400
+
+
+def test_ci_run_dispatch_failure_502(client, db, monkeypatch):
+    from backend.routers import ci as ci_router
+
+    def _boom(cfg):
+        raise RuntimeError("gitlab down")
+    monkeypatch.setattr(ci_router, "_do_dispatch_gitlab", _boom)
+    _gl_integration(db, "int-gl-boom")
+    r = client.post("/api/integrations/int-gl-boom/ci/run", json={})
+    assert r.status_code == 502
+    # no pipeline row left behind on dispatch failure
+    assert db.query(models.Pipeline).filter(models.Pipeline.id.like("gl-pipeline-%")).count() == 0
