@@ -215,7 +215,7 @@ def seed_db():
 
         integrations = [
             models.Integration(id="int-github", name="GitHub", type="vcs_ci", icon="github", status="active", configured_by="acme/web · main", last_sync="just now"),
-            models.Integration(id="int-gitlab", name="GitLab CI", type="ci", icon="gitlab", status="active", configured_by="external runner", last_sync="3m ago"),
+            models.Integration(id="int-gitlab", name="GitLab", type="vcs_ci", icon="gitlab", status="active", configured_by="acme/web · main", last_sync="5m ago"),
             models.Integration(id="int-jenkins", name="Jenkins", type="ci", icon="jenkins", status="active", configured_by="ci.acme.test", last_sync="1h ago"),
             models.Integration(id="int-playwright", name="Playwright", type="runner", icon="plug", status="active", configured_by="playwright.config.ts", last_sync="12m ago"),
             models.Integration(id="int-cypress", name="Cypress", type="runner", icon="plug", status="active", configured_by="cypress.config.js", last_sync="10m ago"),

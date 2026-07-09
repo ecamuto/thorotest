@@ -1,0 +1,9 @@
+id: TC-GL-101
+title: "Promo code applies discount at checkout"
+type: e2e
+runner: playwright
+status: pending
+priority: P2
+owner: qa@acme.com
+tags: [checkout, payment]
+folder: E2E/Checkout
