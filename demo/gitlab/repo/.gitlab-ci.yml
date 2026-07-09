@@ -1,0 +1,28 @@
+# Demo pipeline: a backend (pytest) job and an e2e (Playwright) job, each
+# publishing a JUnit report. GitLab merges both into the pipeline's test_report,
+# which ThoroTest's "Run CI" imports as one run. `artifacts: when: always` keeps
+# the reports flowing even when a job goes red, so the pass/fail breakdown still
+# reaches ThoroTest.
+stages: [test]
+
+pytest:
+  image: python:3.12-slim
+  stage: test
+  script:
+    - pip install --quiet pytest
+    - pytest ci_tests/ --junitxml=report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+
+playwright:
+  image: mcr.microsoft.com/playwright:v1.49.0-jammy
+  stage: test
+  script:
+    - npm install --no-save @playwright/test@1.49.0
+    - npx playwright test
+  artifacts:
+    when: always
+    reports:
+      junit: e2e-report.xml

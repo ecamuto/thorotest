@@ -1,0 +1,9 @@
+id: TC-GL-100
+title: "Login with valid credentials"
+type: e2e
+runner: playwright
+status: passed
+priority: P1
+owner: qa@acme.com
+tags: [smoke, auth]
+folder: E2E/Auth

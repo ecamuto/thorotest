@@ -1,0 +1,54 @@
+# Local GitLab CE + a docker-executor runner, for demoing ThoroTest's GitLab
+# integration end-to-end (Tests-as-Code sync + Run CI → test_report import).
+#
+#   cd demo/gitlab && docker compose up -d      # ~4GB RAM, first boot 3-5 min
+#   ./setup.sh                                   # project + repo + runner + token
+#
+# Web/API: http://localhost:8929   (external_url must match the port).
+name: thorotest-gitlab-demo
+
+services:
+  gitlab:
+    image: gitlab/gitlab-ce:17.5.1-ce.0
+    hostname: localhost
+    restart: unless-stopped
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://localhost:8929'
+        gitlab_rails['initial_root_password'] = 'thorotest-demo-1234'
+        gitlab_rails['gitlab_shell_ssh_port'] = 2224
+        # Trim memory footprint for a laptop demo.
+        puma['worker_processes'] = 2
+        sidekiq['max_concurrency'] = 6
+        prometheus_monitoring['enable'] = false
+        gitlab_rails['gitlab_default_projects_features_container_registry'] = false
+    ports:
+      - "8929:8929"
+      - "2224:2224"
+    shm_size: "256m"
+    volumes:
+      - gitlab-config:/etc/gitlab
+      - gitlab-logs:/var/log/gitlab
+      - gitlab-data:/var/opt/gitlab
+    healthcheck:
+      test: ["CMD", "/opt/gitlab/bin/gitlab-healthcheck", "--fail", "--max-time", "10"]
+      interval: 30s
+      timeout: 15s
+      retries: 30
+      start_period: 300s
+
+  runner:
+    image: gitlab/gitlab-runner:v17.5.1
+    restart: unless-stopped
+    depends_on:
+      - gitlab
+    volumes:
+      - runner-config:/etc/gitlab-runner
+      # docker executor talks to the host Docker daemon.
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  gitlab-config:
+  gitlab-logs:
+  gitlab-data:
+  runner-config:
