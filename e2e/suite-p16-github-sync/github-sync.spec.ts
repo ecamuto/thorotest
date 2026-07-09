@@ -104,20 +104,22 @@ test.describe('Suite P16 — Tests as Code (GitHub sync)', () => {
     await cleanupGithub(page, token);
   });
 
-  // GHS-04 · Sync against a non-github repo surfaces an error in the UI [P1]
-  test('GHS-04: sync of a non-github repo shows an error message', async ({ page }) => {
+  // GHS-04 · Sync against an unroutable repo surfaces an error in the UI [P1]
+  // (github.com and gitlab.com are both supported now; an unknown host with no
+  // explicit provider can't be routed → 400.)
+  test('GHS-04: sync of an unroutable repo shows an error message', async ({ page }) => {
     await loginAs(page, 'marco@acme.com');
     const token = await getToken(page);
     await cleanupGithub(page, token);
 
-    const id = `int-e2e-ghs-gl-${Date.now()}`;
+    const id = `int-e2e-ghs-unknown-${Date.now()}`;
     await page.request.post(`${BASE}/api/integrations`, {
       data: { id, name: 'GitHub', type: 'vcs_ci', icon: 'github',
-              config: { repo_url: 'https://gitlab.com/acme/web-e2e-ghs', branch: 'main', path: '' } },
+              config: { repo_url: 'https://example.com/acme/web-e2e-ghs', branch: 'main', path: '' } },
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     });
 
-    // API contract: non-github repo → 400
+    // API contract: unknown provider → 400
     const apiSync = await page.request.post(`${BASE}/api/integrations/${id}/sync`, { headers: { Authorization: `Bearer ${token}` } });
     expect(apiSync.status()).toBe(400);
 
@@ -125,7 +127,7 @@ test.describe('Suite P16 — Tests as Code (GitHub sync)', () => {
     await page.goto('/#/integrations');
     const row = page.locator('tr').filter({ hasText: 'GitHub' }).filter({ has: page.locator('button:has-text("Sync")') }).first();
     await row.locator('button:has-text("Sync")').click();
-    await expect(row.locator('text=/github repo url/i')).toBeVisible({ timeout: 8000 });
+    await expect(row.locator('text=/provider/i')).toBeVisible({ timeout: 8000 });
 
     await cleanupGithub(page, token);
   });

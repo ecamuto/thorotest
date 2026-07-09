@@ -2,7 +2,7 @@
 
 const PROVIDERS = [
   { id: "github",     name: "GitHub",      icon: "github",  type: "vcs_ci",        configuredBy: "" },
-  { id: "gitlab",     name: "GitLab CI",   icon: "gitlab",  type: "ci",            configuredBy: "external runner" },
+  { id: "gitlab",     name: "GitLab",      icon: "gitlab",  type: "vcs_ci",        configuredBy: "" },
   { id: "jenkins",    name: "Jenkins",     icon: "jenkins", type: "ci",            configuredBy: "" },
   { id: "playwright", name: "Playwright",  icon: "plug",    type: "runner",        configuredBy: "playwright.config.ts" },
   { id: "cypress",    name: "Cypress",     icon: "plug",    type: "runner",        configuredBy: "cypress.config.js" },
@@ -31,15 +31,21 @@ const MODAL_BOX = {
   maxHeight: "90vh", overflowY: "auto",
 };
 
-function GithubConfigFields({ form, setForm, tokenSet }) {
+function VcsConfigFields({ form, setForm, tokenSet, provider = "github" }) {
   const fld = { marginBottom:12 };
   const lbl = { display:"block", fontSize:12, fontWeight:500, color:"var(--text-muted)", marginBottom:6 };
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
+  const isGitlab = provider === "gitlab";
+  const repoPlaceholder = isGitlab ? "https://gitlab.com/group/repo" : "https://github.com/org/repo";
+  const tokenHint = tokenSet ? "(leave blank to keep current)"
+    : isGitlab ? "(private repos + Run CI need the api scope)"
+               : "(private repos + Run CI need the actions scope)";
+  const tokenPlaceholder = tokenSet ? "••••••••" : isGitlab ? "glpat-…" : "ghp_…";
   return (
     <>
       <div style={fld}>
         <label style={lbl}>Repository URL</label>
-        <input className="login-input" value={form.repo_url} onChange={set("repo_url")} placeholder="https://github.com/org/repo" style={{width:"100%"}} />
+        <input className="login-input" value={form.repo_url} onChange={set("repo_url")} placeholder={repoPlaceholder} style={{width:"100%"}} />
       </div>
       <div style={{display:"flex", gap:8}}>
         <div style={{...fld, flex:1}}>
@@ -52,19 +58,26 @@ function GithubConfigFields({ form, setForm, tokenSet }) {
         </div>
       </div>
       <div style={fld}>
-        <label style={lbl}>Personal access token {tokenSet ? "(leave blank to keep current)" : "(private repos + Run CI need the actions scope)"}</label>
-        <input className="login-input" type="password" value={form.token} onChange={set("token")} placeholder={tokenSet ? "••••••••" : "ghp_…"} autoComplete="off" style={{width:"100%"}} />
+        <label style={lbl}>Personal access token {tokenHint}</label>
+        <input className="login-input" type="password" value={form.token} onChange={set("token")} placeholder={tokenPlaceholder} autoComplete="off" style={{width:"100%"}} />
       </div>
-      <div style={{display:"flex", gap:8}}>
-        <div style={{...fld, flex:1}}>
-          <label style={lbl}>Workflow (for Run CI)</label>
-          <input className="login-input" value={form.workflow || ""} onChange={set("workflow")} placeholder="ci.yml" style={{width:"100%"}} />
+      {isGitlab ? (
+        <div style={fld}>
+          <label style={lbl}>API base URL (self-hosted only — leave blank for gitlab.com)</label>
+          <input className="login-input" value={form.api_base || ""} onChange={set("api_base")} placeholder="http://localhost:8929/api/v4" style={{width:"100%"}} />
         </div>
-        <div style={{...fld, flex:1}}>
-          <label style={lbl}>JUnit artifact name</label>
-          <input className="login-input" value={form.junit_artifact || ""} onChange={set("junit_artifact")} placeholder="junit" style={{width:"100%"}} />
+      ) : (
+        <div style={{display:"flex", gap:8}}>
+          <div style={{...fld, flex:1}}>
+            <label style={lbl}>Workflow (for Run CI)</label>
+            <input className="login-input" value={form.workflow || ""} onChange={set("workflow")} placeholder="ci.yml" style={{width:"100%"}} />
+          </div>
+          <div style={{...fld, flex:1}}>
+            <label style={lbl}>JUnit artifact name</label>
+            <input className="login-input" value={form.junit_artifact || ""} onChange={set("junit_artifact")} placeholder="junit" style={{width:"100%"}} />
+          </div>
         </div>
-      </div>
+      )}
     </>
   );
 }
@@ -109,7 +122,7 @@ function IntRow({ intg, onEdit, onDelete, onSync }) {
   const [ciMsg, setCiMsg] = React.useState(null);
   const menuRef = React.useRef(null);
   const canSync = !!(intg.config && (intg.config.repo_url || (intg.type === "jira" && intg.config.base_url)));
-  const isGithub = !!(intg.config && intg.config.repo_url) && intg.type !== "jira";
+  const isVcs = !!(intg.config && intg.config.repo_url) && intg.type !== "jira";
 
   const doSync = async () => {
     setSyncing(true); setSyncMsg(null);
@@ -171,8 +184,8 @@ function IntRow({ intg, onEdit, onDelete, onSync }) {
         {ciMsg && <div style={{fontSize:10.5, color: ciMsg.ok ? "var(--accent)" : "var(--fail)"}}>CI: {ciMsg.text}</div>}
       </td>
       <td style={{position:"relative", textAlign:"right", whiteSpace:"nowrap"}} ref={menuRef}>
-        {isGithub && (
-          <button className="btn sm" style={{marginRight:6}} disabled={ciBusy} onClick={doCI} title="Dispatch the GitHub Actions workflow and import its results">
+        {isVcs && (
+          <button className="btn sm" style={{marginRight:6}} disabled={ciBusy} onClick={doCI} title="Trigger the CI pipeline and import its results">
             {ciBusy ? "Running…" : "Run CI"}
           </button>
         )}
@@ -219,14 +232,14 @@ function AddIntegrationModal({ onClose, onSaved, existingIds }) {
   const [err, setErr] = React.useState(null);
   useEscapeClose(onClose);
 
-  const isGithub = provider?.id === "github";
+  const isVcs = provider?.id === "github" || provider?.id === "gitlab";
   const isJira = provider?.id === "jira";
 
   const pick = (p) => {
     setProvider(p);
     setForm({
       configured_by: p.configuredBy, repo_url: "", branch: "main", path: "", token: "",
-      workflow: "ci.yml", junit_artifact: "junit",
+      workflow: "ci.yml", junit_artifact: "junit", api_base: "",
       base_url: "", email: "", api_token: "", project_key: "", issue_type_bug: "Bug",
     });
     setStep("configure");
@@ -240,15 +253,21 @@ function AddIntegrationModal({ onClose, onSaved, existingIds }) {
         id, name: provider.name, type: provider.type, icon: provider.icon,
         configured_by: form.configured_by || null, last_sync: null,
       };
-      if (isGithub) {
+      if (isVcs) {
         payload.config = {
+          provider: provider.id,
           repo_url: form.repo_url.trim(),
           branch: form.branch.trim() || "main",
           path: form.path.trim(),
           token: form.token.trim(),
-          workflow: (form.workflow || "").trim() || "ci.yml",
-          junit_artifact: (form.junit_artifact || "").trim() || "junit",
         };
+        if (provider.id === "gitlab") {
+          const apiBase = (form.api_base || "").trim();
+          if (apiBase) payload.config.api_base = apiBase;
+        } else {
+          payload.config.workflow = (form.workflow || "").trim() || "ci.yml";
+          payload.config.junit_artifact = (form.junit_artifact || "").trim() || "junit";
+        }
       } else if (isJira) {
         payload.config = {
           base_url: form.base_url.trim(),
@@ -306,7 +325,7 @@ function AddIntegrationModal({ onClose, onSaved, existingIds }) {
                 style={{width:"100%"}}
               />
             </div>
-            {isGithub && <GithubConfigFields form={form} setForm={setForm} tokenSet={false} />}
+            {isVcs && <VcsConfigFields form={form} setForm={setForm} tokenSet={false} provider={provider.id} />}
             {isJira && <JiraConfigFields form={form} setForm={setForm} tokenSet={false} />}
             {err && <div style={{fontSize:12, color:"var(--fail)", marginBottom:8}}>{err}</div>}
             <div style={{display:"flex", gap:8}}>
@@ -323,14 +342,16 @@ function AddIntegrationModal({ onClose, onSaved, existingIds }) {
 function EditIntegrationModal({ intg, onClose, onSaved }) {
   useEscapeClose(onClose);
   const cfg = intg.config || {};
-  const isGithub = intg.icon === "github" || !!cfg.repo_url;
   const isJira = intg.type === "jira";
+  const providerId = cfg.provider || (intg.icon === "gitlab" ? "gitlab" : "github");
+  const isVcs = !isJira && (!!cfg.repo_url || intg.icon === "github" || intg.icon === "gitlab");
   const tokenSet = !!cfg.token_set;
   const apiTokenSet = !!cfg.api_token_set;
   const [form, setForm] = React.useState({
     name: intg.name, configured_by: intg.configured_by || "", status: intg.status,
     repo_url: cfg.repo_url || "", branch: cfg.branch || "main", path: cfg.path || "", token: "",
     workflow: cfg.workflow || "ci.yml", junit_artifact: cfg.junit_artifact || "junit",
+    api_base: cfg.api_base || "",
     base_url: cfg.base_url || "", email: cfg.email || "", api_token: "",
     project_key: cfg.project_key || "", issue_type_bug: cfg.issue_type_bug || "Bug",
   });
@@ -343,16 +364,21 @@ function EditIntegrationModal({ intg, onClose, onSaved }) {
       const payload = {
         name: form.name, configured_by: form.configured_by || null, status: form.status,
       };
-      if (isGithub) {
+      if (isVcs) {
         // Empty token is preserved server-side (token is never wiped by a blank field).
         payload.config = {
+          provider: providerId,
           repo_url: form.repo_url.trim(),
           branch: form.branch.trim() || "main",
           path: form.path.trim(),
           token: form.token.trim(),
-          workflow: (form.workflow || "").trim() || "ci.yml",
-          junit_artifact: (form.junit_artifact || "").trim() || "junit",
         };
+        if (providerId === "gitlab") {
+          payload.config.api_base = (form.api_base || "").trim();
+        } else {
+          payload.config.workflow = (form.workflow || "").trim() || "ci.yml";
+          payload.config.junit_artifact = (form.junit_artifact || "").trim() || "junit";
+        }
       } else if (isJira) {
         // Empty api_token is preserved server-side (never wiped by a blank field).
         payload.config = {
@@ -389,7 +415,7 @@ function EditIntegrationModal({ intg, onClose, onSaved }) {
             <option value="error">Error</option>
           </select>
         </div>
-        {isGithub && <GithubConfigFields form={form} setForm={setForm} tokenSet={tokenSet} />}
+        {isVcs && <VcsConfigFields form={form} setForm={setForm} tokenSet={tokenSet} provider={providerId} />}
         {isJira && <JiraConfigFields form={form} setForm={setForm} tokenSet={apiTokenSet} />}
         {err && <div style={{fontSize:12, color:"var(--fail)", marginBottom:8}}>{err}</div>}
         <div style={{display:"flex", gap:8}}>

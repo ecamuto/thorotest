@@ -6,7 +6,9 @@ from .. import models
 from ..schemas import IntegrationOut, IntegrationCreate, IntegrationUpdate
 from ..auth_utils import require_role, get_current_user
 from ..github_sync import sync_integration
+from ..gitlab_sync import sync_integration as sync_gitlab_integration
 from ..jira_sync import sync_jira_requirements
+from ..vcs import detect_provider
 
 router = APIRouter(tags=["integrations"])
 
@@ -68,6 +70,8 @@ def sync_integration_now(intg_id: str, db: Session = Depends(get_db), _: models.
     try:
         if intg.type == "jira":
             stats = sync_jira_requirements(db, intg)
+        elif detect_provider(intg.config or {}) == "gitlab":
+            stats = sync_gitlab_integration(db, intg)
         else:
             # sync_integration validates the config points at a github.com repo.
             stats = sync_integration(db, intg)
