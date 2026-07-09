@@ -2,6 +2,35 @@
 
 function Pipelines() {
   const { data: D, loading, error } = useInitialData();
+  const [rows, setRows] = React.useState(null);
+
+  // Seed the table from initial-data on first load.
+  React.useEffect(() => { if (D?.pipelines) setRows(D.pipelines); }, [D]);
+
+  // While a dispatch is still running, poll so it flips to pass/fail live
+  // (a "Run CI" writes a running row that finishes a bit later).
+  const anyRunning = (rows || []).some(p => p.status === "running");
+  React.useEffect(() => {
+    if (!anyRunning) return;
+    const id = setInterval(async () => {
+      try {
+        const res = await fetch('/api/pipelines', { headers: window.authHeaders() });
+        if (res.ok) setRows(await res.json());
+      } catch {}
+    }, 4000);
+    return () => clearInterval(id);
+  }, [anyRunning]);
+
+  async function del(id, name, e) {
+    e.stopPropagation();   // don't also open the run URL
+    if (!window.confirm(`Remove pipeline "${name}" from the list? (the run on the CI provider is untouched)`)) return;
+    try {
+      await TH_API.deletePipeline(id);
+      setRows(rs => (rs || []).filter(p => p.id !== id));
+    } catch (err) {
+      window.alert(err.message);
+    }
+  }
 
   if (loading) return (
     <div className="page fade-in">
@@ -15,6 +44,8 @@ function Pipelines() {
     </div>
   );
 
+  const list = rows || D.pipelines;
+
   return (
     <div className="page fade-in">
       <div className="page-h">
@@ -22,6 +53,7 @@ function Pipelines() {
           <h1 className="page-title">CI pipelines</h1>
           <div className="page-sub">Every CI run that touched your tests, alongside the manual results. Same timeline, one source of truth.</div>
         </div>
+        {anyRunning && <div className="card-sub" style={{alignSelf:"center"}}>● live — refreshing…</div>}
       </div>
 
       <div className="card" style={{marginBottom:14}}>
@@ -31,7 +63,7 @@ function Pipelines() {
             <div className="card-sub">CI pipeline results imported into ThoroTest</div>
           </div>
         </div>
-        {D.pipelines.length === 0 ? (
+        {list.length === 0 ? (
           <div className="empty" style={{padding:"48px 18px", textAlign:"center"}}>
             <div style={{fontSize:13, marginBottom:6}}>No pipeline runs yet.</div>
             <div className="mono dim" style={{fontSize:11}}>
@@ -50,23 +82,34 @@ function Pipelines() {
                 <th style={{width:100}}>Branch</th>
                 <th style={{width:120}}>Author</th>
                 <th style={{width:100}}>When</th>
+                <th style={{width:40}}></th>
               </tr>
             </thead>
             <tbody>
-              {D.pipelines.map(p => (
-                <tr key={p.id} style={{cursor:"pointer"}}>
+              {list.map(p => (
+                <tr key={p.id}
+                    style={p.url ? {cursor:"pointer"} : undefined}
+                    title={p.url ? "Open the run on the CI provider" : undefined}
+                    onClick={p.url ? () => window.open(p.url, "_blank", "noopener,noreferrer") : undefined}>
                   <td>
                     <span style={{display:"inline-flex", width:18, height:18}}>
                       {p.platform === "github" ? I.github : p.platform === "gitlab" ? I.gitlab : I.jenkins}
                     </span>
                   </td>
-                  <td>{p.name}</td>
+                  <td>{p.name}{p.url && <span className="dim" style={{marginLeft:6, fontSize:11}}>↗</span>}</td>
                   <td><StatusBadge s={p.status} /></td>
                   <td className="mono dim">{p.duration}</td>
                   <td className="mono" style={{color:"var(--accent)"}}>{p.commit}</td>
                   <td className="mono dim">{p.branch}</td>
                   <td className="mono dim">{p.author}</td>
                   <td className="mono dim">{p.when}</td>
+                  <td>
+                    <button className="btn ghost icon sm" title="Remove from list"
+                            style={{color:"var(--fail)"}}
+                            onClick={e => del(p.id, p.name, e)}>
+                      <Icon name="x" />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

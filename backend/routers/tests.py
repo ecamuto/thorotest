@@ -13,11 +13,16 @@ from ..auth_utils import require_role, get_current_user
 from ..notifications import _notify_comment_event
 from ..audit_utils import log_event, EVT_TEST_CREATED, EVT_TEST_UPDATED, EVT_TEST_DELETED
 from ..activity_utils import log_activity, actor_name
+from ..vcs import detect_provider
+from ..git_push import find_vcs_integration, PushConflict
+from ..github_sync import push_test as github_push_test
+from ..gitlab_sync import push_test as gitlab_push_test
 from ._pagination import paginate, MAX_LIMIT
 
 router = APIRouter(tags=["tests"])
 
 WRITE_ROLES = require_role("admin", "manager", "tester")
+GIT_PUSH_ROLES = require_role("admin", "manager")
 ADMIN_ONLY = require_role("admin")
 
 
@@ -161,6 +166,43 @@ def update_test(test_id: str, payload: TestUpdate, db: Session = Depends(get_db)
         target_id=str(t.id),
     )
     return t
+
+
+@router.post("/tests/{test_id}/push-to-git")
+def push_test_to_git(test_id: str, db: Session = Depends(get_db),
+                     current_user: models.User = GIT_PUSH_ROLES):
+    """Write a git-linked test's current state back to its source file (reverse
+    of "Tests as Code" sync). 409 if the file changed on git since last sync."""
+    t = db.query(models.Test).filter(models.Test.id == test_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail="Test not found")
+    if not t.source_path or not t.repo_url:
+        raise HTTPException(status_code=400, detail="Test is not linked to a git source")
+    intg = find_vcs_integration(db, t)
+    if not intg:
+        raise HTTPException(status_code=400,
+                            detail="No VCS integration matches this test's repo — configure one first")
+    try:
+        if detect_provider(intg.config or {}) == "gitlab":
+            stats = gitlab_push_test(db, intg, t)
+        else:
+            stats = github_push_test(db, intg, t)
+    except PushConflict as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    log_activity(db, actor_name(current_user), "pushed", test_id, f"to git — {t.title}")
+    log_event(
+        EVT_TEST_UPDATED,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        description=f"{current_user.email} pushed test '{t.title}' to git ({stats['path']} @ {stats['commit'][:7]})",
+        target_type="test",
+        target_id=str(t.id),
+    )
+    return {"ok": True, **stats}
 
 
 @router.delete("/tests/{test_id}", status_code=204)

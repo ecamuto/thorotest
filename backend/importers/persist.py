@@ -11,9 +11,16 @@ from .. import models
 from .base import ImportResult
 
 
-def persist_import_result(db, result: ImportResult, provider: str, conflict: str = "skip") -> dict:
+def persist_import_result(db, result: ImportResult, provider: str, conflict: str = "skip",
+                          sync_status: bool = False) -> dict:
     """Write tests/runs/defects from `result`. `conflict` = skip | overwrite |
-    rename. Returns a stats dict. Commits the session."""
+    rename. Returns a stats dict. Commits the session.
+
+    When `sync_status` is True, each test a run case links to has its own
+    `status` advanced to that case's result — so a real CI run updates the
+    test's current status (last case wins). Off by default: file imports of a
+    plain results file shouldn't silently rewrite test statuses; the CI
+    collectors opt in so a pipeline result is the source of truth for status."""
     now = datetime.now(timezone.utc).isoformat()
     stats = {"folders": 0, "tests": 0, "runs": 0, "defects": 0, "skipped": 0}
 
@@ -180,6 +187,11 @@ def persist_import_result(db, result: ImportResult, provider: str, conflict: str
             if not test_id:
                 continue
             db.add(models.RunCase(run_id=rid, test_id=test_id, status=case.status))
+            if sync_status:
+                linked = db.query(models.Test).filter(models.Test.id == test_id).first()
+                if linked is not None:
+                    linked.status = case.status
+                    linked.last_run_at = now
 
         stats["runs"] += 1
 

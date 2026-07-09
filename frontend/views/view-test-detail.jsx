@@ -319,7 +319,8 @@ function DefinitionTab({ test, currentUser }) {
         </div>
 
         {/* YAML source — rendered only when this test is synced from git */}
-        {test.source_path && <YamlSourceCard test={test} />}
+        {test.source_path && <YamlSourceCard test={test}
+          onPushed={patch => setTest(t => ({...t, ...patch}))} />}
       </div>
 
       {/* Side column — keep unchanged from original */}
@@ -369,7 +370,9 @@ function Detail({label, value, mono}) {
   );
 }
 
-function YamlSourceCard({test}) {
+function YamlSourceCard({test, onPushed}) {
+  const [pushing, setPushing] = useState(false);
+  const [msg, setMsg] = useState(null);   // {kind: "ok"|"err", text}
   const ref = test.source_ref || "";
   const shortRef = ref.slice(0, 7);
   // {repo_url}/blob/{ref}/{path} → exact file at the synced commit on GitHub.
@@ -379,6 +382,21 @@ function YamlSourceCard({test}) {
   const synced = test.source_synced_at
     ? new Date(test.source_synced_at).toLocaleString()
     : null;
+
+  async function push() {
+    setPushing(true);
+    setMsg(null);
+    try {
+      const r = await TH_API.pushTestToGit(test.id);
+      onPushed && onPushed({ source_ref: r.commit, source_synced_at: new Date().toISOString() });
+      setMsg({ kind: "ok", text: `Pushed · ${(r.commit || "").slice(0, 7)}` });
+    } catch (e) {
+      setMsg({ kind: "err", text: e.message });
+    } finally {
+      setPushing(false);
+    }
+  }
+
   return (
     <div className="card">
       <div className="card-h">
@@ -387,12 +405,22 @@ function YamlSourceCard({test}) {
           synced from git{shortRef ? ` · ${shortRef}` : ""}{synced ? ` · ${synced}` : ""}
         </div>
         <div className="spacer" />
+        <button className="btn sm" onClick={push} disabled={pushing}
+                title="Commit this test's current state back to its source file on git">
+          <Icon name="upload" /> {pushing ? "Pushing…" : "Push to git"}
+        </button>
         {ghUrl && (
           <a className="btn sm" href={ghUrl} target="_blank" rel="noopener noreferrer">
             <Icon name="github" /> View on GitHub
           </a>
         )}
       </div>
+      {msg && (
+        <div style={{padding:"8px 14px 0", fontSize:12,
+                     color: msg.kind === "ok" ? "var(--green, #2e7d32)" : "var(--red, #c62828)"}}>
+          {msg.text}
+        </div>
+      )}
       <div style={{padding:14}}>
         {test.source_body
           ? <pre className="code"><code>{test.source_body}</code></pre>

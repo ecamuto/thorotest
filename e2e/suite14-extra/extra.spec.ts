@@ -288,9 +288,15 @@ test.describe('Suite 14 — Extra Coverage, Edge Cases & Library Gaps', () => {
   // EXTRA-17 · Pipelines — verify data from API not hardcoded [P2]
   test('EXTRA-17: pipelines page shows data from /api/initial-data', async ({ page }) => {
     await loginAs(page, 'marco@acme.com');
-
-    // Verify initial-data has pipelines
     const token = await getToken(page);
+
+    // Pipelines aren't seeded, so record one via the API (as CI would), then
+    // verify the page renders exactly what the API returns — not hardcoded.
+    await page.request.post(`${BASE}/api/pipelines`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { id: 'wf-e2e-1', name: 'e2e.yml — check', platform: 'github', status: 'pass' },
+    });
+
     const res = await page.request.get(`${BASE}/api/initial-data`, {
       headers: { Authorization: `Bearer ${token}` },
     });

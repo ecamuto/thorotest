@@ -48,7 +48,7 @@ cp .env.example .env
 make docker-up-sqlite
 ```
 
-Database is created automatically on first run. Seed data: 19 test cases across 12 folders, 11 runs, 6 pipelines, 9 defects.
+Database is created automatically on first run. Seed data: 19 test cases across 12 folders, 11 runs, 9 defects. Pipelines are not seeded — the page fills from real CI runs (Configure ▸ Integrations ▸ Run CI).
 
 ---
 
@@ -131,18 +131,25 @@ Docker deployments.
 
 ---
 
-## Tests as Code (GitHub sync)
+## Tests as Code (GitHub + GitLab sync)
 
-Keep automated tests defined as YAML in a Git repo and mirror them into ThoroTest, read-only (Git is the source of truth). The test-detail page then shows the real file path, synced commit, raw YAML, and a **View on GitHub** link that points to the exact file at the synced commit.
+Keep tests defined as YAML in a Git repo and mirror them into ThoroTest. Works with **GitHub** (`github.com`) and **GitLab** (`gitlab.com` or self-hosted). The test-detail page shows the real file path, synced commit, raw YAML, and a link to the exact file at that commit.
+
+Sync is **two-way**:
+
+- **Pull** (Git → ThoroTest): reads the YAML schede and creates/updates tests.
+- **Push** (ThoroTest → Git): the test-detail YAML card has a **Push to git** button that commits the test's current state back to its source file. A conflict guard returns **409** if the file changed on Git since the last sync — re-sync first so you don't overwrite a change made on Git.
 
 ### Setup
 
-1. **Settings → Integrations → Add → GitHub**
+1. **Settings → Integrations → Add → GitHub** (or **GitLab**)
 2. Fill in:
-   - **Repository URL** — `https://github.com/acme/web`
+   - **Repository URL** — `https://github.com/acme/web` or `https://gitlab.com/acme/web`
+   - **Provider** — `github` / `gitlab`. Inferred from the host for the public clouds; **required** for self-hosted GitLab (any other host).
+   - **API base** _(GitLab only, optional)_ — e.g. `http://gitlab.internal/api/v4`; derived from the repo URL when omitted.
    - **Branch** — e.g. `main`
    - **Path** — folder holding the YAML tests, e.g. `tests/`
-   - **Personal access token** — only needed for private repos (`contents: read` scope). Stored in the integration config; never returned to clients (the API reports only `token_set: true`).
+   - **Personal access token** — needed for private repos and for **Push to git** (GitHub `contents: write`, GitLab `api`). Stored in the integration config; never returned to clients (the API reports only `token_set: true`).
 3. Click **Sync** on the integration row. ThoroTest reads every `*.yml` / `*.yaml` under the path at the latest commit, then creates/updates the matching tests and caches the file contents + commit sha.
 
 Re-syncing is idempotent: tests are matched by their YAML `id` (or, when absent, by repo + file path), so a second sync updates in place instead of duplicating.
@@ -154,7 +161,6 @@ id: TC-2301                       # stable id, reused as the test's primary key 
 title: "Stripe card charge succeeds on test card"
 type: automated                   # automated | manual  (aliases: e2e/auto/unit → automated)
 runner: playwright
-status: pending                   # pass/passed → pass, etc.
 priority: high                    # low | med | high | critical  (aliases: P0–P3)
 owner: anna@example.com
 tags: [smoke, payment]
@@ -163,9 +169,12 @@ folder: Checkout/Payment          # "/"-separated folder hierarchy, auto-created
 
 Only `title` is required. Malformed files are skipped and reported in the sync result (`warnings`), not fatal.
 
-### Endpoint
+**Status is not a YAML field.** A test's status is owned by real CI run results, not a hand-written value, so sync never reads a `status:` from the file and push never writes one back. See **[CI status link](#linking-schede-to-ci-results)** below for how run results flow onto the scheda.
 
-`POST /api/integrations/{id}/sync` (admin/manager) → `{ created, updated, skipped, commit, files, warnings, last_sync }`. Sync is restricted to `github.com` repos.
+### Endpoints
+
+- `POST /api/integrations/{id}/sync` (admin/manager) → `{ created, updated, skipped, commit, files, warnings, last_sync }`. Routes to GitHub or GitLab by the integration's provider.
+- `POST /api/tests/{id}/push-to-git` (admin/manager) → `{ ok, committed, commit, path, branch }`. **409** when the file diverged on Git; **400** when the test has no Git source or no integration matches its repo.
 
 ---
 
@@ -262,12 +271,35 @@ stable id, matching falls back to `(title, folder)`.
 
 ---
 
-## GitHub Actions CI
+## CI: run pipelines and import results
 
-Trigger a project's GitHub Actions workflow from ThoroTest and import its JUnit
-results automatically when the run finishes (Configure ▸ Integrations ▸ **Run
-CI**). See **[docs/github-actions-ci.md](docs/github-actions-ci.md)** for the
-workflow requirements, token setup, and API usage.
+Trigger a project's pipeline from ThoroTest and import its results automatically
+when the run finishes (Configure ▸ Integrations ▸ **Run CI**). Both providers are
+supported:
+
+- **GitHub Actions** — dispatch a `workflow_dispatch` workflow, then download and
+  import its JUnit artifact. See **[docs/github-actions-ci.md](docs/github-actions-ci.md)**
+  for workflow requirements, token setup, and API usage.
+- **GitLab CI** — create a pipeline, poll it, and import its `test_report`
+  (jobs just need `artifacts: reports: junit:`). See **[docs/gitlab-ci.md](docs/gitlab-ci.md)**;
+  a local, dockerised demo lives in **[demo/gitlab/](demo/gitlab/)**.
+
+Each dispatch also appears on the **Pipelines** page (running → pass/fail, with
+commit, branch, and duration) — not only as an imported Run.
+
+### Linking schede to CI results
+
+A CI run's results are attached to the **same** test row the YAML scheda created
+(no duplicate), and the scheda's status is advanced to the real run result. The
+link is a correlation id: put the scheda's `id` in the automated test's name (or
+class), e.g. a Playwright title `login with valid credentials [TC-GL-100]` or a
+trailing `..._TC_GL_100`. On import, ThoroTest extracts that `TC-…` token and
+matches it to the scheda. Tests without a token still import as their own
+automated tests, so tagging is opt-in.
+
+So the full loop is: **Sync** creates schede (status `pending`) → **Run CI** runs
+the real pipeline → results link back and flip the schede to `pass`/`fail`. Status
+lives in one place (the run), never in the YAML.
 
 ---
 
@@ -440,12 +472,17 @@ WebSocket:
 
 ## Tests
 
-### Backend unit tests (492 tests)
+### Backend unit tests (576 tests)
 
 ```bash
 source venv/bin/activate
 python -m pytest backend/tests/ -v
 ```
+
+One live integration test (`test_gitlab_e2e_integration.py`) drives the real
+sync ↔ CI ↔ push loop against a running GitLab CE. It **skips** unless a GitLab is
+reachable and `GITLAB_E2E_TOKEN` is set (mint one via `demo/gitlab/setup.sh`), so
+the default run is unaffected.
 
 ```
 backend/tests/

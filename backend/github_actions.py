@@ -125,7 +125,7 @@ def collect_run_results(db, client, owner: str, repo: str, run_id: int,
     result = parse_junit_xml(junit)
     if run_name and result.runs:
         result.runs[0].name = run_name
-    return persist_import_result(db, result, PROVIDER, conflict="skip")
+    return persist_import_result(db, result, PROVIDER, conflict="skip", sync_status=True)
 
 
 def ci_config(integration) -> dict:
