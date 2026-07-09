@@ -116,6 +116,35 @@ class GitLabClient:
         )
         return r.text
 
+    def get_file_opt(self, project: str, path: str, ref: str) -> str | None:
+        """Raw file content, or None if the file doesn't exist at ref."""
+        url = f"/projects/{self._enc(project)}/repository/files/{quote(path, safe='')}/raw"
+        try:
+            r = self._client.get(url, params={"ref": ref})
+        except httpx.HTTPError as e:
+            raise RuntimeError(f"gitlab request failed: {e}")
+        if r.status_code == 404:
+            return None
+        if r.status_code in (401, 403):
+            raise RuntimeError(f"gitlab auth error ({r.status_code}): {r.text[:200]}")
+        if r.status_code >= 400:
+            raise RuntimeError(f"gitlab error {r.status_code}: {r.text[:200]}")
+        return r.text
+
+    def write_file(self, project: str, path: str, content: str, branch: str,
+                   message: str, update: bool) -> None:
+        """Create (POST) or update (PUT) a file in a single commit."""
+        url = f"/projects/{self._enc(project)}/repository/files/{quote(path, safe='')}"
+        body = {"branch": branch, "content": content, "commit_message": message}
+        try:
+            r = self._client.request("PUT" if update else "POST", url, json=body)
+        except httpx.HTTPError as e:
+            raise RuntimeError(f"gitlab request failed: {e}")
+        if r.status_code in (401, 403):
+            raise RuntimeError(f"gitlab auth error ({r.status_code}): {r.text[:200]}")
+        if r.status_code >= 400:
+            raise RuntimeError(f"gitlab error {r.status_code}: {r.text[:200]}")
+
 
 def _fetch_files_factory(api_base: str, token: str | None):
     """Build a fetcher matching sync_repo's ``fetcher(repo_url, branch, path, token)``
@@ -142,9 +171,37 @@ def sync_integration(db, integration) -> dict:
     api_base, _ = parse_gitlab_repo(repo_url, cfg.get("api_base"))
 
     stats = sync_repo(db, repo_url, branch, path, token,
-                      fetcher=_fetch_files_factory(api_base, token))
+                      fetcher=_fetch_files_factory(api_base, token),
+                      link_provider="gitlab-ci")
 
     integration.last_sync = datetime.now(timezone.utc).isoformat()
     integration.status = "active"
     db.commit()
     return stats
+
+
+def push_test(db, integration, test, message: str | None = None) -> dict:
+    """Write a Test row back to its GitLab source file. Raises PushConflict when
+    the file diverged on git since the last sync."""
+    from .git_push import render_test_yaml, check_conflict
+
+    cfg = integration.config or {}
+    branch = cfg.get("branch") or "main"
+    token = cfg.get("token") or None
+    api_base, project = parse_gitlab_repo(test.repo_url, cfg.get("api_base"))
+    path = test.source_path
+    content = render_test_yaml(db, test)
+    msg = message or f"chore(tests): update {path} from ThoroTest"
+
+    with GitLabClient(api_base, token) as gl:
+        current = gl.get_file_opt(project, path, branch)
+        check_conflict(current, test.source_body)
+        gl.write_file(project, path, content, branch, msg, update=current is not None)
+        commit = gl.latest_commit(project, branch)
+
+    now = datetime.now(timezone.utc).isoformat()
+    test.source_ref = commit
+    test.source_body = content
+    test.source_synced_at = now
+    db.commit()
+    return {"committed": True, "commit": commit, "path": path, "branch": branch}

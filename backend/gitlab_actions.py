@@ -11,7 +11,7 @@ import httpx
 
 from .gitlab_sync import GitLabClient, parse_gitlab_repo
 from .importers.base import ImportResult, TestData, RunData, CaseResult
-from .importers.junit_xml import _folder_for
+from .importers.junit_xml import _folder_for, extract_case_id
 from .importers.persist import persist_import_result
 
 PROVIDER = "gitlab-ci"
@@ -62,9 +62,10 @@ def parse_test_report(report: dict, run_name: str) -> ImportResult:
             classname = tc.get("classname") or ""
             status = _STATUS_MAP.get(tc.get("status"), "pending")
             folder = _folder_for(suite_name, classname)
+            case_id = extract_case_id(title, classname)
             tests.append(TestData(title=title, folder_path=folder,
-                                  type="automated", status=status))
-            cases.append(CaseResult(test_title=title, status=status))
+                                  type="automated", status=status, source_id=case_id))
+            cases.append(CaseResult(test_title=title, status=status, source_test_id=case_id))
     runs = [RunData(name=run_name, status="done", cases=cases)]
     return ImportResult(tests=tests, runs=runs, format_detected="gitlab_test_report")
 
@@ -75,7 +76,7 @@ def collect_pipeline_results(db, client, project: str, pipeline_id: int,
     report = client.get_test_report(project, pipeline_id)
     name = run_name or f"GitLab pipeline #{pipeline_id}"
     result = parse_test_report(report, name)
-    return persist_import_result(db, result, PROVIDER, conflict="skip")
+    return persist_import_result(db, result, PROVIDER, conflict="skip", sync_status=True)
 
 
 def ci_config(integration) -> dict:

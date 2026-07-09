@@ -50,9 +50,26 @@ JUnit report (`artifacts: reports: junit:`, `when: always`):
 - **playwright** — [`repo/e2e/`](repo/e2e/), one intentional failure.
 
 So the pipeline goes **red** (playwright fails), yet ThoroTest still imports the
-full breakdown — **5 pass / 1 fail** — because the reports publish even on
-failure. Change the assertions to make it all green, or move the failure between
-jobs, to reshape the demo.
+full breakdown because the reports publish even on failure. Change the
+assertions to make it all green, or move the failure between jobs, to reshape
+the demo.
+
+## Sync + CI: one test, one source of truth
+
+The playwright titles carry `[TC-GL-100]` / `[TC-GL-101]` tokens that match the
+`id:` of the YAML schede under [`repo/tests/`](repo/tests/). This links the two
+sides:
+
+1. **Sync** (pull) creates the schede `TC-GL-100` / `TC-GL-101` — definitions
+   only (title, owner, priority). Their status starts `pending`; the YAML has
+   **no** `status:` field, because a hand-written status can lie.
+2. **Run CI** imports the pipeline result. Each case's `[TC-GL-…]` token is
+   matched to its scheda, so the run attaches to the **same** test row (no
+   duplicate) and advances its status to the **real** result.
+
+So after Sync then Run CI, `TC-GL-100` flips `pending → pass` from the actual
+run. Cases without a token (e.g. "apple pay …") still import as their own
+automated tests — the token is opt-in.
 
 ## Networking note
 

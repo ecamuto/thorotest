@@ -349,6 +349,16 @@
       return res.json();
     },
 
+    async pushTestToGit(id) {
+      const res = await fetch(BASE + `/api/tests/${id}/push-to-git`, { method: "POST", headers: authHeaders() });
+      if (!res.ok) {
+        let msg = "Push to git failed";
+        try { msg = (await res.json()).detail || msg; } catch {}
+        throw new Error(msg);
+      }
+      return res.json();
+    },
+
     async getRunDefects(runId) {
       const res = await fetch(BASE + `/api/runs/${runId}/defects`, { headers: authHeaders() });
       if (!res.ok) throw new Error("Run defects fetch failed");

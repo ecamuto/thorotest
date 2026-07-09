@@ -1,6 +1,33 @@
+import re
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from .base import ImportResult, TestData, RunData, CaseResult
+
+# A test-case id embedded in an automated test's name/classname, so a CI run can
+# be linked back to the "test as code" YAML scheda it exercises. Matches
+# "TC-GL-100", "TC_GL_100", "[TC-GL-100]" → normalized to "TC-GL-100".
+#
+# A separator after "TC" is REQUIRED (so "TCP", "TContext" don't match) and the
+# "TC" must not sit inside a longer alphanumeric run (so "BTC-100" doesn't
+# match). The lookbehind excludes only alnum — an underscore before "TC"
+# (e.g. "login_TC_GL_100") is a valid separator, not part of a word.
+_CASE_ID_RE = re.compile(r"(?<![A-Za-z0-9])TC[-_ ]([A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*)")
+
+
+def extract_case_id(*parts: str) -> str:
+    """Pull a normalized "TC-…" case id out of a test name/classname, or "".
+
+    The first ``parts`` value containing a token wins. Used to correlate CI
+    results (B) with YAML-synced test definitions (A); when no token is present
+    the caller falls back to title/folder matching, so this is opt-in per test.
+    """
+    for part in parts:
+        m = _CASE_ID_RE.search(part or "")
+        if m:
+            tail = m.group(1).replace("_", "-")
+            return f"TC-{tail}".upper()
+    return ""
+
 
 _STATUS_MAP = {
     "passed": "pass",
@@ -71,6 +98,7 @@ def parse_junit_xml(content: bytes) -> ImportResult:
 
             folder_path = _folder_for(suite_name, classname)
             status = _junit_status(case_el)
+            case_id = extract_case_id(title, classname)
 
             if title not in tests_map:
                 tests_map[title] = TestData(
@@ -78,9 +106,10 @@ def parse_junit_xml(content: bytes) -> ImportResult:
                     folder_path=folder_path,
                     type="automated",
                     status="pending",
+                    source_id=case_id,
                 )
 
-            cases.append(CaseResult(test_title=title, status=status))
+            cases.append(CaseResult(test_title=title, status=status, source_test_id=case_id))
 
     total = len(cases)
     passed = sum(1 for c in cases if c.status == "pass")

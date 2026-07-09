@@ -84,3 +84,35 @@ def parse_yaml_test(content: bytes | str) -> dict:
         "folder_path": folder,
         "auto": type_ == "automated",
     }
+
+
+# Key order for serialized files — matches the documented file shape above so
+# a synced-then-pushed file reads naturally and diffs stay small. `status` is
+# deliberately omitted: a test's status is owned by real CI run results, not a
+# hand-written field, so we never write it back into the source file.
+_DUMP_ORDER = ("id", "title", "type", "runner", "priority", "owner",
+               "tags", "folder")
+
+
+def serialize_yaml_test(fields: dict) -> str:
+    """Render a Test's fields back to a "test as code" YAML document.
+
+    Inverse of :func:`parse_yaml_test` (round-trips through the normalized
+    values). ``fields`` accepts the Test model's attribute names plus
+    ``folder`` (the "/"-joined folder path). Empty/blank values are omitted so
+    the file stays terse; ``title`` is always emitted.
+    """
+    out: dict = {}
+    for key in _DUMP_ORDER:
+        val = fields.get(key)
+        if key == "tags":
+            if val:
+                out["tags"] = [str(t) for t in val]
+            continue
+        if val in (None, "", []):
+            continue
+        out[key] = str(val)
+    if "title" not in out:
+        out["title"] = str(fields.get("title") or "").strip()
+    return yaml.safe_dump(out, sort_keys=False, allow_unicode=True,
+                          default_flow_style=False)
