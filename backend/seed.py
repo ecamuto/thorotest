@@ -138,15 +138,8 @@ def seed_db():
         ]
         db.add_all(run_cases)
 
-        pipelines = [
-            models.Pipeline(id="wf-1", name="ci.yml — Pull Request checks", platform="github", status="pass", duration="4m 12s", commit="a3c9f1d", author="marco.r", branch="feature/coupon-stack", when="8m ago"),
-            models.Pipeline(id="wf-2", name="nightly.yml — Full regression", platform="github", status="fail", duration="23m 04s", commit="fe21088", author="ci-bot", branch="main", when="8h ago"),
-            models.Pipeline(id="wf-3", name="e2e.yml — Playwright suite", platform="github", status="pass", duration="11m 38s", commit="a3c9f1d", author="marco.r", branch="feature/coupon-stack", when="8m ago"),
-            models.Pipeline(id="wf-4", name="release.gitlab-ci.yml — Staging deploy", platform="gitlab", status="running", duration="2m 41s", commit="771ab02", author="luca.p", branch="release/4.2.0", when="3m ago"),
-            models.Pipeline(id="wf-5", name="Jenkinsfile — Load test", platform="jenkins", status="pass", duration="18m 22s", commit="fe21088", author="ci-bot", branch="main", when="1d ago"),
-            models.Pipeline(id="wf-6", name="cypress.yml — Component tests", platform="github", status="pass", duration="3m 02s", commit="a3c9f1d", author="marco.r", branch="feature/coupon-stack", when="8m ago"),
-        ]
-        db.add_all(pipelines)
+        # Pipelines are populated by real CI runs (Configure ▸ Integrations ▸
+        # Run CI), not seeded — the page shows only actual dispatches.
 
         activities = [
             models.Activity(who="Marco R.", what="marked", target="TC-2302", detail="as ⚠ blocked — needs 3DS test card", when="12m", created_at=_ago(minutes=12)),

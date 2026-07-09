@@ -48,7 +48,7 @@ cp .env.example .env
 make docker-up-sqlite
 ```
 
-Database is created automatically on first run. Seed data: 19 test cases across 12 folders, 11 runs, 6 pipelines, 9 defects.
+Database is created automatically on first run. Seed data: 19 test cases across 12 folders, 11 runs, 9 defects. Pipelines are not seeded — the page fills from real CI runs (Configure ▸ Integrations ▸ Run CI).
 
 ---
 
