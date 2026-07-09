@@ -37,6 +37,42 @@ RUN_TIMEOUT = 1800      # seconds to wait for the run to complete
 _JOBS: dict[str, dict] = {}
 
 
+def _fmt_duration(seconds) -> str | None:
+    """Seconds → "4m 12s" / "38s" for the pipelines table, or None."""
+    if not seconds:
+        return None
+    m, s = divmod(int(seconds), 60)
+    return f"{m}m {s:02d}s" if m else f"{s}s"
+
+
+def _gh_run_seconds(detail: dict) -> float | None:
+    """Elapsed seconds of a GitHub run from its timestamps, or None."""
+    start = detail.get("run_started_at") or detail.get("created_at")
+    end = detail.get("updated_at")
+    if not (start and end):
+        return None
+    try:
+        s = datetime.fromisoformat(start.replace("Z", "+00:00"))
+        e = datetime.fromisoformat(end.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    secs = (e - s).total_seconds()
+    return secs if secs > 0 else None
+
+
+def _upsert_pipeline(db, pid: str, **fields) -> None:
+    """Create/update the Pipeline row the pipelines page shows, so a live
+    "Run CI" dispatch appears there (running → pass/fail) — not just as a Run."""
+    p = db.query(models.Pipeline).filter(models.Pipeline.id == pid).first()
+    if p is None:
+        p = models.Pipeline(id=pid)
+        db.add(p)
+    for k, v in fields.items():
+        if v is not None:
+            setattr(p, k, v)
+    db.commit()
+
+
 class CIRunRequest(BaseModel):
     workflow: Optional[str] = None    # override integration config
     ref: Optional[str] = None
@@ -83,6 +119,23 @@ def _orchestrate(job_id: str, cfg: dict, since: datetime, run_name: Optional[str
             job["gh_run_url"] = run.get("html_url")
             job["status"] = "running"
 
+            # Record the live run on the pipelines page (running → pass/fail).
+            pipeline_row_id = f"gh-run-{run['id']}"
+            job["pipeline_row_id"] = pipeline_row_id
+            db0 = SessionLocal()
+            try:
+                _upsert_pipeline(
+                    db0, pipeline_row_id,
+                    name=run_name or run.get("name") or cfg["workflow"],
+                    platform="github", status="running",
+                    commit=(run.get("head_sha") or "")[:7] or None,
+                    branch=run.get("head_branch") or cfg["ref"],
+                    author=(run.get("actor") or {}).get("login"),
+                    when="just now",
+                )
+            finally:
+                db0.close()
+
             # 2. poll until completed
             deadline = time.time() + RUN_TIMEOUT
             while time.time() < deadline:
@@ -101,6 +154,12 @@ def _orchestrate(job_id: str, cfg: dict, since: datetime, run_name: Optional[str
                 stats = collect_run_results(
                     db, client, cfg["owner"], cfg["repo"], run["id"],
                     cfg["artifact"], run_name,
+                )
+                concl = job.get("conclusion")
+                _upsert_pipeline(
+                    db, pipeline_row_id,
+                    status="pass" if concl == "success" else "fail",
+                    duration=_fmt_duration(_gh_run_seconds(detail)),
                 )
             finally:
                 db.close()
@@ -140,6 +199,14 @@ def _orchestrate_gitlab(job_id: str, cfg: dict, run_name: Optional[str]) -> None
             db = SessionLocal()
             try:
                 stats = collect_pipeline_results(db, client, cfg["project"], pipeline_id, run_name)
+                pid = job.get("pipeline_row_id")
+                if pid:
+                    concl = job.get("conclusion")
+                    _upsert_pipeline(
+                        db, pid,
+                        status="pass" if concl == "success" else "fail",
+                        duration=_fmt_duration(detail.get("duration")),
+                    )
             finally:
                 db.close()
 
@@ -175,6 +242,14 @@ async def ci_run(intg_id: str, payload: CIRunRequest, db: Session = Depends(get_
             raise HTTPException(status_code=502, detail=f"Dispatch failed: {e}")
 
         job_id = uuid.uuid4().hex[:12]
+        pipeline_row_id = f"gl-pipeline-{pipeline.get('id')}"
+        _upsert_pipeline(
+            db, pipeline_row_id,
+            name=payload.run_name or f"GitLab pipeline #{pipeline.get('id')}",
+            platform="gitlab", status="running",
+            commit=(pipeline.get("sha") or "")[:7] or None,
+            branch=pipeline.get("ref") or cfg["ref"], when="just now",
+        )
         _JOBS[job_id] = {
             "id": job_id,
             "integration_id": intg_id,
@@ -184,6 +259,7 @@ async def ci_run(intg_id: str, payload: CIRunRequest, db: Session = Depends(get_
             "started_at": since.isoformat(),
             "gl_pipeline_id": pipeline.get("id"),
             "gh_run_url": pipeline.get("web_url"),
+            "pipeline_row_id": pipeline_row_id,
         }
         asyncio.create_task(asyncio.to_thread(_orchestrate_gitlab, job_id, cfg, payload.run_name))
         return {"job_id": job_id, "status": "dispatched", "workflow": "pipeline", "ref": cfg["ref"]}
