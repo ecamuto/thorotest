@@ -604,6 +604,11 @@
       if (!res.ok && res.status !== 204) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "Delete failed"); }
     },
 
+    async deletePipeline(id) {
+      const res = await fetch(BASE + `/api/pipelines/${id}`, { method: "DELETE", headers: authHeaders() });
+      if (!res.ok && res.status !== 204) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "Delete failed"); }
+    },
+
     async syncIntegration(id) {
       const res = await fetch(BASE + `/api/integrations/${id}/sync`, { method: "POST", headers: authHeaders() });
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "Sync failed"); }

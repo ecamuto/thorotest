@@ -84,6 +84,18 @@ def test_ci_run_non_vcs_integration_400(client, db):
     assert r.status_code == 400
 
 
+def test_delete_pipeline(client, db):
+    db.add(models.Pipeline(id="wf-del", name="ci.yml", platform="github", status="pass"))
+    db.commit()
+    r = client.delete("/api/pipelines/wf-del")
+    assert r.status_code == 204
+    assert db.query(models.Pipeline).filter_by(id="wf-del").first() is None
+
+
+def test_delete_pipeline_unknown_404(client, db):
+    assert client.delete("/api/pipelines/nope").status_code == 404
+
+
 def test_ci_run_dispatch_failure_502(client, db, monkeypatch):
     from backend.routers import ci as ci_router
 

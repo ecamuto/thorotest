@@ -21,6 +21,17 @@ function Pipelines() {
     return () => clearInterval(id);
   }, [anyRunning]);
 
+  async function del(id, name, e) {
+    e.stopPropagation();   // don't also open the run URL
+    if (!window.confirm(`Remove pipeline "${name}" from the list? (the run on the CI provider is untouched)`)) return;
+    try {
+      await TH_API.deletePipeline(id);
+      setRows(rs => (rs || []).filter(p => p.id !== id));
+    } catch (err) {
+      window.alert(err.message);
+    }
+  }
+
   if (loading) return (
     <div className="page fade-in">
       <div className="empty">Loading…</div>
@@ -71,6 +82,7 @@ function Pipelines() {
                 <th style={{width:100}}>Branch</th>
                 <th style={{width:120}}>Author</th>
                 <th style={{width:100}}>When</th>
+                <th style={{width:40}}></th>
               </tr>
             </thead>
             <tbody>
@@ -91,6 +103,12 @@ function Pipelines() {
                   <td className="mono dim">{p.branch}</td>
                   <td className="mono dim">{p.author}</td>
                   <td className="mono dim">{p.when}</td>
+                  <td>
+                    <button className="btn ghost icon sm" title="Remove from list"
+                            onClick={e => del(p.id, p.name, e)}>
+                      {I.x}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

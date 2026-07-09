@@ -59,3 +59,13 @@ def upsert_pipeline(payload: PipelineCreate, db: Session = Depends(get_db), _: m
     db.commit()
     db.refresh(pipe)
     return pipe
+
+
+@router.delete("/pipelines/{pipeline_id}", status_code=204)
+def delete_pipeline(pipeline_id: str, db: Session = Depends(get_db), _: models.User = WRITE_ROLES):
+    """Remove a pipeline run from the list (the run on the CI provider is untouched)."""
+    pipe = db.query(models.Pipeline).filter(models.Pipeline.id == pipeline_id).first()
+    if not pipe:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+    db.delete(pipe)
+    db.commit()
