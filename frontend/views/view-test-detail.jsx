@@ -448,7 +448,8 @@ function HistoryTab({test}) {
 
   return (
     <div style={{padding:"18px 22px 32px"}}>
-      {rows.some(r => r.case_status === "fail") && (
+      {/* Needs at least two runs to reason about variability, regardless of outcome. */}
+      {rows.length >= 2 && (
         <div className="card" style={{marginBottom:14, borderColor:"var(--purple)"}}>
           <div className="card-h">
             <div className="card-title">AI Flaky Analysis</div>

@@ -628,6 +628,7 @@ a { color: inherit; text-decoration: none; }
 .toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 8px 22px;
   border-bottom: 1px solid var(--border);
