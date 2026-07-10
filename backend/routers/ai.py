@@ -85,6 +85,16 @@ async def _check_rate(user_id: int) -> None:
         dq.append(now)
 
 
+def _upstream_message(e: Exception) -> str:
+    """Best-effort short, human-readable reason from an SDK API error."""
+    body = getattr(e, "body", None)
+    if isinstance(body, dict):
+        err = body.get("error")
+        if isinstance(err, dict) and err.get("message"):
+            return str(err["message"])
+    return str(getattr(e, "message", None) or e)[:200]
+
+
 async def _call_anthropic(system: str, user: str, max_tokens: int) -> str:
     client = _get_client()
     try:
@@ -94,13 +104,19 @@ async def _call_anthropic(system: str, user: str, max_tokens: int) -> str:
             system=system,
             messages=[{"role": "user", "content": user}],
         )
-        return msg.content[0].text
+        # Newer models can return thinking blocks before the text block, so grab
+        # the first block that actually carries text rather than content[0].
+        return next((b.text for b in msg.content if getattr(b, "type", None) == "text"), "")
     except anthropic_lib.RateLimitError:
         raise HTTPException(status_code=503, detail="AI service temporarily unavailable (upstream rate limit). Try again in a moment.")
     except anthropic_lib.AuthenticationError:
         raise HTTPException(status_code=503, detail="AI features misconfigured (invalid API key)")
     except anthropic_lib.APIConnectionError:
         raise HTTPException(status_code=503, detail="Could not reach AI service")
+    except anthropic_lib.APIStatusError as e:
+        # Any other non-2xx (bad request / insufficient credit, unknown model,
+        # 404, 5xx, ...) — otherwise these bubble up as an opaque 500.
+        raise HTTPException(status_code=503, detail=f"AI service unavailable (upstream rejected request: {_upstream_message(e)})")
 
 
 async def _call_openai(system: str, user: str, max_tokens: int) -> str:
@@ -122,6 +138,8 @@ async def _call_openai(system: str, user: str, max_tokens: int) -> str:
         raise HTTPException(status_code=503, detail="AI features misconfigured (invalid API key)")
     except openai_lib.APIConnectionError:
         raise HTTPException(status_code=503, detail="Could not reach AI service")
+    except openai_lib.APIStatusError as e:
+        raise HTTPException(status_code=503, detail=f"AI service unavailable (upstream rejected request: {_upstream_message(e)})")
 
 
 async def _call_json(system: str, user: str, max_tokens: int = 2048) -> dict:
