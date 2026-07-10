@@ -119,6 +119,46 @@ S3 attachment storage remains a v1.1 item.
   matters.
 - SSO/SAML/SCIM: v1.1 pricing tier.
 
+## Scaling baseline (measured 2026-07-10)
+
+Single uvicorn worker, SQLite (default), read load, localhost (no network
+RTT), presentation dataset (818 tests / 17 runs). Async httpx driver,
+5s per level. Machine: 10-core (worker uses ~1 core — the app is
+core-bound). Reproduce: `python scripts/loadtest.py` against a running server.
+
+| Endpoint | conc 1 | conc 4 | conc 8 | conc 16 | conc 32 |
+|---|---|---|---|---|---|
+| light `/api/tests?limit=50` — rps | 172 | 167 | 111 | 88 | 91 |
+| &nbsp;&nbsp;p95 ms | 6.7 | 30 | 89 | 222 | 493 |
+| mixed reads (tests/runs/defects/activity) — rps | 405 | 434 | 287 | 221 | 215 |
+| &nbsp;&nbsp;p95 ms | 5.7 | 16 | 60 | 163 | 252 |
+| heavy `/api/initial-data` — rps | 30 | 30 | 31 | 30 | — |
+| &nbsp;&nbsp;p95 ms | 72 | 188 | 372 | 687 | — |
+
+**Reading it:** throughput is flat-to-declining with concurrency — one
+core (GIL) + `QueuePool` size 5 serialize the work; extra concurrency buys
+latency, not throughput. `/api/initial-data` is pinned at ~30 rps (it
+serializes the whole workspace). Latency stays healthy (p95 < 250 ms)
+through ~conc 16–32 for list reads.
+
+**Concurrent interactive users (Little's law, ~1 action / 3–5 s):**
+~300–500 before p95 degrades, gated by `/api/initial-data` on app-open
+bursts (~800–1200 if the SPA is already loaded and only hits list reads).
+
+**Caveats:** reads only (SQLite writes take a global writer lock — a
+write-heavy mix is lower); localhost adds no RTT; WS and login paths not
+loaded. A 1–2 vCPU prod VM lands similar per-core (core-bound).
+
+**Levers, ranked:**
+
+1. Cache/trim `/api/initial-data` (the 30 rps ceiling) — biggest win, no new infra.
+2. Bump `QueuePool` size (esp. Postgres, one line) — helps once not one-core-bound.
+3. Multi-worker = real throughput multiplier (+1 core each), but **needs the
+   Redis item above first** (in-memory rate limiter + WS state break across
+   workers). This is what gates horizontal scale.
+4. Latent wart: `/health` runs a **sync** `engine.connect()` inside an
+   `async def` — blocks the event loop per call; move to the threadpool.
+
 ## Strengths (keep selling these)
 
 - Manual + automated runs in one timeline (differentiator vs TestRail/Zephyr).
