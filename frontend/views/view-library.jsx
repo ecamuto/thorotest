@@ -24,6 +24,7 @@ function Library({ onNav, onOpenTest, currentUser }) {
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
   const [bulkFolderOpen, setBulkFolderOpen] = useState(false);
   const [exportingCSV, setExportingCSV] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
 
   const refresh = () => { setRefreshKey(k => k + 1); setSelected(new Set()); };
 
@@ -303,6 +304,11 @@ function Library({ onNav, onOpenTest, currentUser }) {
 
           <div className="chip">Owner: <b style={{color:"var(--text)", marginLeft:2}}>any</b></div>
 
+          <button className="btn sm" style={{marginLeft:8, background:"var(--purple)", borderColor:"var(--purple)", color:"oklch(0.16 0 0)", display:"flex", alignItems:"center", gap:5}}
+            onClick={() => setAiOpen(true)} title={activeFolder ? "Suggest edge cases for this folder" : "Suggest edge cases (pick a folder)"}>
+            <Icon name="sparkle" /> AI
+          </button>
+
           <div style={{display:"flex", border:"1px solid var(--border)", borderRadius:"var(--radius)", overflow:"hidden", marginLeft:8}}>
             <button className={"btn ghost icon"} style={{background: view==="list" ? "var(--surface-2)" : "transparent", borderRadius:0}} onClick={() => setView("list")}><Icon name="list" /></button>
             <button className={"btn ghost icon"} style={{background: view==="grid" ? "var(--surface-2)" : "transparent", borderRadius:0, borderLeft:"1px solid var(--border)"}} onClick={() => setView("grid")}><Icon name="grid" /></button>
@@ -470,6 +476,20 @@ function Library({ onNav, onOpenTest, currentUser }) {
           onClose={() => setShowNewTest(false)}
           onCreate={refresh}
         />
+      )}
+
+      {/* AI assistant drawer — scoped to the active folder (falls back to a
+          picker when viewing "All tests"). Refresh on close so new drafts show. */}
+      {aiOpen && (
+        <>
+          <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.4)", zIndex:200}}
+            onClick={() => { setAiOpen(false); refresh(); }} />
+          <div style={{position:"fixed", top:0, right:0, bottom:0, width:400, maxWidth:"92vw", zIndex:201,
+            background:"var(--bg-2)", borderLeft:"1px solid var(--border)", padding:16, overflowY:"auto",
+            boxShadow:"-8px 0 24px rgba(0,0,0,0.3)"}}>
+            <AiSuggestBox D={D} folderId={activeFolder || undefined} onClose={() => { setAiOpen(false); refresh(); }} />
+          </div>
+        </>
       )}
 
       {/* Delete single confirm */}

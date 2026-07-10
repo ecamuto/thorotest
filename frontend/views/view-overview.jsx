@@ -186,7 +186,7 @@ function Overview({ onNav, currentUser }) {
 
 // Compact AI coverage widget — analyzes a folder's tests via /api/ai/suggest-edge-cases
 // and can create pending draft tests from the suggestions.
-function AiSuggestBox({ D }) {
+function AiSuggestBox({ D, folderId: fixedFolderId, onClose }) {
   // Map every folder id → leaf name and → full ancestor path across the whole
   // tree (any depth). Imported folders nest several levels deep and reuse leaf
   // names (many "extra.spec.ts"), so the picker shows the full path to
@@ -210,7 +210,10 @@ function AiSuggestBox({ D }) {
   const folderIds = [...new Set(D.tests.map(t => t.folder).filter(Boolean))]
     .sort((a, b) => (folderPaths[a] || a).localeCompare(folderPaths[b] || b));
 
-  const [folderId, setFolderId] = React.useState(folderIds[0] || "");
+  // When a folder is forced (launched from Library on the active folder) the
+  // picker is hidden and we lock onto it.
+  const [folderId, setFolderId] = React.useState(fixedFolderId || folderIds[0] || "");
+  React.useEffect(() => { if (fixedFolderId) setFolderId(fixedFolderId); }, [fixedFolderId]);
   const [loading, setLoading] = React.useState(false);
   const [err, setErr] = React.useState(null);
   const [result, setResult] = React.useState(null);
@@ -261,18 +264,28 @@ function AiSuggestBox({ D }) {
     <div className="ai-box">
       <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:10}}>
         <span style={{fontSize:11, fontFamily:"var(--font-mono)", textTransform:"uppercase", letterSpacing:"0.08em", color:"var(--purple)"}}>AI assistant</span>
+        {onClose && <button className="btn ghost icon sm" style={{marginLeft:"auto"}} onClick={onClose} aria-label="Close"><Icon name="x" /></button>}
       </div>
 
       {!result && (
         <>
           <div style={{fontSize:13, fontWeight:500, marginBottom:6}}>Find missing edge cases</div>
           <div style={{fontSize:12, color:"var(--text-muted)", lineHeight:1.5, marginBottom:10}}>
-            Pick a folder — AI compares its existing tests and suggests uncovered edge cases.
+            {fixedFolderId
+              ? "AI compares this folder's existing tests and suggests uncovered edge cases."
+              : "Pick a folder — AI compares its existing tests and suggests uncovered edge cases."}
           </div>
           <div style={{display:"flex", gap:6, alignItems:"center"}}>
-            <select className="input" style={{flex:1, minWidth:0}} value={folderId} onChange={e => setFolderId(e.target.value)} disabled={loading}>
-              {folderIds.map(id => <option key={id} value={id}>{(folderPaths[id] || folderNames[id] || id) + ` (${folderCounts[id] || 0})`}</option>)}
-            </select>
+            {fixedFolderId ? (
+              <div className="input" style={{flex:1, minWidth:0, display:"flex", alignItems:"center", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}
+                title={folderPaths[folderId] || folderNames[folderId] || folderId}>
+                {(folderPaths[folderId] || folderNames[folderId] || folderId) + ` (${folderCounts[folderId] || 0})`}
+              </div>
+            ) : (
+              <select className="input" style={{flex:1, minWidth:0}} value={folderId} onChange={e => setFolderId(e.target.value)} disabled={loading}>
+                {folderIds.map(id => <option key={id} value={id}>{(folderPaths[id] || folderNames[id] || id) + ` (${folderCounts[id] || 0})`}</option>)}
+              </select>
+            )}
             <button className="btn sm" style={{background:"var(--purple)", borderColor:"var(--purple)", color:"oklch(0.16 0 0)"}}
               onClick={analyze} disabled={loading || !folderId}>
               {loading ? "Analyzing…" : "Analyze"}
@@ -487,3 +500,4 @@ window.StatusSelect = StatusSelect;
 window.ProgressBar = ProgressBar;
 window.Metric = Metric;
 window.timeAgo = timeAgo;
+window.AiSuggestBox = AiSuggestBox;
