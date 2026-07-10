@@ -181,7 +181,12 @@ _GENERATE_SYSTEM = (
 _SUGGEST_SYSTEM = (
     "You are a test coverage analyst. Given a list of existing test cases with their steps, "
     "identify missing edge cases that should be tested. "
-    "Return ONLY valid JSON: {\"suggestions\": [{\"title\": \"...\", \"rationale\": \"...\"}]}. "
+    "Return ONLY valid JSON: {\"suggestions\": [{\"title\": \"...\", \"rationale\": \"...\", \"category\": \"...\"}]}. "
+    "Each suggestion MUST have all three fields. "
+    "\"title\": an imperative test name, at most 8 words, consistent style. "
+    "\"rationale\": ONE short sentence on why it's a gap. "
+    "\"category\": a single lowercase word from: validation, boundary, security, "
+    "error-handling, permissions, concurrency, data-integrity, ui-state. "
     "No markdown, no other text."
 )
 

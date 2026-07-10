@@ -187,16 +187,28 @@ function Overview({ onNav, currentUser }) {
 // Compact AI coverage widget — analyzes a folder's tests via /api/ai/suggest-edge-cases
 // and can create pending draft tests from the suggestions.
 function AiSuggestBox({ D }) {
-  // Map every folder id → name across the whole tree (any depth). Imported
-  // folders nest several levels deep, so a shallow walk left leaf ids showing
-  // as raw "F-…" in the picker.
+  // Map every folder id → leaf name and → full ancestor path across the whole
+  // tree (any depth). Imported folders nest several levels deep and reuse leaf
+  // names (many "extra.spec.ts"), so the picker shows the full path to
+  // disambiguate.
   const folderNames = {};
-  const walkFolders = (list) => (list || []).forEach(f => {
+  const folderPaths = {};
+  const walkFolders = (list, prefix) => (list || []).forEach(f => {
+    const path = prefix ? `${prefix} ‹ ${f.name}` : f.name;
     folderNames[f.id] = f.name;
-    walkFolders(f.children);
+    folderPaths[f.id] = path;
+    walkFolders(f.children, path);
   });
-  walkFolders(D.folders);
-  const folderIds = [...new Set(D.tests.map(t => t.folder).filter(Boolean))];
+  walkFolders(D.folders, "");
+
+  // Direct test count per folder — matches what the analysis reads (exact
+  // folder, no subfolders), so the number reflects what will be sent.
+  const folderCounts = {};
+  D.tests.forEach(t => { if (t.folder) folderCounts[t.folder] = (folderCounts[t.folder] || 0) + 1; });
+
+  // Only folders that actually have tests, sorted alphabetically by path.
+  const folderIds = [...new Set(D.tests.map(t => t.folder).filter(Boolean))]
+    .sort((a, b) => (folderPaths[a] || a).localeCompare(folderPaths[b] || b));
 
   const [folderId, setFolderId] = React.useState(folderIds[0] || "");
   const [loading, setLoading] = React.useState(false);
@@ -204,20 +216,33 @@ function AiSuggestBox({ D }) {
   const [result, setResult] = React.useState(null);
   const [creating, setCreating] = React.useState(false);
   const [createdCount, setCreatedCount] = React.useState(0);
+  const [selected, setSelected] = React.useState(new Set());
 
   const analyze = () => {
-    setLoading(true); setErr(null); setResult(null); setCreatedCount(0);
+    setLoading(true); setErr(null); setResult(null); setCreatedCount(0); setSelected(new Set());
     TH_API.suggestEdgeCases({ folder_id: folderId })
-      .then(data => { setResult(data); setLoading(false); })
+      .then(data => {
+        setResult(data);
+        // pre-select every suggestion; user unticks the ones they don't want
+        setSelected(new Set((data?.suggestions || []).map((_, i) => i)));
+        setLoading(false);
+      })
       .catch(e => { setErr(e.message); setLoading(false); });
   };
 
+  const toggle = (i) => setSelected(s => {
+    const n = new Set(s);
+    n.has(i) ? n.delete(i) : n.add(i);
+    return n;
+  });
+
   const generateDrafts = async () => {
-    if (!result?.suggestions?.length) return;
+    const picks = (result?.suggestions || []).filter((_, i) => selected.has(i));
+    if (!picks.length) return;
     setCreating(true); setErr(null);
     let n = 0;
     try {
-      for (const s of result.suggestions) {
+      for (const s of picks) {
         await TH_API.createTest({ title: s.title, folder_id: folderId, status: "pending", tags: ["ai-draft"] });
         n++;
       }
@@ -246,7 +271,7 @@ function AiSuggestBox({ D }) {
           </div>
           <div style={{display:"flex", gap:6, alignItems:"center"}}>
             <select className="input" style={{flex:1, minWidth:0}} value={folderId} onChange={e => setFolderId(e.target.value)} disabled={loading}>
-              {folderIds.map(id => <option key={id} value={id}>{folderNames[id] || id}</option>)}
+              {folderIds.map(id => <option key={id} value={id}>{(folderPaths[id] || folderNames[id] || id) + ` (${folderCounts[id] || 0})`}</option>)}
             </select>
             <button className="btn sm" style={{background:"var(--purple)", borderColor:"var(--purple)", color:"oklch(0.16 0 0)"}}
               onClick={analyze} disabled={loading || !folderId}>
@@ -264,16 +289,30 @@ function AiSuggestBox({ D }) {
           {suggestions.length === 0 && (
             <div style={{fontSize:12, color:"var(--text-muted)", lineHeight:1.5}}>No gaps found — coverage looks solid.</div>
           )}
-          <ul style={{margin:"10px 0 12px", padding:"0 0 0 18px", fontSize:12, color:"var(--text-muted)", lineHeight:1.7}}>
-            {suggestions.map((s, i) => (
-              <li key={i}><span style={{color:"var(--text)"}}>{s.title}</span>{s.rationale ? ` — ${s.rationale}` : ""}</li>
-            ))}
-          </ul>
+          <div style={{margin:"10px 0 12px", display:"flex", flexDirection:"column", gap:6}}>
+            {suggestions.map((s, i) => {
+              const on = selected.has(i);
+              return (
+                <label key={i} style={{display:"flex", gap:8, alignItems:"flex-start", padding:"8px 10px", cursor:"pointer",
+                  border:"1px solid var(--border)", borderRadius:"var(--radius)",
+                  background: on ? "var(--accent-soft)" : "transparent", opacity: createdCount > 0 ? 0.6 : 1}}>
+                  <input type="checkbox" checked={on} disabled={createdCount > 0} onChange={() => toggle(i)} style={{marginTop:2}} />
+                  <div style={{minWidth:0, flex:1}}>
+                    <div style={{display:"flex", gap:6, alignItems:"center", flexWrap:"wrap"}}>
+                      <span style={{fontSize:12.5, fontWeight:500, color:"var(--text)"}}>{s.title}</span>
+                      {s.category && <span className="tag" style={{fontSize:10, textTransform:"uppercase", letterSpacing:"0.04em"}}>{s.category}</span>}
+                    </div>
+                    {s.rationale && <div style={{fontSize:11.5, color:"var(--text-muted)", lineHeight:1.5, marginTop:2}}>{s.rationale}</div>}
+                  </div>
+                </label>
+              );
+            })}
+          </div>
           <div style={{display:"flex", gap:6}}>
             {suggestions.length > 0 && createdCount === 0 && (
               <button className="btn sm" style={{background:"var(--purple)", borderColor:"var(--purple)", color:"oklch(0.16 0 0)"}}
-                onClick={generateDrafts} disabled={creating}>
-                {creating ? "Creating…" : "Generate drafts"}
+                onClick={generateDrafts} disabled={creating || selected.size === 0}>
+                {creating ? "Creating…" : `Create ${selected.size} selected`}
               </button>
             )}
             {createdCount > 0 && (
