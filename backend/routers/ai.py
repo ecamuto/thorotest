@@ -106,7 +106,9 @@ async def _call_anthropic(system: str, user: str, max_tokens: int) -> str:
         )
         # Newer models can return thinking blocks before the text block, so grab
         # the first block that actually carries text rather than content[0].
-        return next((b.text for b in msg.content if getattr(b, "type", None) == "text"), "")
+        # Thinking/redacted/tool-use blocks have no string `.text`, so this skips
+        # them without depending on the block's `.type`.
+        return next((b.text for b in msg.content if isinstance(getattr(b, "text", None), str)), "")
     except anthropic_lib.RateLimitError:
         raise HTTPException(status_code=503, detail="AI service temporarily unavailable (upstream rate limit). Try again in a moment.")
     except anthropic_lib.AuthenticationError:
