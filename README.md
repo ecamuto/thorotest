@@ -1,6 +1,64 @@
 # ThoroTest
 
-Source-available test management platform. Organize, run, and track tests across manual and automated suites — one timeline for both. Trace features, stories, and epics to the tests that cover them, and see coverage at a glance.
+> **Self-hosted test management that treats manual and automated tests as one timeline.** Organize, run, and track every test — trace features, stories, and epics to the tests that cover them, and see coverage at a glance.
+
+[![version](https://img.shields.io/badge/version-1.7.0-blue)](package.json)
+[![license](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-green)](LICENSE)
+[![tests](https://img.shields.io/badge/tests-576%20unit%20%2B%2031%20e2e%20suites-brightgreen)](#tests)
+[![backend](https://img.shields.io/badge/backend-FastAPI-009688)](#stack)
+[![frontend](https://img.shields.io/badge/frontend-React%2018-61DAFB)](#stack)
+[![docker](https://img.shields.io/badge/deploy-Docker-2496ED)](#quickstart)
+
+<p align="center">
+  <img src="docs/screenshots/live-run.gif" alt="Live run — automated results stream in over WebSocket, cases flip pass/fail in real time" width="100%">
+  <br><sub><i>Live run: automated results stream in over WebSocket — cases flip to pass/fail in real time.</i></sub>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/overview.png" alt="Dashboard — pass rate, coverage, runs, and activity in one view" width="49%">
+  <img src="docs/screenshots/library.png" alt="Test library — folder tree and cases" width="49%">
+</p>
+
+---
+
+## Contents
+
+[Why](#why-thorotest) · [Features](#features) · [Stack](#stack) · [Quickstart](#quickstart) · [Quick example](#quick-example) · [Tests as Code](#tests-as-code-github--gitlab-sync) · [Jira](#jira-integration) · [Requirements](#requirements--coverage) · [Import](#test-import) · [CI](#ci-run-pipelines-and-import-results) · [Docs](#documentation) · [Roadmap](#roadmap) · [License](#license)
+
+---
+
+## Why ThoroTest
+
+Most test management lives in **closed, per-seat SaaS** (TestRail, Zephyr, Xray) or **dated open-source** (TestLink, Kiwi TCMS). ThoroTest is source-available, self-hostable, and built around one idea the others split apart: **manual and automated results share one timeline**.
+
+| | ThoroTest | TestRail / Zephyr / Xray | TestLink / Kiwi |
+|---|---|---|---|
+| **Hosting** | Self-host, airgap-capable | Closed SaaS (or pricey server tier) | Self-host |
+| **Cost** | Free (source-available) | Per-seat subscription | Free |
+| **Manual + automated** | One unified timeline | Separate, or Jira add-on | Manual-first |
+| **Migrate in** | 9 importers, auto-detect (TestRail, Zephyr, Xray, qTest, TestLink, JUnit, Allure, CSV/XLSX) | — | Limited |
+| **Tests as code** | Two-way Git sync (GitHub + GitLab YAML) | — | — |
+| **CI native** | Trigger + import GitHub Actions / GitLab CI | Import only | — |
+| **API** | REST **+** GraphQL + API tokens + HMAC webhooks | REST | Limited |
+| **AI assistant** | Built-in, BYOK (Claude or any OpenAI-compatible / local LLM) | Add-on | — |
+| **Stack** | Modern (FastAPI + React 18) | Varies | Legacy PHP |
+
+Already on TestRail/Zephyr/Xray? The import pipeline is built for **migrating off them** — upload the native export, preview, import. Re-imports are idempotent (matched by source id), so you can sync repeatedly during a cutover.
+
+---
+
+## Features
+
+- **Unified runs** — manual case execution and automated CI results in one run history.
+- **Requirements & coverage** — link features/stories/epics to tests; per-requirement and workspace coverage bars, uncovered/at-risk surfacing.
+- **Tests as code** — two-way YAML sync with GitHub & GitLab (pull to create tests, push to commit back, 409 conflict guard).
+- **CI integration** — dispatch GitHub Actions / GitLab CI pipelines from the app, auto-import JUnit results, link them to the originating test.
+- **Migrate anything** — 9 auto-detected importers with preview and dedup.
+- **Jira two-way** — pull stories→requirements, push defects→bugs.
+- **Full auth stack** — JWT, RBAC, TOTP 2FA, GitHub/Google OAuth, audit log, API tokens, HMAC webhooks.
+- **Self-contained** — React, fonts, all assets served locally; zero external requests, works airgapped.
+- **BYOK AI assistant** — edge-case generation etc. via Claude or any OpenAI-compatible / local LLM. Off unless a key is set.
+- **i18n** — en / it / de / es / fr.
 
 ---
 
@@ -50,84 +108,57 @@ make docker-up-sqlite
 
 Database is created automatically on first run. Seed data: 19 test cases across 12 folders, 11 runs, 9 defects. Pipelines are not seeded — the page fills from real CI runs (Configure ▸ Integrations ▸ Run CI).
 
----
-
-## Make commands
-
-| Command | Description |
-|---|---|
-| `make setup` | Full setup: venv + deps + Playwright |
-| `make install` | Re-install deps into existing venv |
-| `make dev` | Build frontend + start backend dev server on `http://localhost:8000` (hot-reload) |
-| `make frontend-build` | Build frontend to `frontend/dist/` (transpile + minify + vendor assets) |
-| `make frontend-watch` | Rebuild frontend on change (run beside `make dev` when editing UI) |
-| `make db-reset` | Delete `testhub.db` — re-seeded on next `make dev` |
-| `make db-revision m="…"` | Create Alembic migration from model changes (autogenerate) |
-| `make db-upgrade` | Apply pending Alembic migrations |
-| `make db-seed` | Populate DB with demo data |
-| `make demo` | Alias for `make db-seed` |
-| `make test` | Run backend unit tests (pytest) |
-| `make test-e2e` | Run all Playwright e2e tests (requires `make dev` running) |
-| `make test-e2e-auth` | Run auth e2e suite only |
-| `make test-report` | Open last Playwright HTML report |
-| `make open` | Open `http://localhost:8000` in default browser |
-| `make docker-up` | Build image + start app and Postgres |
-| `make docker-up-sqlite` | Build image + start app with SQLite |
-| `make docker-down` | Stop and remove Docker containers |
-| `make docker-logs` | Tail Docker container logs |
-| `make clean` | Remove venv, node_modules, DB, test artifacts |
+First login uses the seeded admin — `admin@localhost` / `admin` (change it immediately).
 
 ---
 
-## Configuration
+## Quick example
 
-Copy `.env.example` to `.env`:
+Define a test as YAML in your Git repo, sync it, and let a real CI run flip its status — status lives in the run, never hand-written:
 
-```bash
-cp .env.example .env
+```yaml
+# tests/checkout/card-charge.yml
+id: TC-2301
+title: "Stripe card charge succeeds on test card"
+type: automated
+runner: playwright
+priority: high
+tags: [smoke, payment]
+folder: Checkout/Payment
 ```
 
-| Variable | Default | Description |
-|---|---|---|
-| `DATABASE_URL` | `sqlite:///./testhub.db` | Database connection string |
-| `SECRET_KEY` | `thorotest-dev-secret-...` | JWT signing key — **change in production** |
-| `TESTHUB_BASE_URL` | `http://localhost:8000` | Public base URL (OAuth callbacks, default CORS origin) |
-| `ALLOWED_ORIGINS` | = `TESTHUB_BASE_URL` | CORS origins — comma-separated list, or `*` for any (dev only) |
-| `LOG_LEVEL` | `INFO` | Application log level (`DEBUG`, `INFO`, `WARNING`, …) |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | _(unset)_ | Outbound email for password resets. No-op if `SMTP_HOST` absent |
-| `UPLOAD_DIR` / `MAX_UPLOAD_MB` | `./uploads` / `50` | Attachment storage directory and per-file size limit |
-| `DEMO_MODE` | _(unset)_ | Live-run demo simulation with fabricated results (demos only — **never in production**) |
-| `ANTHROPIC_API_KEY` | _(unset)_ | Enables AI assistant (BYOK). No-op if absent |
-| `AI_PROVIDER` | `anthropic` | AI backend: `anthropic` or `openai` (any OpenAI-compatible API, incl. local LLMs) |
-| `AI_MODEL` | `claude-sonnet-4-6` | Model ID. Required when `AI_PROVIDER=openai` |
-| `AI_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible endpoint (e.g. `http://localhost:11434/v1` for Ollama). Setting it implies `AI_PROVIDER=openai` |
-| `AI_API_KEY` | _(unset)_ | API key for the OpenAI-compatible endpoint (any value for local servers) |
-| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | _(unset)_ | GitHub OAuth login (optional) |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | _(unset)_ | Google OAuth login (optional) |
-| `JIRA_AUTOSYNC_MINUTES` | `0` | Auto-sync all Jira integrations every N minutes (`0` = disabled). Requires outbound reachability to Jira Cloud |
-
-Database URLs:
-
-```bash
-# SQLite (default)
-DATABASE_URL=sqlite:///./testhub.db
-
-# PostgreSQL
-DATABASE_URL=postgresql://user:pass@localhost:5432/thorotest
-
-# MySQL / MariaDB
-DATABASE_URL=mysql+pymysql://user:pass@localhost:3306/thorotest
+```text
+Settings ▸ Integrations ▸ Add ▸ GitHub → Sync
+   → creates test TC-2301 (status: pending)
+Integrations ▸ Run CI (GitHub Actions / GitLab CI)
+   → runs the pipeline, imports the JUnit artifact
+   → result links back to TC-2301 and flips it to pass / fail
 ```
 
-Generate a secure `SECRET_KEY`:
+Prefer the API? Everything the UI does is REST (and GraphQL):
 
-```bash
-python3 -c "import secrets; print(secrets.token_hex(32))"
+```console
+# login → token
+TOKEN=$(curl -s localhost:8000/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@localhost","password":"admin"}' | jq -r .access_token)
+
+# list tests (paginated; total in X-Total-Count header)
+curl -s localhost:8000/api/tests -H "Authorization: Bearer $TOKEN" | jq '.[0]'
+
+# same data over GraphQL
+curl -s localhost:8000/graphql -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"{ tests(limit:5){ id title status } }"}'
 ```
 
-**Backups:** all state lives in the database plus the `uploads/` directory —
-see [BACKUP.md](BACKUP.md) for backup/restore procedures per database and for
-Docker deployments.
+---
+
+## Setup & configuration
+
+- **All `make` targets** — [docs/configuration.md](docs/configuration.md#make-commands).
+- **Environment variables** (`.env`: database URLs, secrets, SMTP, OAuth, AI provider) — [docs/configuration.md](docs/configuration.md#environment-variables).
+- **Backups** — [BACKUP.md](BACKUP.md).
 
 ---
 
@@ -303,294 +334,56 @@ lives in one place (the run), never in the YAML.
 
 ---
 
-## Project structure
+## Documentation
 
-```
-thorotest/
-├── frontend/
-│   ├── index.html              # Entry point — loads all scripts
-│   ├── styles.css              # All styles (CSS variables, components)
-│   ├── data.js                 # Static fallback data (TH_DATA)
-│   ├── api.js                  # HTTP + WebSocket client helpers (TH_API)
-│   ├── i18n.js                 # i18n string lookup (T(key, lang))
-│   ├── react-globals.js        # Exposes React hooks as globals for the views
-│   ├── fonts.css / fonts/      # Vendored webfonts (Geist, JetBrains Mono)
-│   ├── dist/                   # Build output (npm run build) — served by the app
-│   ├── app.jsx                 # Root App component + boot + hash routing
-│   │
-│   ├── components/
-│   │   ├── app-shell.jsx       # Sidebar, topbar, nav structure
-│   │   ├── hooks.jsx           # Shared React hooks (useInitialData)
-│   │   ├── icons.jsx           # SVG icon components
-│   │   ├── i18n-context.jsx    # React context for active language
-│   │   ├── notification-bell.jsx # Notification bell + dropdown (WebSocket push)
-│   │   └── tweaks-panel.jsx    # Developer panel (theme, density)
-│   │
-│   ├── locales/                # i18n string files (en, it, …)
-│   │
-│   └── views/
-│       ├── view-login.jsx          # Login page (public)
-│       ├── view-overview.jsx       # Dashboard — metrics, runs, activity
-│       ├── view-library.jsx        # Test library — folder tree + list/grid
-│       ├── view-test-detail.jsx    # Test case — steps, history, defects, comments
-│       ├── view-runs.jsx           # Runs list + live run detail (WebSocket)
-│       ├── view-defects.jsx        # Defect management
-│       ├── view-requirements.jsx   # Requirements + test coverage
-│       ├── view-settings.jsx       # Profile, password, tokens, webhooks, integrations
-│       ├── view-admin.jsx          # User and role management (admin only)
-│       ├── view-import.jsx         # Test import (CSV/XLSX/XML/JSON, auto-detect + mapping)
-│       ├── view-my-work.jsx        # Personal work queue and assignments
-│       ├── view-docs.jsx           # Documentation viewer
-│       ├── view-config.jsx         # Config-as-code view
-│       └── view-misc.jsx           # Pipelines, Insights, AI assistant
-│
-├── scripts/
-│   └── build-frontend.mjs  # esbuild production build (npm run build)
-├── migrations/             # Alembic migrations (baseline + future revisions)
-├── alembic.ini             # Alembic config (DATABASE_URL-driven)
-├── BACKUP.md               # Backup & restore procedures
-├── backend/
-│   ├── main.py             # FastAPI app, lifespan, /api/initial-data, WebSocket
-│   ├── db.py               # SQLAlchemy engine, session, Base
-│   ├── models.py           # ORM models
-│   ├── schemas.py          # Pydantic schemas
-│   ├── seed.py             # Demo seed data (runs on first boot if DB empty)
-│   ├── auth_utils.py       # JWT creation/validation, password hashing (passlib)
-│   ├── ws_manager.py       # WebSocket connection manager + demo run simulation (DEMO_MODE)
-│   ├── emailer.py          # Outbound system email (password resets) via env SMTP
-│   ├── gql_schema.py       # Strawberry GraphQL schema
-│   ├── github_sync.py      # Tests-as-Code: read YAML tests from a GitHub repo
-│   ├── jira_sync.py        # Jira Cloud: pull stories→requirements, push defects→bugs
-│   └── routers/
-│       ├── _pagination.py  # Shared limit/offset + X-Total-Count helper
-│       ├── auth.py         # /auth/register, /auth/login, /me, /users, password reset
-│       ├── tests.py        # CRUD /api/tests + bulk + history + comments + defects
-│       ├── runs.py         # /api/runs + run detail + defects
-│       ├── folders.py      # GET /api/folders (nested tree)
-│       ├── defects.py      # CRUD /api/defects (filters: status, severity, test, run)
-│       ├── requirements.py # CRUD /api/requirements + coverage + link tests + import
-│       ├── projects.py     # CRUD /api/projects
-│       ├── categories.py   # CRUD /api/categories
-│       ├── integrations.py # CRUD /api/integrations + GitHub YAML sync
-│       ├── tokens.py       # GET/POST/DELETE /api/tokens
-│       ├── webhooks.py     # CRUD /api/webhooks + test endpoint
-│       ├── attachments.py  # Upload/download file attachments per test or run
-│       ├── ai.py           # AI assistant endpoint (BYOK — Anthropic)
-│       ├── admin.py        # User management, role assignment (admin only)
-│       ├── favorites.py    # Favorite tests per user
-│       ├── import_.py      # Test import API (detect/preview/execute) — parsers in ../importers/
-│       ├── pipelines.py    # GET /api/pipelines
-│       ├── activity.py     # GET /api/activity, GET /api/defects
-│       ├── notifications.py # Notifications list/read + per-user config
-│       ├── audit_log.py    # Audit log query (admin)
-│       ├── oauth.py        # GitHub / Google OAuth login + account linking
-│       └── totp.py         # TOTP two-factor auth enable/verify
-│
-├── e2e/
-│   ├── fixtures/                   # Shared Playwright fixtures
-│   ├── suite1-auth/                # Login, register, session persistence
-│   ├── suite2-navigation/          # Hash routing, back/forward, nav links
-│   ├── suite3-library/             # Folder tree, filters, multi-select
-│   ├── suite4-test-detail/         # Test detail tabs (definition, history, defects, comments)
-│   ├── suite5-runs/                # Run list, run detail, WebSocket live updates
-│   ├── suite6-overview/            # Dashboard metrics
-│   ├── suite7-pipelines/           # Pipeline cards
-│   ├── suite8-tweaks/              # Theme and density panel
-│   ├── suite9-security/            # Auth guards, protected routes
-│   ├── suite10-settings/           # Profile, password, tokens, webhooks
-│   ├── suite11-defects-view/       # Defects list and management
-│   ├── suite12-integrations/       # Integrations CRUD
-│   ├── suite13-docs/               # Documentation viewer
-│   ├── suite14-extra/              # Miscellaneous edge cases
-│   ├── suite15-favorites/          # Folder favorites (UI + API)
-│   ├── suite16-notifications/      # Notification bell + config API
-│   ├── suite17-import/             # Test import — CSV/XLSX/JUnit/Allure/JSON/TestRail/TestLink/Zephyr/Xray/qTest
-│   ├── suite18-requirements/       # Requirements + coverage
-│   ├── suite-p1-steps/             # Structured test steps execution
-│   ├── suite-p2-rbac/              # Role-based access control
-│   ├── suite-p3-retest/            # Retest workflow
-│   ├── suite-p4-ai-assistant/      # AI assistant panel
-│   ├── suite-p6-phase06-fixes/     # Phase 6 regression suite
-│   ├── suite-p7-tech-debt/         # Tech debt cleanup regression suite
-│   ├── suite-p9-bug-fixes/         # Phase 9 bug fix regression suite
-│   ├── suite-p10-auth-header-fix/  # Auth header regression suite
-│   ├── suite-p12-audit-log/        # Audit log
-│   ├── suite-p14-oauth-login/      # OAuth login (GitHub / Google)
-│   ├── suite-p15-totp-2fa/         # TOTP two-factor auth
-│   └── suite-p16-github-sync/      # Tests-as-Code GitHub sync (config, token redaction, sync)
-│
-├── .env.example
-├── requirements.txt
-├── Dockerfile
-├── docker-compose.yml
-├── docker-compose.sqlite.yml
-├── Makefile
-├── playwright.config.ts
-└── testhub.db              # SQLite database (auto-created, gitignored)
-```
-
----
-
-## API overview
-
-Base URL: `http://localhost:8000`
-
-All endpoints except `/auth/register`, `/auth/login`, and public pages require `Authorization: Bearer <token>`.
-
-| Area | Base path |
+| Topic | Doc |
 |---|---|
-| Auth | `/api/auth/`, `/api/me`, `/api/users` |
-| Tests | `/api/tests` |
-| Runs | `/api/runs` |
-| Folders | `/api/folders` |
-| Defects | `/api/defects` |
-| Projects / Categories | `/api/projects`, `/api/categories` |
-| Integrations | `/api/integrations` |
-| Tokens | `/api/tokens` |
-| Webhooks | `/api/webhooks` |
-| Attachments | `/api/attachments` |
-| AI assistant | `/api/ai` |
-| Admin | `/api/admin` |
-| Favorites | `/api/favorites` |
-| Import | `/api/import/{detect,preview,execute}` |
-| Notifications | `/api/notifications`, `/api/notifications/config` |
-| Audit log | `/api/audit-log` |
-| OAuth | `/api/auth/oauth/{github,google}` |
-| TOTP 2FA | `/api/totp` |
-| Aggregated | `/api/initial-data`, `/api/insights` |
-| GraphQL | `/graphql` |
-| Health | `/health` — unauthenticated liveness/readiness probe (checks DB; 200 ok / 503 degraded) |
-
-List endpoints (`/api/tests`, `/api/runs`, `/api/defects`, `/api/pipelines`, `/api/activity`) accept `limit` and `offset` query params (max 1000 rows per page) and return the total filtered row count in the `X-Total-Count` response header.
-
-WebSocket:
-
-- `ws://localhost:8000/ws/runs/{run_id}` — emits `state`, `step`, `complete` events during a live run.
-- `ws://localhost:8000/ws/notifications?token=<jwt>` — per-user notification push channel.
+| Configuration, `make` commands, AI provider setup | [docs/configuration.md](docs/configuration.md) |
+| Architecture, project structure, dev workflow | [docs/architecture.md](docs/architecture.md) |
+| REST + GraphQL + WebSocket API, test layout | [docs/api.md](docs/api.md) |
+| GitHub Actions CI setup | [docs/github-actions-ci.md](docs/github-actions-ci.md) |
+| GitLab CI setup | [docs/gitlab-ci.md](docs/gitlab-ci.md) |
+| Backup & restore | [BACKUP.md](BACKUP.md) |
+| Full production roadmap | [PRODUCTION_ROADMAP.md](PRODUCTION_ROADMAP.md) |
 
 ---
 
 ## Tests
 
-### Backend unit tests (576 tests)
+**576 backend unit tests** (pytest) + **31 Playwright e2e suites** covering every major flow — CI-gated.
 
 ```bash
-source venv/bin/activate
-python -m pytest backend/tests/ -v
+make test        # backend unit tests
+make test-e2e    # Playwright e2e (needs `make dev` running)
 ```
 
-One live integration test (`test_gitlab_e2e_integration.py`) drives the real
-sync ↔ CI ↔ push loop against a running GitLab CE. It **skips** unless a GitLab is
-reachable and `GITLAB_E2E_TOKEN` is set (mint one via `demo/gitlab/setup.sh`), so
-the default run is unaffected.
-
-```
-backend/tests/
-├── conftest.py               # Fixtures: in-memory SQLite, client, seeded state
-├── test_insights.py          # /api/insights calculations
-├── test_initial_data.py      # Response shape, field normalization, folder tree
-├── test_run_detail.py        # Enriched run cases, 404, orphan fallback
-├── test_runs_management.py   # Create run, pause/abort, status transitions
-├── test_tests_crud.py        # Full CRUD, bulk actions, filters
-├── test_test_detail_tabs.py  # History, defects, comments endpoints
-├── test_defects.py           # Defects CRUD, filters, severity/status logic
-├── test_requirements.py      # Requirements CRUD, coverage, linking, import, roles
-├── test_jira_sync.py         # Jira sync, defect push, config secret redaction
-├── test_steps.py             # Structured test steps CRUD
-├── test_step_execution.py    # Step execution and result recording
-├── test_attachments.py       # File upload/download per test and run
-├── test_ai.py                # AI assistant endpoint
-├── test_admin.py             # User management, role assignment
-├── test_roles.py             # RBAC — access control by role
-├── test_retest.py            # Retest workflow
-├── test_assignment.py        # Test assignment to users
-├── test_export.py            # CSV / PDF export
-├── test_github_sync.py       # Tests-as-Code: YAML parse, repo sync upsert, token redaction
-├── test_import_execute.py    # Import execute: external-identity matching, dedup, run linking
-├── test_zephyr_import.py     # Zephyr Scale JSON parser + detection
-├── test_xray_import.py       # Xray JSON parser (definitions + results) + detection
-├── test_qtest_import.py      # qTest JSON parser (properties array) + detection
-├── test_testlink_import.py   # TestLink XML parser + detection precedence
-├── test_xlsx_import.py       # .xlsx parser (openpyxl) + detection
-├── test_audit_log.py         # Audit log query, filters, admin gating
-├── test_notifications.py     # Notifications list/read + per-user config
-├── test_oauth.py             # OAuth login + account linking (GitHub)
-├── test_oauth_google.py      # OAuth login (Google)
-├── test_totp.py              # TOTP two-factor enable/verify/disable
-└── test_webhooks_hmac.py     # Webhook delivery + HMAC signature
-```
-
-### E2E tests (Playwright)
-
-```bash
-make test-e2e           # all suites (requires make dev running)
-make test-e2e-auth      # auth suite only
-make test-report        # open HTML report
-```
-
-31 suites covering all major user flows, feature phases, and regression scenarios — including
-`suite17-import` (27 tests across every supported import format).
+Full test layout and the live GitLab integration test → [docs/api.md#tests](docs/api.md#tests).
 
 ---
 
-## Development notes
+## Roadmap
 
-**Adding a new view:**
+All 7 production-readiness items are **done** (v1.0), and post-v1 features shipped through **v1.7**. Full detail and rationale in **[PRODUCTION_ROADMAP.md](PRODUCTION_ROADMAP.md)**.
 
-1. Create `frontend/views/view-myview.jsx`, register component on `window`
-2. Add `<script src="views/view-myview.js"></script>` to `frontend/index.html` (note `.js` — the build transpiles `.jsx` → `.js` into `frontend/dist/`)
-3. Add a case in `frontend/app.jsx`'s hash router switch
-4. Add nav item to the `NAV` array in `frontend/components/app-shell.jsx` if needed
-5. Rebuild with `npm run build`, or keep `make frontend-watch` running while you edit
+### Shipped
 
-**Database migrations (Alembic):**
+- ✅ v1.0 — production hardening: gated demo simulation, esbuild frontend build (airgap-ready), pagination, `/health` + logging, password reset + SMTP, Alembic migrations, backup/restore docs.
+- ✅ v1.1 — Requirements & test coverage (+ GraphQL).
+- ✅ v1.2 — Jira two-way integration.
+- ✅ v1.3 — External importers (TestRail/TestLink/qTest/Xray/Zephyr/XLSX) + dedup.
+- ✅ v1.4 — Test Plans, realtime runs over WebSocket, API tokens, pipeline ingest, GitHub Actions CI.
+- ✅ v1.5–1.7 — GitLab CI, Tests-as-Code push, TOTP 2FA, OAuth, audit log, AI edge-case assistant.
 
-Schema is Alembic-managed. On boot the app upgrades the DB to the latest
-revision automatically (pre-Alembic databases are detected and stamped at the
-baseline). When you change `backend/models.py`:
+### Planned
 
-```bash
-make db-revision m="add foo column to tests"   # autogenerate from model diff
-# review the file in migrations/versions/, then:
-make db-upgrade                                # or just restart the app
-```
+- ⏳ UI pagination controls ("showing N of M") using `X-Total-Count`.
+- ⏳ S3 attachment storage; Prometheus metrics endpoint.
+- ⏳ Redis-backed rate limiter / WS state (multi-worker).
+- ⏳ SSO / SAML / SCIM.
 
-Never edit applied revisions; add a new one. `create_all` is no longer the
-source of schema truth for existing installs — revisions are.
+Have a request? [Open an issue](https://github.com/ecamuto/thorotest/issues).
 
-**Adding a new API endpoint:**
-
-1. Add route to the relevant router in `backend/routers/` (or create a new file)
-2. Register the router in `backend/main.py`
-3. Add Pydantic schema to `backend/schemas.py` if needed
-4. Add tests in `backend/tests/`
-
-**Database reset:**
-
-```bash
-make db-reset   # deletes testhub.db — re-seeded automatically on next make dev
-```
-
-**AI assistant:**
-Defaults to Claude — set `ANTHROPIC_API_KEY` in `.env`. The endpoint is a no-op if the key is absent — no errors, no external calls.
-
-Any OpenAI-compatible provider also works (OpenAI, Mistral, Groq, OpenRouter, or a local LLM via Ollama / LM Studio / vLLM):
-
-```bash
-# Hosted example (OpenAI)
-AI_PROVIDER=openai
-AI_MODEL=gpt-4o
-AI_API_KEY=sk-...
-
-# Local example (Ollama)
-AI_BASE_URL=http://localhost:11434/v1
-AI_MODEL=llama3.1
-```
-
-Setting `AI_BASE_URL` alone selects the OpenAI-compatible provider. Small local models (<8B) sometimes return malformed JSON — the API responds 500 in that case; prefer instruction-tuned 8B+ models.
-
-**Theming:**
-The tweaks panel (bottom-right gear icon) switches between dark/light and compact/comfortable density. Persists in `localStorage`.
+---
 
 ## License
 
