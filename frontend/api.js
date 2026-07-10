@@ -290,6 +290,13 @@
       return res.json();
     },
 
+    // Per-record change history (who/when/what). entityType: test|requirement|defect
+    async getRecordHistory(entityType, id) {
+      const res = await fetch(BASE + `/api/history/${entityType}/${id}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error("History fetch failed");
+      return res.json();
+    },
+
     async getTestDefects(id) {
       const res = await fetch(BASE + `/api/tests/${id}/defects`, { headers: authHeaders() });
       if (!res.ok) throw new Error("Defects fetch failed");

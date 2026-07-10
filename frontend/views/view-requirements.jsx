@@ -347,6 +347,14 @@ function RequirementModal({ requirement, onClose, onSaved }) {
             <TestPicker selected={form.test_ids} onChange={ids => setForm(f => ({...f, test_ids: ids}))} />
           </div>
         </div>
+        {!isNew && (
+          <div style={{marginTop:18, borderTop:"1px solid var(--border)", paddingTop:6}}>
+            <label style={L}>Change history</label>
+            <div style={{marginLeft:-22, marginRight:-22}}>
+              <ChangeHistory entityType="requirement" entityId={requirement.id} />
+            </div>
+          </div>
+        )}
         <div style={{display:"flex", gap:8, justifyContent:"flex-end", marginTop:20}}>
           <button className="btn" onClick={onClose}>Cancel</button>
           <button className="btn accent" onClick={save} disabled={saving || !form.title.trim()}>

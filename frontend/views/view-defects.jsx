@@ -8,6 +8,7 @@ function Defects() {
   const [filterSeverity, setFilterSeverity] = useState("all");
   const [showCreate, setShowCreate] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [historyId, setHistoryId] = useState(null);
   const [runs, setRuns] = useState([]);
 
   const load = () => {
@@ -184,7 +185,13 @@ function Defects() {
                       )}
                     </td>
                     <td className="dim" style={{fontSize:11}}>{d.created_at || "—"}</td>
-                    <td>
+                    <td style={{whiteSpace:"nowrap"}}>
+                      <button
+                        className="btn ghost sm"
+                        style={{padding:"2px 6px"}}
+                        onClick={() => setHistoryId(d.id)}
+                        title="Change history"
+                      ><Icon name="clock" /></button>
                       <button
                         className="btn ghost sm"
                         style={{color:"var(--fail)", padding:"2px 6px"}}
@@ -206,6 +213,19 @@ function Defects() {
           onClose={() => setShowCreate(false)}
           onCreated={(d) => { setDefects(prev => [d, ...prev]); setShowCreate(false); }}
         />
+      )}
+
+      {historyId && (
+        <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} onClick={() => setHistoryId(null)}>
+          <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, width:520, maxHeight:"85vh", overflowY:"auto"}} onClick={e => e.stopPropagation()}>
+            <div style={{display:"flex", alignItems:"center", padding:"18px 22px 0"}}>
+              <h2 style={{fontSize:15, fontWeight:600, margin:0}}>Change history — {historyId}</h2>
+              <div className="spacer" style={{flex:1}} />
+              <button className="btn ghost sm" onClick={() => setHistoryId(null)}><Icon name="x" /></button>
+            </div>
+            <ChangeHistory entityType="defect" entityId={historyId} />
+          </div>
+        </div>
       )}
 
       {deleteConfirmId && (

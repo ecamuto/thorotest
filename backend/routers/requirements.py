@@ -13,6 +13,7 @@ from .. import models
 from ..schemas import RequirementOut, RequirementCreate, RequirementUpdate, RequirementCoverage
 from ..auth_utils import require_role, get_current_user
 from ..activity_utils import log_activity
+from ..record_history import log_create, log_update, log_delete
 from ._pagination import paginate, MAX_LIMIT
 
 router = APIRouter(tags=["requirements"])
@@ -192,6 +193,7 @@ def create_requirement(
     r.tests = _resolve_tests(db, payload.test_ids)
     db.add(r)
     log_activity(db, created_by, "created requirement", req_id, payload.title)
+    log_create(db, "requirement", req_id, current_user)
     db.commit()
     db.refresh(r)
     return _serialize(r)
@@ -265,13 +267,14 @@ async def import_requirements(
 
 
 @router.patch("/requirements/{req_id}", response_model=RequirementOut)
-def update_requirement(req_id: str, payload: RequirementUpdate, db: Session = Depends(get_db), _: models.User = WRITE_ROLES):
+def update_requirement(req_id: str, payload: RequirementUpdate, db: Session = Depends(get_db), current_user: models.User = WRITE_ROLES):
     r = db.query(models.Requirement).filter(models.Requirement.id == req_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Requirement not found")
     data = payload.model_dump(exclude_unset=True)
     if "test_ids" in data:
         r.tests = _resolve_tests(db, data.pop("test_ids") or [])
+    log_update(db, "requirement", req_id, current_user, r, data)
     for field, value in data.items():
         setattr(r, field, value)
     db.commit()
@@ -280,11 +283,12 @@ def update_requirement(req_id: str, payload: RequirementUpdate, db: Session = De
 
 
 @router.delete("/requirements/{req_id}", status_code=204)
-def delete_requirement(req_id: str, db: Session = Depends(get_db), _: models.User = ADMIN_ONLY):
+def delete_requirement(req_id: str, db: Session = Depends(get_db), current_user: models.User = ADMIN_ONLY):
     r = db.query(models.Requirement).filter(models.Requirement.id == req_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Requirement not found")
     db.delete(r)
+    log_delete(db, "requirement", req_id, current_user)
     db.commit()
 
 

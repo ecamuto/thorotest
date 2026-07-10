@@ -138,6 +138,7 @@ function TestDetail({ testId, onBack, currentUser }) {
         <div className={"tab" + (tab === "defects" ? " active" : "")} onClick={() => setTab("defects")}>Defects{defectCount !== null && defectCount > 0 ? <span className="count">{defectCount}</span> : null}</div>
         <div className={"tab" + (tab === "requirements" ? " active" : "")} onClick={() => setTab("requirements")}>Requirements{reqCount !== null && reqCount > 0 ? <span className="count">{reqCount}</span> : null}</div>
         <div className={"tab" + (tab === "comments" ? " active" : "")} onClick={() => setTab("comments")}>Comments</div>
+        <div className={"tab" + (tab === "changes" ? " active" : "")} onClick={() => setTab("changes")}>Changes</div>
         <div className={"tab" + (tab === "git" ? " active" : "")} onClick={() => setTab("git")}>Git history</div>
       </div>
 
@@ -147,6 +148,7 @@ function TestDetail({ testId, onBack, currentUser }) {
         {tab === "defects" && <DefectsTab test={test} currentUser={currentUser} />}
         {tab === "requirements" && <RequirementsTab test={test} currentUser={currentUser} onCountChange={setReqCount} />}
         {tab === "comments" && <CommentsTab test={test} />}
+        {tab === "changes" && <ChangeHistory entityType="test" entityId={test.id} />}
         {tab === "git" && <GitHistoryTab test={test} />}
       </div>
 

@@ -214,4 +214,34 @@ test.describe('Suite 4 — Test Detail', () => {
     expect(content).toBeTruthy();
   });
 
+  // E2E-DET-11 · Tab Changes — record change history [P1]
+  test('DET-11: tab Changes registra un edit', async ({ page }) => {
+    await page.goto('/#/tests/TC-2301');
+    await page.waitForURL('**/#/tests/TC-2301', { timeout: 10000 });
+
+    // Generate a change: flip status to fail (PATCH -> record_history "updated")
+    await page.locator('.status, [class*="status"]').first().click();
+    await Promise.all([
+      page.waitForResponse(r => r.url().includes('/api/tests/TC-2301') && r.request().method() === 'PATCH'),
+      page.click('span.status.fail'),
+    ]);
+
+    // Open Changes tab — expect the history endpoint + a rendered entry
+    const [response] = await Promise.all([
+      page.waitForResponse(r => r.url().includes('/api/history/test/TC-2301')),
+      page.click('.tab:has-text("Changes")'),
+    ]);
+    expect(response.status()).toBe(200);
+    const body = await response.json();
+    expect(Array.isArray(body)).toBeTruthy();
+    expect(body.length).toBeGreaterThan(0);
+
+    // "status" field diff visible in the timeline
+    await expect(page.locator('.app')).toContainText('status', { timeout: 5000 });
+
+    // Restore
+    await page.locator('.status, [class*="status"]').first().click();
+    await page.click('span.status.pass');
+  });
+
 });

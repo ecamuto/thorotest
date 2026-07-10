@@ -37,7 +37,7 @@ from .ws_manager import manager
 from .notifications import notif_manager
 from .auth_utils import SECRET_KEY, ALGORITHM, get_current_user
 from .gql_schema import graphql_router
-from .routers import folders, tests, runs, plans, pipelines, activity, auth, projects, categories, defects, requirements, integrations, tokens, webhooks, favorites, import_, attachments, admin, ai, notifications, audit_log, oauth, totp, ci
+from .routers import folders, tests, runs, plans, pipelines, activity, auth, projects, categories, defects, requirements, integrations, tokens, webhooks, favorites, import_, attachments, admin, ai, notifications, audit_log, oauth, totp, ci, history
 
 # Serve the built frontend (frontend/dist — produced by `npm run build`).
 # Fall back to the source dir so the API can still boot without a build
@@ -276,6 +276,7 @@ app.include_router(admin.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
 app.include_router(audit_log.router, prefix="/api")
+app.include_router(history.router, prefix="/api")
 app.include_router(oauth.router, prefix="/api")
 app.include_router(totp.router, prefix="/api")
 

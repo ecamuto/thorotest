@@ -13,6 +13,7 @@ from ..auth_utils import require_role, get_current_user
 from ..notifications import _notify_comment_event
 from ..audit_utils import log_event, EVT_TEST_CREATED, EVT_TEST_UPDATED, EVT_TEST_DELETED
 from ..activity_utils import log_activity, actor_name
+from ..record_history import log_create, log_update, log_delete, diff_fields, write_changes
 from ..vcs import detect_provider
 from ..git_push import find_vcs_integration, PushConflict
 from ..github_sync import push_test as github_push_test
@@ -136,6 +137,7 @@ def create_test(payload: TestCreate, db: Session = Depends(get_db), current_user
     t = models.Test(**data)
     db.add(t)
     log_activity(db, actor_name(current_user), "created", test_id, t.title)
+    log_create(db, "test", test_id, current_user)
     db.commit()
     db.refresh(t)
     log_event(
@@ -156,6 +158,15 @@ def update_test(test_id: str, payload: TestUpdate, db: Session = Depends(get_db)
         raise HTTPException(status_code=404, detail="Test not found")
     data = payload.model_dump(exclude_unset=True)
     category_ids = data.pop("category_ids", None)
+    changes = diff_fields(t, data)
+    if category_ids is not None:
+        old_cats = sorted(t.category_ids)
+        new_cats = sorted(category_ids)
+        if old_cats != new_cats:
+            changes.append({"field": "categories",
+                            "old": ", ".join(old_cats) or None,
+                            "new": ", ".join(new_cats) or None})
+    write_changes(db, "test", test_id, current_user, changes)
     for field, value in data.items():
         setattr(t, field, value)
     if category_ids is not None:
@@ -222,6 +233,7 @@ def delete_test(test_id: str, db: Session = Depends(get_db), current_user: model
     test_title = t.title   # capture before delete
     db.delete(t)
     log_activity(db, actor_name(current_user), "deleted", test_id, test_title)
+    log_delete(db, "test", test_id, current_user)
     db.commit()
     log_event(
         EVT_TEST_DELETED,
@@ -305,9 +317,18 @@ def list_steps(test_id: str, db: Session = Depends(get_db), _: models.User = Dep
 
 
 @router.patch("/tests/{test_id}/steps", response_model=List[TestStepOut])
-def replace_steps(test_id: str, steps: List[TestStepIn], db: Session = Depends(get_db), _: models.User = WRITE_ROLES):
+def replace_steps(test_id: str, steps: List[TestStepIn], db: Session = Depends(get_db), current_user: models.User = WRITE_ROLES):
     if not db.query(models.Test).filter(models.Test.id == test_id).first():
         raise HTTPException(status_code=404, detail="Test not found")
+    # Snapshot old steps (ordered) to diff for change history.
+    old_steps = (
+        db.query(models.TestStep)
+        .filter(models.TestStep.test_id == test_id)
+        .order_by(models.TestStep.order)
+        .all()
+    )
+    old_list = [(s.action, s.expected_result) for s in old_steps]
+    new_list = [(s.action, s.expected_result) for s in steps]
     # Atomic replace: delete all existing, insert new in order
     db.query(models.TestStep).filter(models.TestStep.test_id == test_id).delete()
     for i, s in enumerate(steps):
@@ -317,6 +338,12 @@ def replace_steps(test_id: str, steps: List[TestStepIn], db: Session = Depends(g
             action=s.action,
             expected_result=s.expected_result,
         ))
+    if old_list != new_list:
+        new_desc = f"{len(new_list)} steps"
+        if len(old_list) == len(new_list):
+            new_desc += " (edited)"
+        write_changes(db, "test", test_id, current_user,
+                      [{"field": "steps", "old": f"{len(old_list)} steps", "new": new_desc}])
     db.commit()
     return (
         db.query(models.TestStep)

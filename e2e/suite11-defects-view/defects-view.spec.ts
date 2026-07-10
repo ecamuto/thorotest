@@ -221,4 +221,38 @@ test.describe('Suite 11 — Defects View & API', () => {
     }
   });
 
+  // DEF-11 · Change history modal (who/when/what) [P1]
+  test('DEF-11: change history modal renders field diff', async ({ page }) => {
+    await loginAs(page, 'marco@acme.com');
+    const token = await page.evaluate(() => localStorage.getItem('th_token'));
+    const auth = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+    // Create + mutate via API so an "updated" history row exists.
+    const created = await page.request.post(`${BASE}/api/defects`, {
+      data: { title: 'DEF-11 history defect', severity: 'high' },
+      headers: auth,
+    });
+    const def = await created.json();
+    await page.request.patch(`${BASE}/api/defects/${def.id}`, {
+      data: { status: 'resolved' },
+      headers: auth,
+    });
+
+    // Open the row's history modal via the clock button.
+    await page.goto('/#/defects');
+    await expect(page.locator('h1:has-text("Defects")')).toBeVisible({ timeout: 10000 });
+    const [response] = await Promise.all([
+      page.waitForResponse(r => r.url().includes(`/api/history/defect/${def.id}`)),
+      page.locator(`tr:has-text("${def.id}") button[title="Change history"]`).click(),
+    ]);
+    expect(response.status()).toBe(200);
+    await expect(page.locator(`.app:has-text("Change history — ${def.id}")`)).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.app')).toContainText('status', { timeout: 5000 });
+
+    // Cleanup
+    await page.request.delete(`${BASE}/api/defects/${def.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  });
+
 });
