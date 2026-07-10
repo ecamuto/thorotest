@@ -252,20 +252,20 @@ test.describe('Suite P4 — AI Assistant', () => {
     expect(suggestionsRendered).toBe(true);
   });
 
-  // SC4 — Analyze Flaky: visible only on tests with ≥1 failed run
-  test('AI-04c (SC4): Analyze Flaky button visible only when test has failed runs', async ({ page }) => {
+  // SC4 — Analyze Flaky: visible only on tests with ≥2 runs (variability needed)
+  test('AI-04c (SC4): Analyze Flaky button visible only when test has at least two runs', async ({ page }) => {
     await page.route('**/api/ai/analyze-flaky', async route => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_ANALYZE) });
     });
 
-    // TC-1045 has 2 failed RunCases → button visible
+    // TC-1045 has 2 RunCases → button visible
     await page.goto('/#/tests/TC-1045');
     await page.waitForURL('**/#/tests/TC-1045', { timeout: 10000 });
     await page.click('.tab:has-text("Run history")');
     await page.waitForTimeout(800);
     await expect(page.locator('button:has-text("Analyze flaky")')).toBeVisible({ timeout: 5000 });
 
-    // TC-2401 has only a passing RunCase → button NOT visible
+    // TC-2401 has a single RunCase → button NOT visible
     await page.goto('/#/tests/TC-2401');
     await page.waitForURL('**/#/tests/TC-2401', { timeout: 10000 });
     await page.click('.tab:has-text("Run history")');
