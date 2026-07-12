@@ -40,6 +40,21 @@ class TestListPagination:
         assert r.status_code == 200
         assert len(r.json()) == 3  # capped limit still >= row count here
 
+    def test_negative_limit_does_not_bypass_cap(self, client, db):
+        # `LIMIT -1` in SQLite is unbounded; a negative limit must be clamped
+        # to >= 1 so it cannot pull the whole table.
+        _add_tests(db, 5)
+        r = client.get("/api/tests?limit=-1")
+        assert r.status_code == 200
+        assert len(r.json()) == 1
+        assert r.headers["X-Total-Count"] == "5"
+
+    def test_negative_offset_clamped(self, client, db):
+        _add_tests(db, 3)
+        r = client.get("/api/tests?offset=-5&limit=2")
+        assert r.status_code == 200
+        assert [t["id"] for t in r.json()] == ["PAG-000", "PAG-001"]
+
     def test_runs_defects_pipelines_activity_have_header(self, client):
         for path in ("/api/runs", "/api/defects", "/api/pipelines", "/api/activity"):
             r = client.get(path)
