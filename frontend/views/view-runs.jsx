@@ -868,6 +868,17 @@ function NewPlanModal({ onClose, onCreated }) {
     setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
 
+  const allSelected = filtered.length > 0 && filtered.every(t => selected.has(t.id));
+  const someSelected = filtered.some(t => selected.has(t.id));
+  const toggleAll = () => {
+    setSelected(s => {
+      const n = new Set(s);
+      if (filtered.every(t => n.has(t.id))) filtered.forEach(t => n.delete(t.id));
+      else filtered.forEach(t => n.add(t.id));
+      return n;
+    });
+  };
+
   const handleSave = async () => {
     if (!name.trim()) { setError("Plan name is required."); return; }
     setSaving(true);
@@ -934,6 +945,16 @@ function NewPlanModal({ onClose, onCreated }) {
           <input className="input" style={{width:"100%", boxSizing:"border-box"}}
             placeholder="Search tests by title or ID…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        {filtered.length > 0 && (
+          <label style={{display:"grid", gridTemplateColumns:"20px 1fr", gap:10, alignItems:"center",
+            padding:"8px 18px", cursor:"pointer", fontSize:11.5, fontWeight:600, color:"var(--text-dim)",
+            borderBottom:"1px solid var(--border)"}}>
+            <input type="checkbox" checked={allSelected}
+              ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
+              onChange={toggleAll} />
+            <span>{allSelected ? "Deselect all" : "Select all"}{search ? " matching" : ""} ({filtered.length})</span>
+          </label>
+        )}
         <div style={{overflowY:"auto", flex:1}}>
           {filtered.length === 0 && <div className="empty" style={{padding:"24px 18px", fontSize:12}}>No tests match.</div>}
           {filtered.map(t => (
@@ -994,6 +1015,17 @@ function NewRunModal({ onClose, onCreated }) {
     setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
 
+  const allSelected = filtered.length > 0 && filtered.every(t => selected.has(t.id));
+  const someSelected = filtered.some(t => selected.has(t.id));
+  const toggleAll = () => {
+    setSelected(s => {
+      const n = new Set(s);
+      if (filtered.every(t => n.has(t.id))) filtered.forEach(t => n.delete(t.id));
+      else filtered.forEach(t => n.add(t.id));
+      return n;
+    });
+  };
+
   const handleCreate = async () => {
     if (!name.trim()) { setError("Run name is required."); return; }
     setCreating(true);
@@ -1051,6 +1083,16 @@ function NewRunModal({ onClose, onCreated }) {
                 autoFocus
               />
             </div>
+            {filtered.length > 0 && (
+              <label style={{display:"grid", gridTemplateColumns:"20px 1fr", gap:10, alignItems:"center",
+                padding:"8px 18px", cursor:"pointer", fontSize:11.5, fontWeight:600, color:"var(--text-dim)",
+                borderBottom:"1px solid var(--border)"}}>
+                <input type="checkbox" checked={allSelected}
+                  ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
+                  onChange={toggleAll} />
+                <span>{allSelected ? "Deselect all" : "Select all"}{search ? " matching" : ""} ({filtered.length})</span>
+              </label>
+            )}
             <div style={{overflowY:"auto", flex:1}}>
               {filtered.length === 0 && (
                 <div className="empty" style={{padding:"24px 18px", fontSize:12}}>No tests match.</div>
