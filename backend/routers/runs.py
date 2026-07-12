@@ -12,7 +12,7 @@ from ..auth_utils import require_role, get_current_user
 from ..audit_utils import log_event, EVT_RUN_STARTED, EVT_RUN_COMPLETED
 from ..activity_utils import log_activity, actor_name
 from ..ws_manager import manager
-from ..notifications import _notify_run_events, _fire_webhooks
+from ..notifications import _notify_run_events, _fire_webhooks, _notify_assignment
 from ._pagination import paginate, MAX_LIMIT
 from fpdf import FPDF
 from fpdf.fonts import FontFace
@@ -192,10 +192,14 @@ async def update_run_case(
         raise HTTPException(status_code=404, detail="RunCase not found")
 
     fields = payload.model_fields_set
+    assignee_changed = False
+    new_assignee = None
     if "assigned_to" in fields:
         # Assignment stays a lead action; result marking is open to testers.
         if current_user.role not in ("admin", "manager"):
             raise HTTPException(status_code=403, detail="Only leads can assign cases")
+        assignee_changed = (payload.assigned_to or None) != (rc.assigned_to or None)
+        new_assignee = payload.assigned_to
         rc.assigned_to = payload.assigned_to
     if "actual_result" in fields:
         rc.actual_result = payload.actual_result
@@ -207,6 +211,15 @@ async def update_run_case(
         rc.status = payload.status
 
     db.commit()
+
+    if assignee_changed and new_assignee:
+        case_title = (rc.test.title if rc.test else None) or rc.test_id
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(_notify_assignment(
+                "test case", case_title, f"#/runs/{run_id}", new_assignee, current_user.username))
+        except RuntimeError:
+            pass
 
     if not status_changed:
         db.refresh(rc)

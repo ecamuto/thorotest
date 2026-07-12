@@ -1,3 +1,4 @@
+import asyncio
 import csv
 import io
 import json
@@ -14,6 +15,7 @@ from ..schemas import RequirementOut, RequirementCreate, RequirementUpdate, Requ
 from ..auth_utils import require_role, get_current_user
 from ..activity_utils import log_activity
 from ..record_history import log_create, log_update, log_delete
+from ..notifications import _notify_assignment
 from ._pagination import paginate, MAX_LIMIT
 
 router = APIRouter(tags=["requirements"])
@@ -274,11 +276,20 @@ def update_requirement(req_id: str, payload: RequirementUpdate, db: Session = De
     data = payload.model_dump(exclude_unset=True)
     if "test_ids" in data:
         r.tests = _resolve_tests(db, data.pop("test_ids") or [])
+    owner_changed = "owner" in data and (data.get("owner") or None) != (r.owner or None)
+    new_owner = data.get("owner")
     log_update(db, "requirement", req_id, current_user, r, data)
     for field, value in data.items():
         setattr(r, field, value)
     db.commit()
     db.refresh(r)
+    if owner_changed and new_owner:
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(_notify_assignment(
+                "requirement", r.title, f"#/requirements/{req_id}", new_owner, current_user.username))
+        except RuntimeError:
+            pass
     return _serialize(r)
 
 

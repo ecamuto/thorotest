@@ -346,6 +346,8 @@ class NotificationConfig(Base):
     notify_consecutive_fail = Column(Boolean, default=True)
     consecutive_fail_threshold = Column(Integer, default=3)
     notify_comment = Column(Boolean, default=True)
+    notify_mention = Column(Boolean, default=True)       # @mentioned in a comment
+    notify_assigned = Column(Boolean, default=True)      # a record's owner/case assignee set to you
 
 
 class AuditLog(Base):

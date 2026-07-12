@@ -10,7 +10,7 @@ from ..db import get_db
 from .. import models
 from ..schemas import TestOut, TestCreate, TestUpdate, BulkAction, DefectOut, CommentOut, CommentCreate, TestStepOut, TestStepIn
 from ..auth_utils import require_role, get_current_user
-from ..notifications import _notify_comment_event
+from ..notifications import _notify_comment_event, _notify_mentions, _notify_assignment
 from ..audit_utils import log_event, EVT_TEST_CREATED, EVT_TEST_UPDATED, EVT_TEST_DELETED
 from ..activity_utils import log_activity, actor_name
 from ..record_history import log_create, log_update, log_delete, diff_fields, write_changes
@@ -158,6 +158,8 @@ def update_test(test_id: str, payload: TestUpdate, db: Session = Depends(get_db)
         raise HTTPException(status_code=404, detail="Test not found")
     data = payload.model_dump(exclude_unset=True)
     category_ids = data.pop("category_ids", None)
+    owner_changed = "owner" in data and (data.get("owner") or None) != (t.owner or None)
+    new_owner = data.get("owner")
     changes = diff_fields(t, data)
     if category_ids is not None:
         old_cats = sorted(t.category_ids)
@@ -185,6 +187,13 @@ def update_test(test_id: str, payload: TestUpdate, db: Session = Depends(get_db)
         target_type="test",
         target_id=str(t.id),
     )
+    if owner_changed and new_owner:
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(_notify_assignment(
+                "test", t.title, f"#/tests/{test_id}", new_owner, current_user.username))
+        except RuntimeError:
+            pass
     return t
 
 
@@ -285,7 +294,8 @@ def add_comment(
     current_user: models.User = WRITE_ROLES,
     db: Session = Depends(get_db),
 ):
-    if not db.query(models.Test).filter(models.Test.id == test_id).first():
+    t = db.query(models.Test).filter(models.Test.id == test_id).first()
+    if not t:
         raise HTTPException(status_code=404, detail="Test not found")
     # Use payload.who if explicitly provided (not the schema default), else use auth user's name
     if payload.who and payload.who != "You":
@@ -299,6 +309,8 @@ def add_comment(
     try:
         loop = asyncio.get_running_loop()
         loop.create_task(_notify_comment_event(test_id, current_user.username))
+        loop.create_task(_notify_mentions(
+            t.title, f"#/tests/{test_id}", payload.text, current_user.username))
     except RuntimeError:
         pass  # No running loop in sync test context — skip notification
     return c
