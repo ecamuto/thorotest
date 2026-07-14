@@ -12,12 +12,17 @@ function Pipelines() {
   const anyRunning = (rows || []).some(p => p.status === "running");
   React.useEffect(() => {
     if (!anyRunning) return;
+    let inFlight = false;   // reconcile hits the CI provider — don't stack calls
     const id = setInterval(async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
-        const res = await fetch('/api/pipelines', { headers: window.authHeaders() });
-        if (res.ok) setRows(await res.json());
+        // Re-query the provider for stuck 'running' rows and refresh in one round-trip.
+        const { pipelines } = await TH_API.reconcilePipelines();
+        if (pipelines) setRows(pipelines);
       } catch {}
-    }, 4000);
+      finally { inFlight = false; }
+    }, 5000);
     return () => clearInterval(id);
   }, [anyRunning]);
 
@@ -29,6 +34,25 @@ function Pipelines() {
       setRows(rs => (rs || []).filter(p => p.id !== id));
     } catch (err) {
       window.alert(err.message);
+    }
+  }
+
+  // Row expansion → individual test cases of the imported run.
+  const [expanded, setExpanded] = React.useState(null);   // pipeline id or null
+  const [cases, setCases] = React.useState({});           // id → { loading, error, items }
+
+  async function toggleExpand(p, e) {
+    e.stopPropagation();   // don't also open the run URL
+    if (expanded === p.id) { setExpanded(null); return; }
+    setExpanded(p.id);
+    if (!cases[p.id]) {
+      setCases(c => ({ ...c, [p.id]: { loading: true } }));
+      try {
+        const items = await TH_API.pipelineCases(p.id);
+        setCases(c => ({ ...c, [p.id]: { items } }));
+      } catch (err) {
+        setCases(c => ({ ...c, [p.id]: { error: err.message } }));
+      }
     }
   }
 
@@ -86,15 +110,28 @@ function Pipelines() {
               </tr>
             </thead>
             <tbody>
-              {list.map(p => (
-                <tr key={p.id}
+              {list.map(p => {
+                const isOpen = expanded === p.id;
+                const cs = cases[p.id];
+                return (
+                <React.Fragment key={p.id}>
+                <tr
                     style={p.url ? {cursor:"pointer"} : undefined}
                     title={p.url ? "Open the run on the CI provider" : undefined}
                     onClick={p.url ? () => window.open(p.url, "_blank", "noopener,noreferrer") : undefined}>
                   <td>
-                    <span style={{display:"inline-flex", width:18, height:18}}>
-                      {p.platform === "github" ? I.github : p.platform === "gitlab" ? I.gitlab : I.jenkins}
-                    </span>
+                    {p.run_id ? (
+                      <button className="btn ghost icon sm"
+                              title={isOpen ? "Collapse" : "Show test cases"}
+                              onClick={e => toggleExpand(p, e)}
+                              style={{transform: isOpen ? "rotate(90deg)" : "none", transition:"transform .12s"}}>
+                        <Icon name="chev" />
+                      </button>
+                    ) : (
+                      <span style={{display:"inline-flex", width:18, height:18}}>
+                        {p.platform === "github" ? I.github : p.platform === "gitlab" ? I.gitlab : I.jenkins}
+                      </span>
+                    )}
                   </td>
                   <td>{p.name}{p.url && <span className="dim" style={{marginLeft:6, fontSize:11}}>↗</span>}</td>
                   <td><StatusBadge s={p.status} /></td>
@@ -111,7 +148,35 @@ function Pipelines() {
                     </button>
                   </td>
                 </tr>
-              ))}
+                {isOpen && (
+                  <tr className="pipeline-cases-row">
+                    <td></td>
+                    <td colSpan={8} style={{padding:0}}>
+                      {cs?.loading && <div className="dim" style={{padding:"8px 4px", fontSize:12}}>Loading test cases…</div>}
+                      {cs?.error && <div style={{padding:"8px 4px", fontSize:12, color:"var(--fail)"}}>{cs.error}</div>}
+                      {cs?.items && cs.items.length === 0 && (
+                        <div className="dim" style={{padding:"8px 4px", fontSize:12}}>No test cases recorded for this run.</div>
+                      )}
+                      {cs?.items && cs.items.length > 0 && (
+                        <table className="table" style={{margin:"2px 0 6px", background:"var(--bg-2)"}}>
+                          <tbody>
+                            {cs.items.map(c => (
+                              <tr key={c.id}>
+                                <td className="mono dim" style={{width:120}}>{c.test_id}</td>
+                                <td>{c.title}</td>
+                                <td style={{width:100}}><StatusBadge s={c.status} /></td>
+                                <td className="mono dim" style={{width:90}}>{c.duration || "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </td>
+                  </tr>
+                )}
+                </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         )}

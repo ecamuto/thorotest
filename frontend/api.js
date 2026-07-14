@@ -616,6 +616,18 @@
       if (!res.ok && res.status !== 204) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "Delete failed"); }
     },
 
+    async pipelineCases(id) {
+      const res = await fetch(BASE + `/api/pipelines/${id}/cases`, { headers: authHeaders() });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "Failed to load cases"); }
+      return res.json();
+    },
+
+    async reconcilePipelines() {
+      const res = await fetch(BASE + `/api/pipelines/reconcile`, { method: "POST", headers: authHeaders() });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "Reconcile failed"); }
+      return res.json();   // { updated, pipelines }
+    },
+
     async syncIntegration(id) {
       const res = await fetch(BASE + `/api/integrations/${id}/sync`, { method: "POST", headers: authHeaders() });
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "Sync failed"); }

@@ -168,6 +168,7 @@ class PipelineOut(BaseModel):
     branch: Optional[str] = None
     when: Optional[str] = None
     url: Optional[str] = None
+    run_id: Optional[str] = None   # set → row is expandable to the run's test cases
 
     model_config = {"from_attributes": True}
 
