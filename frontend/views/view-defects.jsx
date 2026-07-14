@@ -1,9 +1,9 @@
 // Global defects view — list, filter, manage all defects
 
-function Defects() {
+function Defects({ focusId }) {
   const [defects, setDefects] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(focusId || "");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterSeverity, setFilterSeverity] = useState("all");
   const [showCreate, setShowCreate] = useState(false);
@@ -19,6 +19,16 @@ function Defects() {
   };
 
   useEffect(() => { load(); }, [filterStatus, filterSeverity]);
+
+  // Opened from an activity link (BUG-…): pre-filter the list to that defect.
+  useEffect(() => {
+    if (!focusId) return;
+    setSearch(focusId);
+    setLoading(true);
+    TH_API.getDefects({ status: filterStatus, severity: filterSeverity, search: focusId })
+      .then(data => { setDefects(data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [focusId]);
 
   useEffect(() => {
     TH_API.getRuns().then(setRuns).catch(() => {});
