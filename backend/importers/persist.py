@@ -177,6 +177,7 @@ def persist_import_result(db, result: ImportResult, provider: str, conflict: str
             blocked=blocked,
             progress=100 if total > 0 else 0,
             started=now,
+            created_at=now,   # so CI/file-imported runs show up in Test health (bucketed by date)
             source_run_id=run_data.source_id or None,
         )
         db.add(run)
