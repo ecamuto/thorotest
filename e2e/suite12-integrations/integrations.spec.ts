@@ -303,30 +303,39 @@ test.describe('Suite 12 — Integrations, API Tokens, Webhooks', () => {
     await loginAs(page, 'marco@acme.com');
     const token = await getToken(page);
 
-    // Cleanup stale httpbin webhooks
+    // Point the webhook at the app's own server instead of a public endpoint
+    // (httpbin.org). An external target made this flake: when it was slow the
+    // 5s server-side timeout returned status_code 0, which renders no badge.
+    // POST /health is reachable, fast, and returns 405 (non-zero) → a badge.
+    const HOOK_URL = `${BASE}/health`;
+
+    // Cleanup stale local webhooks from previous runs
     const existingWh = await page.request.get(`${BASE}/api/webhooks`, { headers: { Authorization: `Bearer ${token}` } });
-    for (const w of (await existingWh.json()).filter((x: any) => x.url.includes('httpbin.org'))) {
+    for (const w of (await existingWh.json()).filter((x: any) => x.url === HOOK_URL)) {
       await page.request.delete(`${BASE}/api/webhooks/${w.id}`, { headers: { Authorization: `Bearer ${token}` } });
     }
 
-    // Create webhook via API (using httpbin or a known URL)
+    // Create webhook via API
     const created = await page.request.post(`${BASE}/api/webhooks`, {
-      data: { url: 'https://httpbin.org/post', events: ['run.completed'] },
+      data: { url: HOOK_URL, events: ['run.completed'] },
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     });
     const hook = await created.json();
 
     await page.goto('/#/integrations');
-    await expect(page.locator('span.mono').filter({ hasText: 'httpbin.org' })).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('span.mono').filter({ hasText: '/health' })).toBeVisible({ timeout: 10000 });
 
     // Click "Test" button for this webhook
     // Use innermost div containing the URL span (flex row with URL + action buttons)
-    const hookRow = page.locator('div').filter({ has: page.locator('span.mono').filter({ hasText: 'httpbin.org' }) }).last();
-    await hookRow.locator('button').filter({ hasText: 'Test' }).click();
-
-    // Wait for result — status code or "OK" indicator appears
-    await page.waitForTimeout(8000); // webhook test may take time
-    // The status code badge should appear after test
+    const hookRow = page.locator('div').filter({ has: page.locator('span.mono').filter({ hasText: '/health' }) }).last();
+    // Wait for the test POST to resolve instead of a fixed sleep.
+    const [testResponse] = await Promise.all([
+      page.waitForResponse(r =>
+        r.url().includes(`/api/webhooks/${hook.id}/test`) && r.request().method() === 'POST'),
+      hookRow.locator('button').filter({ hasText: 'Test' }).click(),
+    ]);
+    expect(testResponse.status()).toBe(200);
+    // The status code badge should appear once the result lands.
     await expect(hookRow.locator('span.status')).toBeVisible({ timeout: 10000 });
 
     // Cleanup
