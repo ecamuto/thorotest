@@ -380,10 +380,14 @@ function CliSection() {
 
   return (
     <div style={{ maxWidth: 700 }}>
-      <div className="page-title" style={{ fontSize: 18, marginBottom: 4 }}>CLI</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+        <div className="page-title" style={{ fontSize: 18 }}>CLI</div>
+        <span style={{ fontSize: 10.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, color: "var(--text-dim)", border: "1px solid var(--border)", borderRadius: 4, padding: "2px 6px" }}>
+          Coming soon
+        </span>
+      </div>
       <div style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 20, lineHeight: 1.6 }}>
-        <code style={{ fontFamily: "var(--font-mono)" }}>npm install -g @thorotest/cli</code>
-        &nbsp;·&nbsp; Requires Node 18+
+        Not yet published. The commands below preview the planned CLI · Requires Node 18+
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {cmds.map(c => (
