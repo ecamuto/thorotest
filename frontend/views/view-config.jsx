@@ -856,8 +856,28 @@ function Integrations() {
 }
 
 function AIAssistant({ currentUser, currentFolderId }) {
-  // Active panel: "generate" | "edge-cases"
+  // Active panel: "generate" | "edge-cases" | "ask"
   const [panel, setPanel] = React.useState("generate");
+
+  // Folder list for the edge-cases picker. Walk the tree (any depth) building
+  // full ancestor paths, and count direct tests per folder so the dropdown
+  // shows only folders that actually have tests to analyze.
+  const { data: appData } = useInitialData();
+  const folderPaths = {};
+  const folderCounts = {};
+  (function walk(list, prefix) {
+    (list || []).forEach(f => {
+      const path = prefix ? `${prefix} ‹ ${f.name}` : f.name;
+      folderPaths[f.id] = path;
+      walk(f.children, path);
+    });
+  })(appData?.folders, "");
+  (appData?.tests || []).forEach(t => {
+    const fid = t.folder || t.folder_id;
+    if (fid) folderCounts[fid] = (folderCounts[fid] || 0) + 1;
+  });
+  const folderIds = Object.keys(folderCounts)
+    .sort((a, b) => (folderPaths[a] || a).localeCompare(folderPaths[b] || b));
 
   // --- Generate Tests state ---
   const [genDesc, setGenDesc] = React.useState("");
@@ -868,11 +888,23 @@ function AIAssistant({ currentUser, currentFolderId }) {
   const [genSelected, setGenSelected] = React.useState({});  // {index: bool}
   const [genSaving, setGenSaving] = React.useState(false);
   const [genSaveError, setGenSaveError] = React.useState(null);
+  const [genFolderId, setGenFolderId] = React.useState(currentFolderId || "");  // destination for saved tests
 
   // --- Edge Cases state ---
+  const [ecFolderId, setEcFolderId] = React.useState(currentFolderId || "");
   const [ecLoading, setEcLoading] = React.useState(false);
   const [ecError, setEcError] = React.useState(null);
   const [ecResults, setEcResults] = React.useState(null);    // {suggestions: [{title, rationale}]}
+  // Default the picker to the folder the user came from, else the first with tests.
+  React.useEffect(() => {
+    if (!ecFolderId) setEcFolderId(currentFolderId || folderIds[0] || "");
+  }, [currentFolderId, folderIds.length]);
+
+  // --- Ask AI (free prompt) state ---
+  const [askPrompt, setAskPrompt] = React.useState("");
+  const [askLoading, setAskLoading] = React.useState(false);
+  const [askError, setAskError] = React.useState(null);
+  const [askAnswer, setAskAnswer] = React.useState(null);
 
   const handleGenerate = () => {
     if (!genDesc.trim()) return;
@@ -902,7 +934,7 @@ function AIAssistant({ currentUser, currentFolderId }) {
         const tc = genResults[i];
         const created = await TH_API.createTest({
           title: tc.title,
-          folder_id: currentFolderId || null,
+          folder_id: genFolderId || null,
           status: "pending",
         });
         if (tc.steps && tc.steps.length > 0) {
@@ -923,12 +955,23 @@ function AIAssistant({ currentUser, currentFolderId }) {
   };
 
   const handleSuggest = () => {
+    if (!ecFolderId) return;
     setEcLoading(true);
     setEcError(null);
     setEcResults(null);
-    TH_API.suggestEdgeCases({ folder_id: currentFolderId || null })
+    TH_API.suggestEdgeCases({ folder_id: ecFolderId })
       .then(data => { setEcResults(data); setEcLoading(false); })
       .catch(err => { setEcError(err.message); setEcLoading(false); });
+  };
+
+  const handleAsk = () => {
+    if (!askPrompt.trim()) return;
+    setAskLoading(true);
+    setAskError(null);
+    setAskAnswer(null);
+    TH_API.aiPrompt({ prompt: askPrompt.trim() })
+      .then(data => { setAskAnswer(data.response || ""); setAskLoading(false); })
+      .catch(err => { setAskError(err.message); setAskLoading(false); });
   };
 
   const anySelected = genResults && Object.values(genSelected).some(Boolean);
@@ -953,6 +996,10 @@ function AIAssistant({ currentUser, currentFolderId }) {
           className={"btn sm" + (panel === "edge-cases" ? " primary" : "")}
           onClick={() => setPanel("edge-cases")}
         >Suggest edge cases</button>
+        <button
+          className={"btn sm" + (panel === "ask" ? " primary" : "")}
+          onClick={() => setPanel("ask")}
+        >Ask AI</button>
       </div>
 
       {/* Generate Tests panel */}
@@ -986,6 +1033,21 @@ function AIAssistant({ currentUser, currentFolderId }) {
                 {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>{n}</option>)}
               </select>
             </div>
+            <div className="field" style={{marginBottom:14}}>
+              <label className="field-label">Save to folder</label>
+              <select
+                className="select"
+                style={{width:"100%", maxWidth:480}}
+                value={genFolderId}
+                onChange={e => setGenFolderId(e.target.value)}
+                disabled={genLoading || genSaving}
+              >
+                <option value="">No folder</option>
+                {folderIds.map(id => (
+                  <option key={id} value={id}>{(folderPaths[id] || id) + ` (${folderCounts[id] || 0})`}</option>
+                ))}
+              </select>
+            </div>
             <div style={{display:"flex", gap:6, alignItems:"center"}}>
               <button
                 className="btn primary"
@@ -1002,7 +1064,9 @@ function AIAssistant({ currentUser, currentFolderId }) {
               <div style={{marginTop:16}}>
                 <div style={{fontSize:12, fontWeight:500, marginBottom:10, color:"var(--text-muted)"}}>
                   {genResults.length} test case{genResults.length !== 1 ? "s" : ""} generated — select which to save
-                  {currentFolderId ? null : <span style={{color:"var(--warn)", marginLeft:8}}>(no folder selected — tests saved without folder)</span>}
+                  <span style={{marginLeft:8, color: genFolderId ? "var(--text-muted)" : "var(--warn)"}}>
+                    {genFolderId ? `→ ${folderPaths[genFolderId] || genFolderId}` : "(no folder — saved without folder)"}
+                  </span>
                 </div>
                 <div style={{display:"flex", flexDirection:"column", gap:8}}>
                   {genResults.map((tc, i) => (
@@ -1053,22 +1117,33 @@ function AIAssistant({ currentUser, currentFolderId }) {
         <div className="card">
           <div className="card-h">
             <div className="card-title">Suggest edge cases</div>
-            <div className="card-sub">
-              {currentFolderId
-                ? `Analyzing tests in folder ${currentFolderId} for missing coverage.`
-                : "Navigate to a folder to see edge case suggestions."}
-            </div>
+            <div className="card-sub">Pick a folder — AI compares its existing tests and flags uncovered edge cases.</div>
           </div>
           <div className="card-b">
-            {!currentFolderId && (
+            {folderIds.length === 0 ? (
               <div style={{fontSize:12, color:"var(--text-muted)", marginBottom:12}}>
-                Navigate to a folder first to enable edge case suggestions.
+                No folders with tests yet. Create some tests first.
+              </div>
+            ) : (
+              <div className="field" style={{marginBottom:14}}>
+                <label className="field-label">Folder</label>
+                <select
+                  className="select"
+                  style={{width:"100%", maxWidth:480}}
+                  value={ecFolderId}
+                  onChange={e => { setEcFolderId(e.target.value); setEcResults(null); setEcError(null); }}
+                  disabled={ecLoading}
+                >
+                  {folderIds.map(id => (
+                    <option key={id} value={id}>{(folderPaths[id] || id) + ` (${folderCounts[id] || 0})`}</option>
+                  ))}
+                </select>
               </div>
             )}
             <button
               className="btn primary"
               onClick={handleSuggest}
-              disabled={ecLoading || !currentFolderId}
+              disabled={ecLoading || !ecFolderId}
             >
               {ecLoading ? "Analyzing…" : <><Icon name="sparkle" /> Suggest edge cases</>}
             </button>
@@ -1093,12 +1168,55 @@ function AIAssistant({ currentUser, currentFolderId }) {
                         style={{background:"var(--purple)", color:"oklch(0.16 0 0)", borderColor:"var(--purple)"}}
                         onClick={() => {
                           setGenDesc(s.title);
+                          if (ecFolderId) setGenFolderId(ecFolderId);
                           setPanel("generate");
                         }}
                       >Generate test</button>
                     </div>
                   ));
                 })()}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Ask AI panel — free-form prompt */}
+      {panel === "ask" && (
+        <div className="card">
+          <div className="card-h">
+            <div className="card-title">Ask AI</div>
+            <div className="card-sub">Ask any QA or test-design question — free-form, no structure required.</div>
+          </div>
+          <div className="card-b">
+            <div className="field" style={{marginBottom:12}}>
+              <label className="field-label">Your prompt</label>
+              <textarea
+                className="textarea"
+                style={{minHeight:100, fontFamily:"var(--font-sans)", width:"100%"}}
+                value={askPrompt}
+                onChange={e => setAskPrompt(e.target.value)}
+                placeholder="e.g. What boundary conditions should I test for a date-range filter?"
+                disabled={askLoading}
+                onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") handleAsk(); }}
+              />
+            </div>
+            <div style={{display:"flex", gap:6, alignItems:"center"}}>
+              <button
+                className="btn primary"
+                onClick={handleAsk}
+                disabled={askLoading || !askPrompt.trim()}
+              >
+                {askLoading ? "Thinking…" : <><Icon name="sparkle" /> Ask</>}
+              </button>
+              <span style={{fontSize:11, color:"var(--text-muted)"}}>⌘/Ctrl+Enter</span>
+            </div>
+            {askError && (
+              <div style={{fontSize:12, color:"var(--fail)", marginTop:10}}>{askError}</div>
+            )}
+            {askAnswer != null && (
+              <div style={{marginTop:16, padding:"14px 16px", border:"1px solid var(--border)", borderRadius:6, background:"var(--bg-2)", fontSize:13, lineHeight:1.7, whiteSpace:"pre-wrap"}}>
+                {askAnswer || <span style={{color:"var(--text-muted)"}}>(empty response)</span>}
               </div>
             )}
           </div>

@@ -144,12 +144,14 @@ async def _call_openai(system: str, user: str, max_tokens: int) -> str:
         raise HTTPException(status_code=503, detail=f"AI service unavailable (upstream rejected request: {_upstream_message(e)})")
 
 
-async def _call_json(system: str, user: str, max_tokens: int = 2048) -> dict:
+async def _call_text(system: str, user: str, max_tokens: int) -> str:
     if _provider() == "anthropic":
-        text = await _call_anthropic(system, user, max_tokens)
-    else:
-        text = await _call_openai(system, user, max_tokens)
-    text = text.strip()
+        return await _call_anthropic(system, user, max_tokens)
+    return await _call_openai(system, user, max_tokens)
+
+
+async def _call_json(system: str, user: str, max_tokens: int = 2048) -> dict:
+    text = (await _call_text(system, user, max_tokens)).strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
     try:
@@ -170,6 +172,12 @@ class SuggestEdgeCasesRequest(BaseModel):
 
 class AnalyzeFlakyRequest(BaseModel):
     test_id: str
+
+
+class PromptRequest(BaseModel):
+    prompt: str
+    system: Optional[str] = None
+    max_tokens: int = 1024  # clamped to [1, 4096]
 
 
 # System prompts
@@ -197,6 +205,12 @@ _ANALYZE_SYSTEM = (
     "patterns causing inconsistent results. "
     "Return ONLY valid JSON: {\"diagnosis\": \"...\", \"recommendations\": [\"...\", \"...\"]}. "
     "No markdown, no other text."
+)
+
+_PROMPT_DEFAULT_SYSTEM = (
+    "You are a QA assistant embedded in a manual test management tool. "
+    "Help testers with test design, coverage, and quality engineering questions. "
+    "Be concise and practical."
 )
 
 
@@ -288,3 +302,21 @@ async def analyze_flaky(
         user=f"Run history (most recent first):\n{json.dumps(history, indent=2)}",
     )
     return result
+
+
+@router.post("/ai/prompt")
+async def prompt(
+    payload: PromptRequest,
+    current_user: models.User = WRITE_ROLES,
+    db: Session = Depends(get_db),
+):
+    prompt_text = payload.prompt.strip()
+    if not prompt_text:
+        raise HTTPException(status_code=422, detail="prompt is required")
+    _ensure_configured()
+    await _check_rate(current_user.id)
+
+    max_tokens = max(1, min(payload.max_tokens, 4096))
+    system = (payload.system or "").strip() or _PROMPT_DEFAULT_SYSTEM
+    text = await _call_text(system=system, user=prompt_text, max_tokens=max_tokens)
+    return {"response": text}
