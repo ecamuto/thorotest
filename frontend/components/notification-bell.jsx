@@ -89,6 +89,8 @@ function NotificationBell({ currentUser }) {
     if (type === "run_complete") return "✓";
     if (type === "consecutive_fail") return "✗";
     if (type === "comment") return "\u{1F4AC}";
+    if (type === "mention") return "@";
+    if (type === "assigned") return "\u{1F464}";  // bust in silhouette
     return "•";
   }
 

@@ -13,6 +13,13 @@ MAX_LIMIT = 1000
 
 
 def paginate(q, response: Response, limit: int, offset: int) -> list:
-    """Apply offset/limit to a SQLAlchemy query and set X-Total-Count."""
+    """Apply offset/limit to a SQLAlchemy query and set X-Total-Count.
+
+    Clamps limit to [1, MAX_LIMIT] and offset to >= 0 so a client cannot bypass
+    the row cap: a negative limit becomes SQL `LIMIT -1` (unbounded) and would
+    pull the whole table into memory.
+    """
+    limit = max(1, min(limit, MAX_LIMIT))
+    offset = max(0, offset)
     response.headers["X-Total-Count"] = str(q.count())
-    return q.offset(offset).limit(min(limit, MAX_LIMIT)).all()
+    return q.offset(offset).limit(limit).all()

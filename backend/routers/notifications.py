@@ -37,6 +37,8 @@ class NotificationConfigOut(BaseModel):
     notify_consecutive_fail: bool = True
     consecutive_fail_threshold: int = 3
     notify_comment: bool = True
+    notify_mention: bool = True
+    notify_assigned: bool = True
     model_config = {"from_attributes": True}
 
 
@@ -53,6 +55,8 @@ class NotificationConfigIn(BaseModel):
     notify_consecutive_fail: bool = True
     consecutive_fail_threshold: int = 3
     notify_comment: bool = True
+    notify_mention: bool = True
+    notify_assigned: bool = True
 
 
 # MUST come before /{notif_id} routes

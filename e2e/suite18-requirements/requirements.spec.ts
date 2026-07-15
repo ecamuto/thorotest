@@ -107,4 +107,37 @@ test.describe('Suite 18 — Requirements & Coverage', () => {
     await page.locator('.tab:has-text("Requirements")').click();
     await expect(page.locator('.card-sub:has-text("Requirements this test helps verify")')).toBeVisible({ timeout: 8000 });
   });
+
+  // REQ-10 · Edit modal shows change history for the record [P1]
+  test('REQ-10: edit modal renders change history after an update', async ({ page }) => {
+    await loginAs(page, 'marco@acme.com');
+    const auth = { Authorization: `Bearer ${await token(page)}`, 'Content-Type': 'application/json' };
+
+    // Create + mutate via API so a "updated" history row exists.
+    const created = await page.request.post(`${BASE}/api/requirements`, {
+      data: { title: 'E2E history requirement', type: 'feature', status: 'active' },
+      headers: auth,
+    });
+    const req = await created.json();
+    await page.request.patch(`${BASE}/api/requirements/${req.id}`, {
+      data: { status: 'done' },
+      headers: auth,
+    });
+
+    // Open the row's edit modal → history section fetches + renders.
+    await page.goto('/#/requirements');
+    await expect(page.locator('h1:has-text("Requirements")')).toBeVisible({ timeout: 10000 });
+    const [response] = await Promise.all([
+      page.waitForResponse(r => r.url().includes(`/api/history/requirement/${req.id}`)),
+      page.locator(`tr:has-text("${req.id}") button[title="Edit"]`).click(),
+    ]);
+    expect(response.status()).toBe(200);
+    await expect(page.locator('.app')).toContainText('Change history', { timeout: 5000 });
+    await expect(page.locator('.app')).toContainText('status', { timeout: 5000 });
+
+    // Cleanup
+    await page.request.delete(`${BASE}/api/requirements/${req.id}`, {
+      headers: { Authorization: `Bearer ${await token(page)}` },
+    });
+  });
 });

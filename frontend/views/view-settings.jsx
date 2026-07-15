@@ -567,6 +567,7 @@ function NotificationsTab({ currentUser }) {
     slack_enabled: false, slack_webhook_url: "",
     notify_run_complete: true, notify_consecutive_fail: true,
     consecutive_fail_threshold: 3, notify_comment: true,
+    notify_mention: true, notify_assigned: true,
   });
   const [saving, setSaving] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
@@ -588,6 +589,8 @@ function NotificationsTab({ currentUser }) {
           notify_consecutive_fail: data.notify_consecutive_fail !== false,
           consecutive_fail_threshold: data.consecutive_fail_threshold || 3,
           notify_comment: data.notify_comment !== false,
+          notify_mention: data.notify_mention !== false,
+          notify_assigned: data.notify_assigned !== false,
         }));
       }
     }).catch(() => {});
@@ -657,6 +660,8 @@ function NotificationsTab({ currentUser }) {
           </div>
         )}
         {toggle("Notify on new comments", "notify_comment")}
+        {toggle("Notify when @mentioned in a comment", "notify_mention")}
+        {toggle("Notify when a record is assigned to me", "notify_assigned")}
       </div>
 
       {/* Email section */}

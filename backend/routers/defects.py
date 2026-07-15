@@ -10,6 +10,7 @@ from .. import models
 from ..schemas import DefectOut, DefectCreate, DefectUpdate
 from ..auth_utils import require_role, get_current_user
 from ..activity_utils import log_activity, actor_name
+from ..record_history import log_create, log_update, log_delete
 from ._pagination import paginate, MAX_LIMIT
 
 router = APIRouter(tags=["defects"])
@@ -78,17 +79,19 @@ def create_defect(
     )
     db.add(d)
     log_activity(db, created_by, "filed defect", bug_id, payload.title)
+    log_create(db, "defect", bug_id, current_user)
     db.commit()
     db.refresh(d)
     return d
 
 
 @router.patch("/defects/{defect_id}", response_model=DefectOut)
-def update_defect(defect_id: str, payload: DefectUpdate, db: Session = Depends(get_db), _: models.User = WRITE_ROLES):
+def update_defect(defect_id: str, payload: DefectUpdate, db: Session = Depends(get_db), current_user: models.User = WRITE_ROLES):
     d = db.query(models.Defect).filter(models.Defect.id == defect_id).first()
     if not d:
         raise HTTPException(status_code=404, detail="Defect not found")
     data = payload.model_dump(exclude_unset=True)
+    log_update(db, "defect", defect_id, current_user, d, data)
     for field, value in data.items():
         setattr(d, field, value)
     db.commit()
@@ -128,9 +131,10 @@ def push_defect(defect_id: str, current_user: models.User = PUSH_ROLES, db: Sess
 
 
 @router.delete("/defects/{defect_id}", status_code=204)
-def delete_defect(defect_id: str, db: Session = Depends(get_db), _: models.User = ADMIN_ONLY):
+def delete_defect(defect_id: str, db: Session = Depends(get_db), current_user: models.User = ADMIN_ONLY):
     d = db.query(models.Defect).filter(models.Defect.id == defect_id).first()
     if not d:
         raise HTTPException(status_code=404, detail="Defect not found")
     db.delete(d)
+    log_delete(db, "defect", defect_id, current_user)
     db.commit()

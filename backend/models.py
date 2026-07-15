@@ -346,6 +346,8 @@ class NotificationConfig(Base):
     notify_consecutive_fail = Column(Boolean, default=True)
     consecutive_fail_threshold = Column(Integer, default=3)
     notify_comment = Column(Boolean, default=True)
+    notify_mention = Column(Boolean, default=True)       # @mentioned in a comment
+    notify_assigned = Column(Boolean, default=True)      # a record's owner/case assignee set to you
 
 
 class AuditLog(Base):
@@ -360,6 +362,28 @@ class AuditLog(Base):
     target_type = Column(String(64), nullable=True)
     target_id = Column(String(255), nullable=True)
     occurred_at = Column(String(64), nullable=False)                  # ISO UTC string
+
+
+class RecordHistory(Base):
+    """Per-record change history — who/when/what for each business record.
+
+    Distinct from AuditLog (global security/event log) and Activity (global
+    feed): this stores field-level old→new diffs scoped to one record, rendered
+    inline in that record's detail view.
+    """
+    __tablename__ = "record_history"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    entity_type = Column(String(32), nullable=False)   # "test" | "requirement" | "defect"
+    entity_id = Column(String(255), nullable=False)
+    action = Column(String(16), nullable=False)        # "created" | "updated" | "deleted"
+    actor_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    actor_name = Column(String(255), nullable=False)
+    changes = Column(JSON, default=list)               # [{"field","old","new"}] — empty for create/delete
+    created_at = Column(String(64), nullable=False)    # ISO UTC string
+
+    __table_args__ = (
+        Index("ix_record_history_entity", "entity_type", "entity_id"),
+    )
 
 
 class OAuthState(Base):

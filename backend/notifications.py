@@ -1,15 +1,21 @@
 import asyncio
 import json
+import re
 import smtplib
 import ssl
 from email.mime.text import MIMEText
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Dict, List, Optional
 import httpx
+from sqlalchemy import func
 from fastapi import WebSocket
+from . import emailer
 from .db import SessionLocal
 from . import models
 from .webhook_utils import sign_payload
+
+# @mention tokens: an @ followed by a username-ish run (letters, digits, _ . -).
+_MENTION_RE = re.compile(r"@([A-Za-z0-9_][A-Za-z0-9_.\-]*)")
 
 
 class NotificationManager:
@@ -244,6 +250,110 @@ async def _notify_comment_event(test_id: str, commenter_username: str):
             if cfg.slack_enabled and cfg.slack_webhook_url:
                 asyncio.create_task(_send_slack(cfg.slack_webhook_url, notif))
 
+        db.commit()
+    except Exception:
+        pass
+    finally:
+        db.close()
+
+
+# ── Mentions & assignment (targeted, per-user delivery) ─────────────────────
+
+def parse_mentions(text: str) -> List[str]:
+    """Return lower-cased @usernames found in `text`, de-duplicated, order-stable."""
+    seen = []
+    for m in _MENTION_RE.findall(text or ""):
+        low = m.lower()
+        if low not in seen:
+            seen.append(low)
+    return seen
+
+
+def _deliver_to_user(db, user: models.User, event_type: str, title: str, link: str,
+                     config_flag: str) -> None:
+    """Create a Notification row for `user`, push over WS, and (if the recipient
+    hasn't opted out via `config_flag`) send email through the system SMTP relay.
+    Assumes it runs inside a background task with its own session that the caller
+    commits. Email is best-effort and never blocks the event loop."""
+    cfg = db.query(models.NotificationConfig).filter_by(user_id=user.id).first()
+    # Default-on: absence of a config row means the user keeps the defaults.
+    if cfg is not None and not getattr(cfg, config_flag, True):
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    notif = models.Notification(
+        user_id=user.id, event_type=event_type, title=title, link=link,
+        read=False, created_at=now,
+    )
+    db.add(notif)
+    db.flush()
+    asyncio.create_task(notif_manager.push(user.id, {
+        "id": notif.id, "event_type": event_type, "title": title,
+        "link": link, "read": False, "created_at": now,
+    }))
+    if user.email and emailer.is_configured():
+        body = f"{title}\n\n{link or ''}".strip()
+        asyncio.create_task(
+            asyncio.to_thread(emailer.send_email, user.email, f"[ThoroTest] {title}", body)
+        )
+
+
+async def _notify_mentions(entity_title: str, link: str, text: str,
+                           actor_username: str) -> None:
+    """Notify every @mentioned user (by username) found in `text`, skipping the
+    author. Called after a comment is posted."""
+    usernames = [u for u in parse_mentions(text) if u != (actor_username or "").lower()]
+    if not usernames:
+        return
+    db = SessionLocal()
+    try:
+        for uname in usernames:
+            user = db.query(models.User).filter(
+                func.lower(models.User.username) == uname
+            ).first()
+            if not user:
+                continue
+            _deliver_to_user(
+                db, user, "mention",
+                f"{actor_username} mentioned you on '{entity_title}'",
+                link, "notify_mention",
+            )
+        db.commit()
+    except Exception:
+        pass
+    finally:
+        db.close()
+
+
+def _resolve_assignee(db, identifier: Optional[str]) -> Optional[models.User]:
+    """Resolve a free-text owner/assignee string to a User by username, then
+    display_name, then email (all case-insensitive). None if unresolved/blank."""
+    ident = (identifier or "").strip()
+    if not ident:
+        return None
+    low = ident.lower()
+    for col in (models.User.username, models.User.display_name, models.User.email):
+        user = db.query(models.User).filter(func.lower(col) == low).first()
+        if user:
+            return user
+    return None
+
+
+async def _notify_assignment(entity_label: str, entity_title: str, link: str,
+                             assignee: Optional[str], actor_username: str) -> None:
+    """Notify the newly-assigned user that `entity_label` '`entity_title`' was
+    assigned to them. No-op if the assignee is blank, unresolvable, or the actor
+    assigned it to themselves. Caller must only invoke this when the assignment
+    actually changed."""
+    db = SessionLocal()
+    try:
+        user = _resolve_assignee(db, assignee)
+        if not user or user.username == actor_username:
+            return
+        _deliver_to_user(
+            db, user, "assigned",
+            f"{actor_username} assigned you {entity_label} '{entity_title}'",
+            link, "notify_assigned",
+        )
         db.commit()
     except Exception:
         pass
