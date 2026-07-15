@@ -98,10 +98,10 @@ test.describe('Suite P4 — AI Assistant', () => {
     await page.click('button.btn.sm:has-text("Suggest edge cases")');
     await expect(page.locator('.card-title:has-text("Suggest edge cases")')).toBeVisible();
 
-    // Without folder context: action button (not the tab) should be disabled + warning shown
+    // The panel now has a folder picker that auto-selects the first folder with
+    // tests, so the action button is enabled (no "navigate to a folder" gate).
     const suggestBtn = page.locator('button.btn.primary:not(.sm):has-text("Suggest edge cases")');
-    await expect(suggestBtn).toBeDisabled();
-    await expect(page.locator('text=Navigate to a folder first')).toBeVisible();
+    await expect(suggestBtn).toBeEnabled();
 
     // Verify API response structure via TH_API direct call (bypasses UI gate)
     const result = await page.evaluate(async (mockData) => {
@@ -185,8 +185,9 @@ test.describe('Suite P4 — AI Assistant', () => {
     await expect(descInput).toBeVisible();
     await descInput.fill('User login scenarios');
 
-    // Count selector visible (default 3)
-    const countSelect = page.locator('select.select');
+    // Count selector visible (default 3). The panel now also has a "Save to
+    // folder" select, so scope to the one with numeric options.
+    const countSelect = page.locator('select.select').filter({ has: page.locator('option[value="10"]') });
     await expect(countSelect).toBeVisible();
     await countSelect.selectOption('2');
 
@@ -229,8 +230,10 @@ test.describe('Suite P4 — AI Assistant', () => {
     await page.click('button.btn.sm:has-text("Suggest edge cases")');
     await expect(page.locator('.card-title:has-text("Suggest edge cases")')).toBeVisible();
 
-    // Button disabled when no folder
-    await expect(page.locator('button.btn.primary:not(.sm):has-text("Suggest edge cases")')).toBeDisabled();
+    // Panel is folder-aware: a folder picker auto-selects a folder with tests,
+    // so the action button is enabled.
+    await expect(page.locator('.card-b select.select')).toBeVisible();
+    await expect(page.locator('button.btn.primary:not(.sm):has-text("Suggest edge cases")')).toBeEnabled();
 
     // Inject results directly to test the suggestion rendering and "Generate test" prefill
     await page.evaluate(async (suggestions) => {
