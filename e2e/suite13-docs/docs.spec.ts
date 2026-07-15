@@ -166,4 +166,47 @@ test.describe('Suite 13 — Docs & API View', () => {
     expect(spec.components.schemas['DefectOut']).toBeTruthy();
   });
 
+  // DOC-11 · About section — version + changelog [P1]
+  test('DOC-11: about section shows current version and changelog releases', async ({ page }) => {
+    await loginAs(page, 'marco@acme.com');
+    await page.goto('/#/docs');
+    await page.click('button:has-text("About")');
+
+    // Version card
+    await expect(page.locator('text=About ThoroTest')).toBeVisible({ timeout: 8000 });
+    await expect(page.locator('text=/^v\\d+\\.\\d+\\.\\d+$/').first()).toBeVisible();
+    // Current release is badged and expanded by default (its group badges are visible)
+    await expect(page.locator('text=current')).toBeVisible();
+    await expect(page.locator('text=Added').first()).toBeVisible();
+    // Oldest release is listed
+    await expect(page.locator('button:has-text("v1.0.0")')).toBeVisible();
+  });
+
+  // DOC-12 · About — expand a previous release [P2]
+  test('DOC-12: clicking a previous release expands its changelog entries', async ({ page }) => {
+    await loginAs(page, 'marco@acme.com');
+    await page.goto('/#/docs');
+    await page.click('button:has-text("About")');
+    await expect(page.locator('button:has-text("v1.0.0")')).toBeVisible({ timeout: 8000 });
+
+    // Collapsed: v1.0.0 intro prose not visible
+    await expect(page.locator('text=First production release')).not.toBeVisible();
+    await page.click('button:has-text("v1.0.0")');
+    await expect(page.locator('text=First production release')).toBeVisible();
+    // Collapse again
+    await page.click('button:has-text("v1.0.0")');
+    await expect(page.locator('text=First production release')).not.toBeVisible();
+  });
+
+  // DOC-13 · /api/about requires auth; /health stays version-free [P1]
+  test('DOC-13: /api/about is auth-gated and /health exposes no version', async ({ page }) => {
+    const unauth = await page.request.get(`${BASE}/api/about`);
+    expect([401, 403]).toContain(unauth.status());
+
+    const health = await page.request.get(`${BASE}/health`);
+    expect(health.status()).toBe(200);
+    const body = await health.json();
+    expect(body.version).toBeUndefined();
+  });
+
 });
