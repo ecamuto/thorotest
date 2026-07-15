@@ -113,8 +113,9 @@ S3 attachment storage remains a v1.1 item.
 - Single-process state: login rate limiter + WS managers are in-memory —
   one uvicorn worker only. Document the limit; Redis backing is v1.1.
 - No multi-tenancy — fine for self-host per-instance licensing; blocks SaaS.
-- License is MIT + Commons Clause = **source-available**, not open source,
-  but `frontend/index.html` title says "Open-source". Fix branding.
+- License is MIT + Commons Clause = **source-available**, not open source.
+  Branding fixed: UI title is "ThoroTest — Test management", README/TERMS
+  say "source-available" — no stale "Open-source" claim remains.
   Commons Clause does not block third-party SaaS hosting — decide if that
   matters.
 - SSO/SAML/SCIM: v1.1 pricing tier.
@@ -156,8 +157,9 @@ loaded. A 1–2 vCPU prod VM lands similar per-core (core-bound).
 3. Multi-worker = real throughput multiplier (+1 core each), but **needs the
    Redis item above first** (in-memory rate limiter + WS state break across
    workers). This is what gates horizontal scale.
-4. Latent wart: `/health` runs a **sync** `engine.connect()` inside an
-   `async def` — blocks the event loop per call; move to the threadpool.
+4. ~~Latent wart: `/health` runs a **sync** `engine.connect()` inside an
+   `async def` — blocks the event loop per call; move to the threadpool.~~
+   Fixed: the DB ping now runs via `asyncio.to_thread`.
 
 ## Strengths (keep selling these)
 
