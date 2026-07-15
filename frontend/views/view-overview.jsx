@@ -13,7 +13,15 @@ function timeAgo(iso) {
   return `${Math.floor(s / 86400 / 7)}w`;
 }
 
-function Overview({ onNav, currentUser }) {
+function Overview({ onNav, onOpenTest, onOpenRun, onOpenDefect, currentUser }) {
+  // Map an activity target id to its opener, or null if it isn't linkable.
+  const targetOpener = (t) => {
+    if (!t) return null;
+    if (onOpenTest && /^TC-/.test(t)) return onOpenTest;
+    if (onOpenRun && /^R-/.test(t)) return onOpenRun;
+    if (onOpenDefect && /^BUG-/.test(t)) return onOpenDefect;
+    return null;
+  };
   const { data: D, loading, error } = useInitialData();
   const [insights, setInsights] = React.useState(null);
   const [health, setHealth] = React.useState(null);
@@ -171,7 +179,16 @@ function Overview({ onNav, currentUser }) {
                   color: a.who.includes("bot") ? "var(--text-muted)" : undefined,
                 }}>{a.who.split(" ").map(x=>x[0]).join("").slice(0,2)}</div>
                 <div style={{flex:1, minWidth:0, lineHeight:1.4}}>
-                  <div style={{fontSize:12}}><b>{a.who}</b> <span className="muted">{a.what}</span> <span className="mono" style={{color:"var(--accent)"}}>{a.target}</span></div>
+                  <div style={{fontSize:12}}><b>{a.who}</b> <span className="muted">{a.what}</span>{" "}
+                    {(() => {
+                      const open = targetOpener(a.target);
+                      return open
+                        ? <a className="mono" style={{color:"var(--accent)", cursor:"pointer", textDecoration:"underline"}}
+                             title={`Open ${a.target}`}
+                             onClick={() => open(a.target)}>{a.target}</a>
+                        : <span className="mono" style={{color:"var(--accent)"}}>{a.target}</span>;
+                    })()}
+                  </div>
                   <div style={{fontSize:11.5, color:"var(--text-dim)", marginTop:2}}>{a.detail}</div>
                 </div>
                 <div className="mono dim" style={{fontSize:10.5, flexShrink:0}}>{a.created_at ? timeAgo(a.created_at) : a.when}</div>

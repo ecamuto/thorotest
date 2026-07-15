@@ -71,6 +71,7 @@ function App({ currentUser: initialUser, onLogout, onProfileUpdate }) {
   const [importNonce, setImportNonce] = useState(0);
   const [testId, setTestId] = useState(initial.testId);
   const [runId, setRunId] = useState(initial.runId);
+  const [defectFocus, setDefectFocus] = useState(null);   // BUG id to pre-filter the defects list
   const currentUser = initialUser;
   const [toastMsg, setToastMsg] = React.useState(null);
   const [toastSeverity, setToastSeverity] = React.useState(null);
@@ -130,6 +131,7 @@ function App({ currentUser: initialUser, onLogout, onProfileUpdate }) {
 
   const openTest = (id) => { setTestId(id); setView("test-detail"); };
   const openRun = (id) => { setRunId(id); setView("run-detail"); };
+  const openDefect = (id) => { setDefectFocus(id); setView("defects"); };
 
   const W = { label: "ThoroTest", href: "#/overview" };
   let crumbs = [W, "Overview"];
@@ -140,7 +142,7 @@ function App({ currentUser: initialUser, onLogout, onProfileUpdate }) {
   switch (view) {
     case "overview":
       crumbs = [W, "Overview"];
-      body = <Overview onNav={nav} currentUser={currentUser} />;
+      body = <Overview onNav={nav} onOpenTest={openTest} onOpenRun={openRun} onOpenDefect={openDefect} currentUser={currentUser} />;
       break;
     case "library":
       crumbs = [W, "Test library"];
@@ -168,7 +170,7 @@ function App({ currentUser: initialUser, onLogout, onProfileUpdate }) {
       break;
     case "defects":
       crumbs = [W, "Defects"];
-      body = <Defects currentUser={currentUser} />;
+      body = <Defects focusId={defectFocus} currentUser={currentUser} />;
       break;
     case "requirements":
       crumbs = [W, "Requirements"];
@@ -211,7 +213,7 @@ function App({ currentUser: initialUser, onLogout, onProfileUpdate }) {
       hideTopbar = true;
       break;
     default:
-      body = <Overview onNav={nav} currentUser={currentUser} />;
+      body = <Overview onNav={nav} onOpenTest={openTest} onOpenRun={openRun} onOpenDefect={openDefect} currentUser={currentUser} />;
   }
 
   return (
