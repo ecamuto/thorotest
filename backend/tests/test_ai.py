@@ -149,6 +149,56 @@ class TestAnalyzeFlaky:
         assert resp.status_code == 422
 
 
+class TestPrompt:
+    def _mock_text(self, text):
+        mock = MagicMock()
+        mock.messages.create = AsyncMock(return_value=MockMessage(text))
+        return mock
+
+    def test_prompt_returns_response(self, client, monkeypatch):
+        monkeypatch.setattr(ai_module, "_ai_client", self._mock_text("Test the empty-cart checkout path."))
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-xxx")
+
+        resp = client.post("/api/ai/prompt", json={"prompt": "Suggest a test idea"})
+
+        assert resp.status_code == 200
+        assert resp.json()["response"] == "Test the empty-cart checkout path."
+
+    def test_prompt_empty_422(self, client, monkeypatch):
+        monkeypatch.setattr(ai_module, "_ai_client", self._mock_text("x"))
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-xxx")
+
+        resp = client.post("/api/ai/prompt", json={"prompt": "   "})
+        assert resp.status_code == 422
+
+    def test_prompt_custom_system_and_clamped_tokens(self, client, monkeypatch):
+        mock = self._mock_text("ok")
+        monkeypatch.setattr(ai_module, "_ai_client", mock)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-xxx")
+
+        resp = client.post(
+            "/api/ai/prompt",
+            json={"prompt": "hi", "system": "You are terse.", "max_tokens": 999999},
+        )
+        assert resp.status_code == 200
+        _, kwargs = mock.messages.create.call_args
+        assert kwargs["system"] == "You are terse."
+        assert kwargs["max_tokens"] == 4096  # clamped
+
+    def test_prompt_missing_key_503(self, client, monkeypatch):
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.setattr(ai_module, "_ai_client", None)
+
+        resp = client.post("/api/ai/prompt", json={"prompt": "hi"})
+        assert resp.status_code == 503
+
+    def test_viewer_cannot_prompt(self, auth_client, monkeypatch):
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-xxx")
+        viewer = auth_client("viewer")
+        resp = viewer.post("/api/ai/prompt", json={"prompt": "hi"})
+        assert resp.status_code == 403
+
+
 class TestRateLimit:
     def test_rate_limit_enforced(self, client, monkeypatch):
         import collections

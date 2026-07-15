@@ -21,6 +21,9 @@ def _build_tree(folders: list, parent_id=None) -> list:
                 id=f.id, name=f.name, parent_id=f.parent_id,
                 project_id=f.project_id, count=f.count, children=children,
             ))
+    # Alphabetical (case-insensitive) at every level so the folder tree and every
+    # folder picker render in a stable, predictable order.
+    result.sort(key=lambda fo: fo.name.lower())
     return result
 
 

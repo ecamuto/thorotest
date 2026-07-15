@@ -896,6 +896,18 @@
       return res.json();
     },
 
+    async aiPrompt(payload) {
+      const res = await fetch(BASE + "/api/ai/prompt", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify(payload),
+      });
+      if (res.status === 429) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "Rate limit exceeded: try again in an hour"); }
+      if (res.status === 503) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "AI not configured"); }
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "AI request failed"); }
+      return res.json();
+    },
+
     async exportRunCSV(runId) {
       const res = await fetch(BASE + `/api/runs/${runId}/export?format=csv`, { headers: authHeaders() });
       if (!res.ok) throw new Error("Export failed");

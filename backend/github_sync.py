@@ -14,6 +14,7 @@ import uuid
 from datetime import datetime, timezone
 
 import httpx
+from sqlalchemy import func
 
 from . import models
 from .importers import parse_yaml_test
@@ -134,18 +135,20 @@ def _get_or_create_folder(db, path: str, cache: dict) -> str | None:
     """Resolve a "A/B/C" folder path to a folder id, creating missing levels."""
     if not path:
         return None
-    if path in cache:
-        return cache[path]
+    # Cache keys and folder matching are case-insensitive so "e2e" and "E2E"
+    # resolve to one folder instead of creating a duplicate on the next sync.
+    if path.lower() in cache:
+        return cache[path.lower()]
     parts = [p.strip() for p in path.split("/") if p.strip()]
     parent_id = None
     current = ""
     for part in parts:
-        current = f"{current}/{part}" if current else part
+        current = f"{current}/{part.lower()}" if current else part.lower()
         if current in cache:
             parent_id = cache[current]
             continue
         existing = db.query(models.Folder).filter(
-            models.Folder.name == part,
+            func.lower(models.Folder.name) == part.lower(),
             models.Folder.parent_id == parent_id,
         ).first()
         if existing:
@@ -157,7 +160,7 @@ def _get_or_create_folder(db, path: str, cache: dict) -> str | None:
             db.flush()
             cache[current] = fid
             parent_id = fid
-    return cache.get(path)
+    return parent_id
 
 
 def _fetch_files(repo_url: str, branch: str, path: str, token: str | None):

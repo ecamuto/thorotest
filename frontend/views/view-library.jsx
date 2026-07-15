@@ -1,5 +1,56 @@
 // Library view — test case management
 
+// Flatten the folder tree to a flat list at any depth (imported spec folders
+// nest several levels deep). Used for the folder tree, the active-folder title
+// lookup, and the bulk "move to folder" picker.
+function flattenFolders(list) {
+  const out = [];
+  (list || []).forEach(f => {
+    out.push(f);
+    if (f.children) out.push(...flattenFolders(f.children));
+  });
+  return out;
+}
+
+// One folder row, rendered recursively so nested subfolders (any depth) are
+// navigable — the old tree only rendered the top two levels.
+function FolderRow({ node, depth, openFolders, toggleFolder, selectFolder, activeFolder, favoritedIds, toggleFavorite }) {
+  const hasChildren = node.children && node.children.length > 0;
+  const open = !!openFolders[node.id];
+  return (
+    <React.Fragment>
+      <div
+        className={"tree-row" + (activeFolder === node.id ? " active" : "")}
+        style={{paddingLeft: 8 + depth * 16}}
+        onClick={() => { if (hasChildren) toggleFolder(node.id); selectFolder(node.id); }}
+      >
+        <span className={"caret" + (open ? " open" : "")}>{hasChildren ? <Icon name="chev" /> : null}</span>
+        <span style={{color: depth === 0 ? "var(--warn)" : "var(--text-dim)", fontSize: depth === 0 ? undefined : 10}}>{depth === 0 ? "▣" : "—"}</span>
+        <span>{node.name}</span>
+        <span className="count">{node.count}</span>
+        <span
+          title={favoritedIds.has(node.id) ? "Remove from favorites" : "Add to favorites"}
+          style={{marginLeft:"auto", cursor:"pointer", color: favoritedIds.has(node.id) ? "var(--warn)" : "var(--text-dim)", fontSize:12, lineHeight:1}}
+          onClick={(e) => toggleFavorite(e, node.id)}
+        >{favoritedIds.has(node.id) ? "★" : "☆"}</span>
+      </div>
+      {open && hasChildren && node.children.map(c => (
+        <FolderRow
+          key={c.id}
+          node={c}
+          depth={depth + 1}
+          openFolders={openFolders}
+          toggleFolder={toggleFolder}
+          selectFolder={selectFolder}
+          activeFolder={activeFolder}
+          favoritedIds={favoritedIds}
+          toggleFavorite={toggleFavorite}
+        />
+      ))}
+    </React.Fragment>
+  );
+}
+
 function Library({ onNav, onOpenTest, currentUser }) {
   const [refreshKey, setRefreshKey] = useState(0);
   const { data: D, loading, error } = useInitialData(refreshKey);
@@ -77,12 +128,7 @@ function Library({ onNav, onOpenTest, currentUser }) {
 
   const allFolderIds = useMemo(() => {
     if (!D) return [];
-    const result = [];
-    D.folders.forEach(f => {
-      result.push(f.id);
-      if (f.children) f.children.forEach(c => result.push(c.id));
-    });
-    return result;
+    return flattenFolders(D.folders).map(f => f.id);
   }, [D]);
 
   const allTags = useMemo(() => {
@@ -163,7 +209,7 @@ function Library({ onNav, onOpenTest, currentUser }) {
   );
 
   const totalCount = D.tests.length;
-  const allFoldersList = D.folders.flatMap(f => [f, ...(f.children || [])]);
+  const allFoldersList = flattenFolders(D.folders);
 
   return (
     <div style={{display:"grid", gridTemplateColumns:"260px 1fr", height:"100%", overflow:"hidden"}}>
@@ -184,36 +230,17 @@ function Library({ onNav, onOpenTest, currentUser }) {
             <span className="count">{totalCount}</span>
           </div>
           {D.folders.map(f => (
-            <React.Fragment key={f.id}>
-              <div className={"tree-row" + (activeFolder === f.id ? " active" : "")} onClick={() => { toggleFolder(f.id); selectFolder(f.id); }}>
-                <span className={"caret" + (openFolders[f.id] ? " open" : "")}>{f.children ? <Icon name="chev" /> : null}</span>
-                <span style={{color:"var(--warn)"}}>▣</span>
-                <span>{f.name}</span>
-                <span className="count">{f.count}</span>
-                <span
-                  title={favoritedIds.has(f.id) ? "Remove from favorites" : "Add to favorites"}
-                  style={{marginLeft:"auto", cursor:"pointer", color: favoritedIds.has(f.id) ? "var(--warn)" : "var(--text-dim)", fontSize:12, lineHeight:1}}
-                  onClick={(e) => toggleFavorite(e, f.id)}
-                >{favoritedIds.has(f.id) ? "★" : "☆"}</span>
-              </div>
-              {openFolders[f.id] && f.children && f.children.map(c => (
-                <div
-                  key={c.id}
-                  className={"tree-row" + (activeFolder === c.id ? " active" : "")}
-                  style={{paddingLeft: 28}}
-                  onClick={() => selectFolder(c.id)}
-                >
-                  <span style={{color:"var(--text-dim)", fontSize:10}}>—</span>
-                  <span>{c.name}</span>
-                  <span className="count">{c.count}</span>
-                  <span
-                    title={favoritedIds.has(c.id) ? "Remove from favorites" : "Add to favorites"}
-                    style={{marginLeft:"auto", cursor:"pointer", color: favoritedIds.has(c.id) ? "var(--warn)" : "var(--text-dim)", fontSize:12, lineHeight:1}}
-                    onClick={(e) => toggleFavorite(e, c.id)}
-                  >{favoritedIds.has(c.id) ? "★" : "☆"}</span>
-                </div>
-              ))}
-            </React.Fragment>
+            <FolderRow
+              key={f.id}
+              node={f}
+              depth={0}
+              openFolders={openFolders}
+              toggleFolder={toggleFolder}
+              selectFolder={selectFolder}
+              activeFolder={activeFolder}
+              favoritedIds={favoritedIds}
+              toggleFavorite={toggleFavorite}
+            />
           ))}
         </div>
         <div style={{padding:"10px 12px", borderTop:"1px solid var(--border)", fontSize:11, color:"var(--text-dim)"}}>
@@ -230,7 +257,7 @@ function Library({ onNav, onOpenTest, currentUser }) {
         {/* Toolbar */}
         <div className="toolbar">
           <div style={{fontSize:14, fontWeight:600, marginRight:8}}>
-            {activeFolder ? (D.folders.find(f=>f.id===activeFolder)?.name || D.folders.flatMap(f=>f.children||[]).find(c=>c.id===activeFolder)?.name) : "All tests"}
+            {activeFolder ? (allFoldersList.find(f=>f.id===activeFolder)?.name || activeFolder) : "All tests"}
           </div>
           <div className="card-sub">{testsLoading ? "…" : `${filtered.length} tests`}</div>
           <div className="spacer" />
@@ -471,7 +498,7 @@ function Library({ onNav, onOpenTest, currentUser }) {
       {/* New test modal */}
       {showNewTest && (
         <NewTestModal
-          folders={D.folders.flatMap(f => [f, ...(f.children || [])])}
+          folders={allFoldersList}
           defaultFolderId={activeFolder}
           onClose={() => setShowNewTest(false)}
           onCreate={refresh}
