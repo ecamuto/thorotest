@@ -174,11 +174,15 @@ def _fetch_files(repo_url: str, branch: str, path: str, token: str | None):
 
 
 def sync_repo(db, repo_url: str, branch: str, path: str, token: str | None = None,
-              fetcher=None, link_provider: str | None = None) -> dict:
+              fetcher=None, link_provider: str | None = None, commit: bool = True) -> dict:
     """Read YAML tests from a repo and upsert them. Returns stats dict.
 
     `fetcher(repo_url, branch, path, token) -> (sha, [(file_path, content), ...])`
     is injectable for tests; defaults to the live GitHub client.
+
+    `commit=False` leaves the transaction open so the caller can roll it back —
+    used by the CLI sync endpoint's dry-run mode to report what would change
+    without persisting anything.
 
     `link_provider` is the CI provider string ("github-actions" / "gitlab-ci")
     this repo's pipeline imports under. When set, a scheda with an id is tagged
@@ -245,7 +249,8 @@ def sync_repo(db, repo_url: str, branch: str, path: str, token: str | None = Non
             stats["created"] += 1
         db.flush()
 
-    db.commit()
+    if commit:
+        db.commit()
     return stats
 
 

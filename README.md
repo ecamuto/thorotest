@@ -343,6 +343,7 @@ lives in one place (the run), never in the YAML.
 | REST + GraphQL + WebSocket API, test layout | [docs/api.md](docs/api.md) |
 | GitHub Actions CI setup | [docs/github-actions-ci.md](docs/github-actions-ci.md) |
 | GitLab CI setup | [docs/gitlab-ci.md](docs/gitlab-ci.md) |
+| CLI — lint, sync, status from any CI provider | [docs/cli.md](docs/cli.md) |
 | Backup & restore | [BACKUP.md](BACKUP.md) |
 | Full production roadmap | [PRODUCTION_ROADMAP.md](PRODUCTION_ROADMAP.md) |
 
@@ -376,6 +377,7 @@ All 7 production-readiness items are **done** (v1.0), and post-v1 features shipp
 
 ### Planned
 
+- 🚧 `thorotest` CLI (beta, in-repo — [docs/cli.md](docs/cli.md)): `status`, `lint`, `sync`, `token create`. Next: `run` (trigger + wait), npm publish.
 - ⏳ UI pagination controls ("showing N of M") using `X-Total-Count`.
 - ⏳ S3 attachment storage; Prometheus metrics endpoint.
 - ⏳ Redis-backed rate limiter / WS state (multi-worker).

@@ -368,14 +368,13 @@ function DocStep({ n, title, children }) {
 function CliSection() {
   const [copied, copy] = useCopy();
   const cmds = [
-    { cmd: "thorotest run [--env staging]", desc: "Execute all tests in the current project." },
-    { cmd: "thorotest run --filter tag=smoke", desc: "Run a filtered subset of tests." },
-    { cmd: "thorotest new test",  desc: "Interactive wizard to create a new test case." },
-    { cmd: "thorotest new run",   desc: "Start a new run from the CLI." },
-    { cmd: "thorotest sync",      desc: "Push local YAML test definitions to the server." },
-    { cmd: "thorotest lint",      desc: "Validate YAML schema before sync." },
-    { cmd: "thorotest status",    desc: "Show current project, active runs, last results." },
-    { cmd: "thorotest token create --name ci", desc: "Generate a long-lived API token for CI." },
+    { cmd: "thorotest status",    desc: "Server health, current user, test & run counts." },
+    { cmd: "thorotest lint tests/", desc: "Validate YAML test files locally — offline, no token needed." },
+    { cmd: "thorotest sync tests/", desc: "Push local YAML test definitions to the server (idempotent upsert)." },
+    { cmd: "thorotest sync tests/ --dry-run", desc: "Server-side validation: report what would change, persist nothing." },
+    { cmd: "thorotest token create --name ci", desc: "Generate a long-lived API token for CI (admin only)." },
+    { cmd: "thorotest run [--env staging]", desc: "Planned — trigger a run and wait for the result." },
+    { cmd: "thorotest new test",  desc: "Planned — interactive wizard to create a new test case." },
   ];
 
   return (
@@ -383,11 +382,11 @@ function CliSection() {
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
         <div className="page-title" style={{ fontSize: 18 }}>CLI</div>
         <span style={{ fontSize: 10.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, color: "var(--text-dim)", border: "1px solid var(--border)", borderRadius: 4, padding: "2px 6px" }}>
-          Coming soon
+          Beta
         </span>
       </div>
       <div style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 20, lineHeight: 1.6 }}>
-        Not yet published. The commands below preview the planned CLI · Requires Node 18+
+        Ships in the repo under <code style={{ fontFamily: "var(--font-mono)" }}>cli/</code> (<code style={{ fontFamily: "var(--font-mono)" }}>npm link</code> to install) — not yet on npm · Requires Node 18+ · Full reference in docs/cli.md
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {cmds.map(c => (

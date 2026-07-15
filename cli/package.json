@@ -1,0 +1,21 @@
+{
+  "name": "@thorotest/cli",
+  "version": "0.1.0",
+  "description": "Command-line client for ThoroTest — lint, sync, and inspect tests from the terminal or CI.",
+  "bin": {
+    "thorotest": "bin/thorotest.js"
+  },
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ecamuto/thorotest.git",
+    "directory": "cli"
+  },
+  "license": "SEE LICENSE IN ../LICENSE"
+}
