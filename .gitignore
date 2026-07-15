@@ -18,7 +18,12 @@ venv/
 *.db
 *.db-shm
 *.db-wal
+*.db.bak*
 uploads/
+
+# Test / coverage scratch
+.coverage
+scratch-junit/
 
 # Node
 node_modules/
