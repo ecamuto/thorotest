@@ -146,6 +146,8 @@ class Pipeline(Base):
     branch = Column(String(255), nullable=True)
     when = Column(String(64), nullable=True)
     url = Column(String(512), nullable=True)   # link to the run on GitHub/GitLab
+    run_id = Column(String(255), ForeignKey("runs.id"), nullable=True)  # imported Run holding this pipeline's test cases (for row expand)
+    integration_id = Column(String(255), nullable=True)  # source integration — lets a reconcile poll re-query the provider after a restart
 
 
 class TestPlan(Base):

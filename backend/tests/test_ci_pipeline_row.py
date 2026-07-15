@@ -96,6 +96,113 @@ def test_delete_pipeline_unknown_404(client, db):
     assert client.delete("/api/pipelines/nope").status_code == 404
 
 
+# ── pipeline row expand → run test cases ────────────────────────
+
+def test_pipeline_cases_returns_run_cases(client, db):
+    db.add(models.Test(id="TC-EXP1", title="Expand me"))
+    db.add(models.Run(id="R-EXP", name="CI run", status="fail", total=2))
+    db.add(models.Pipeline(id="wf-exp", name="ci.yml", platform="github",
+                           status="fail", run_id="R-EXP"))
+    db.add(models.RunCase(run_id="R-EXP", test_id="TC-EXP1", status="pass"))
+    db.add(models.RunCase(run_id="R-EXP", test_id="TC-EXP1", status="fail"))
+    db.commit()
+
+    r = client.get("/api/pipelines/wf-exp/cases")
+    assert r.status_code == 200, r.text
+    cases = r.json()
+    assert len(cases) == 2
+    assert {c["status"] for c in cases} == {"pass", "fail"}
+    assert cases[0]["title"] == "Expand me"       # joined test title
+    assert cases[0]["test_id"] == "TC-EXP1"
+
+
+def test_pipeline_cases_empty_when_no_run_linked(client, db):
+    db.add(models.Pipeline(id="wf-norun", name="ci.yml", platform="github", status="pass"))
+    db.commit()
+    r = client.get("/api/pipelines/wf-norun/cases")
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_pipeline_cases_unknown_404(client, db):
+    assert client.get("/api/pipelines/nope/cases").status_code == 404
+
+
+# ── reconcile: heal stuck 'running' rows against the provider ────
+
+class _FakeGH:
+    """Context-manager stub for GitHubActionsClient."""
+    def __init__(self, detail):
+        self._detail = detail
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
+    def get_run(self, owner, repo, run_id): return self._detail
+
+
+def _gh_running_pipeline(db):
+    db.add(models.Integration(id="int-gh", name="GH", type="vcs_ci", icon="github",
+                              config={"repo_url": "https://github.com/acme/web", "token": "ghp_x"}))
+    db.add(models.Pipeline(id="gh-run-777", name="CI", platform="github",
+                           status="running", integration_id="int-gh"))
+    db.commit()
+
+
+def test_reconcile_finalizes_completed_run(client, db, monkeypatch):
+    from backend.routers import ci as ci_router
+    _gh_running_pipeline(db)
+    detail = {"status": "completed", "conclusion": "success",
+              "run_started_at": "2026-07-09T10:00:00Z", "updated_at": "2026-07-09T10:02:00Z"}
+    monkeypatch.setattr(ci_router, "ci_config",
+                        lambda intg: {"owner": "acme", "repo": "web", "token": "ghp_x", "artifact": "junit"})
+    monkeypatch.setattr(ci_router, "GitHubActionsClient", lambda token: _FakeGH(detail))
+
+    def _fake_collect(db_, client_, owner, repo, run_id, artifact, run_name):
+        db_.add(models.Run(id="R-NEW", name=run_name, status="pass", total=1))
+        db_.flush()
+        return {"run_ids": ["R-NEW"]}
+    monkeypatch.setattr(ci_router, "collect_run_results", _fake_collect)
+
+    n = ci_router.reconcile_running_pipelines(db)
+    assert n == 1
+    p = db.query(models.Pipeline).filter_by(id="gh-run-777").first()
+    assert p.status == "pass"
+    assert p.duration == "2m 00s"
+    assert p.run_id == "R-NEW"
+
+
+def test_reconcile_leaves_still_running(client, db, monkeypatch):
+    from backend.routers import ci as ci_router
+    _gh_running_pipeline(db)
+    monkeypatch.setattr(ci_router, "ci_config",
+                        lambda intg: {"owner": "acme", "repo": "web", "token": "ghp_x", "artifact": "junit"})
+    monkeypatch.setattr(ci_router, "GitHubActionsClient",
+                        lambda token: _FakeGH({"status": "in_progress"}))
+    assert ci_router.reconcile_running_pipelines(db) == 0
+    assert db.query(models.Pipeline).filter_by(id="gh-run-777").first().status == "running"
+
+
+def test_reconcile_skips_pipeline_without_integration(client, db, monkeypatch):
+    from backend.routers import ci as ci_router
+    db.add(models.Pipeline(id="gh-run-9", name="CI", platform="github", status="running"))
+    db.commit()
+
+    def _boom(*a, **k):
+        raise AssertionError("should not query provider without an integration")
+    monkeypatch.setattr(ci_router, "GitHubActionsClient", _boom)
+    assert ci_router.reconcile_running_pipelines(db) == 0
+
+
+def test_reconcile_endpoint_returns_fresh_list(client, db, monkeypatch):
+    from backend.routers import ci as ci_router
+    db.add(models.Pipeline(id="wf-static", name="ci.yml", platform="github", status="pass"))
+    db.commit()
+    r = client.post("/api/pipelines/reconcile")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert "updated" in body
+    assert any(p["id"] == "wf-static" for p in body["pipelines"])
+
+
 def test_ci_run_dispatch_failure_502(client, db, monkeypatch):
     from backend.routers import ci as ci_router
 

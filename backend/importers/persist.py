@@ -22,7 +22,7 @@ def persist_import_result(db, result: ImportResult, provider: str, conflict: str
     plain results file shouldn't silently rewrite test statuses; the CI
     collectors opt in so a pipeline result is the source of truth for status."""
     now = datetime.now(timezone.utc).isoformat()
-    stats = {"folders": 0, "tests": 0, "runs": 0, "defects": 0, "skipped": 0}
+    stats = {"folders": 0, "tests": 0, "runs": 0, "defects": 0, "skipped": 0, "run_ids": []}
 
     # ── Folders ────────────────────────────────────────────────
     folder_cache: dict[str, str] = {}  # path → folder.id
@@ -177,6 +177,7 @@ def persist_import_result(db, result: ImportResult, provider: str, conflict: str
             blocked=blocked,
             progress=100 if total > 0 else 0,
             started=now,
+            created_at=now,   # so CI/file-imported runs show up in Test health (bucketed by date)
             source_run_id=run_data.source_id or None,
         )
         db.add(run)
@@ -194,6 +195,7 @@ def persist_import_result(db, result: ImportResult, provider: str, conflict: str
                     linked.last_run_at = now
 
         stats["runs"] += 1
+        stats["run_ids"].append(rid)
 
     # ── Defects ───────────────────────────────────────────────
     for d in result.defects:

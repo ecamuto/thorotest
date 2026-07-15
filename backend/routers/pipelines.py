@@ -2,9 +2,10 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 from typing import List
+from sqlalchemy.orm import joinedload
 from ..db import get_db
 from .. import models
-from ..schemas import PipelineOut, PipelineCreate
+from ..schemas import PipelineOut, PipelineCreate, RunCaseOut
 from ..auth_utils import get_current_user, require_role
 from ._pagination import paginate, MAX_LIMIT
 
@@ -22,6 +23,40 @@ def list_pipelines(
     _: models.User = Depends(get_current_user),
 ):
     return paginate(db.query(models.Pipeline).order_by(models.Pipeline.id), response, limit, offset)
+
+
+@router.get("/pipelines/{pipeline_id}/cases", response_model=List[RunCaseOut])
+def pipeline_cases(
+    pipeline_id: str,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(get_current_user),
+):
+    """Individual test cases of the Run this pipeline imported — powers the
+    expandable pipeline row. Empty list if no Run is linked (e.g. a pipeline
+    pushed via the API without result import)."""
+    pipe = db.query(models.Pipeline).filter(models.Pipeline.id == pipeline_id).first()
+    if not pipe:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+    if not pipe.run_id:
+        return []
+    cases = (
+        db.query(models.RunCase)
+        .options(joinedload(models.RunCase.test))
+        .filter(models.RunCase.run_id == pipe.run_id)
+        .all()
+    )
+    return [
+        RunCaseOut(
+            id=c.id,
+            run_id=c.run_id,
+            test_id=c.test_id,
+            status=c.status,
+            title=c.test.title if c.test else c.test_id,
+            duration=(c.test.duration if c.test and c.test.duration else None),
+            assigned_to=c.assigned_to,
+        )
+        for c in cases
+    ]
 
 
 @router.post("/pipelines", response_model=PipelineOut, status_code=201)

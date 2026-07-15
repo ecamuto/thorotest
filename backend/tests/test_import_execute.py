@@ -86,6 +86,9 @@ def test_execution_links_run_case_by_source_id(client, db):
     linked = db.query(models.Test).filter(models.Test.id == rc.test_id).one()
     assert linked.external_key == "PROJ-T1"
     assert rc.status == "pass"
+    # Imported runs must carry created_at, else they're invisible to the
+    # Test health chart (which buckets runs by created_at date).
+    assert run.created_at is not None
 
 
 def test_xray_results_link_to_previously_imported_tests(client, db):

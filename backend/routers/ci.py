@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from ..db import get_db, SessionLocal
 from .. import models
-from ..auth_utils import require_role
+from ..auth_utils import require_role, get_current_user
 from ..github_actions import (
     GitHubActionsClient, ci_config, pick_dispatched_run, collect_run_results,
 )
@@ -23,6 +23,7 @@ from ..gitlab_actions import (
     _TERMINAL as GITLAB_TERMINAL,
 )
 from ..vcs import detect_provider
+from ..schemas import PipelineOut
 
 logger = logging.getLogger("thorotest.ci")
 router = APIRouter(tags=["ci"])
@@ -133,6 +134,7 @@ def _orchestrate(job_id: str, cfg: dict, since: datetime, run_name: Optional[str
                     author=(run.get("actor") or {}).get("login"),
                     when="just now",
                     url=run.get("html_url"),
+                    integration_id=cfg.get("integration_id"),
                 )
             finally:
                 db0.close()
@@ -161,6 +163,7 @@ def _orchestrate(job_id: str, cfg: dict, since: datetime, run_name: Optional[str
                     db, pipeline_row_id,
                     status="pass" if concl == "success" else "fail",
                     duration=_fmt_duration(_gh_run_seconds(detail)),
+                    run_id=(stats.get("run_ids") or [None])[-1],
                 )
             finally:
                 db.close()
@@ -207,6 +210,7 @@ def _orchestrate_gitlab(job_id: str, cfg: dict, run_name: Optional[str]) -> None
                         db, pid,
                         status="pass" if concl == "success" else "fail",
                         duration=_fmt_duration(detail.get("duration")),
+                        run_id=(stats.get("run_ids") or [None])[-1],
                     )
             finally:
                 db.close()
@@ -251,6 +255,7 @@ async def ci_run(intg_id: str, payload: CIRunRequest, db: Session = Depends(get_
             commit=(pipeline.get("sha") or "")[:7] or None,
             branch=pipeline.get("ref") or cfg["ref"], when="just now",
             url=pipeline.get("web_url"),
+            integration_id=intg_id,
         )
         _JOBS[job_id] = {
             "id": job_id,
@@ -270,6 +275,7 @@ async def ci_run(intg_id: str, payload: CIRunRequest, db: Session = Depends(get_
         cfg = _resolve_cfg(intg, payload)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Not a GitHub integration: {e}")
+    cfg["integration_id"] = intg_id
 
     since = datetime.now(timezone.utc)
     try:
@@ -297,3 +303,81 @@ def ci_job_status(intg_id: str, job_id: str, _: models.User = WRITE_ROLES):
     if not job or job.get("integration_id") != intg_id:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
+
+
+# ── Reconcile stuck 'running' rows against the provider ─────────
+# The dispatch orchestrator polls in an in-memory worker thread, so a row can be
+# left stuck on 'running' if that thread dies or the process restarts. This
+# re-queries the provider for the real status of any 'running' pipeline (keyed by
+# the run id encoded in the row id + the stored integration), imports results
+# when it finds one finished, and flips the row to pass/fail. Idempotent.
+
+def _reconcile_github(db, pipe, intg) -> bool:
+    run_id = pipe.id[len("gh-run-"):]
+    if not run_id.isdigit():
+        return False
+    cfg = ci_config(intg)
+    with GitHubActionsClient(cfg["token"]) as client:
+        detail = client.get_run(cfg["owner"], cfg["repo"], int(run_id))
+        if detail.get("status") != "completed":
+            return False   # genuinely still running — leave it
+        stats = collect_run_results(
+            db, client, cfg["owner"], cfg["repo"], int(run_id), cfg["artifact"], pipe.name,
+        )
+        _upsert_pipeline(
+            db, pipe.id,
+            status="pass" if detail.get("conclusion") == "success" else "fail",
+            duration=_fmt_duration(_gh_run_seconds(detail)),
+            run_id=(stats.get("run_ids") or [None])[-1],
+        )
+    return True
+
+
+def _reconcile_gitlab(db, pipe, intg) -> bool:
+    pid = pipe.id[len("gl-pipeline-"):]
+    if not pid.isdigit():
+        return False
+    cfg = gitlab_ci_config(intg)
+    with GitLabActionsClient(cfg["api_base"], cfg["token"]) as client:
+        detail = client.get_pipeline(cfg["project"], int(pid))
+        if detail.get("status") not in GITLAB_TERMINAL:
+            return False
+        stats = collect_pipeline_results(db, client, cfg["project"], int(pid), pipe.name)
+        _upsert_pipeline(
+            db, pipe.id,
+            status="pass" if detail.get("status") == "success" else "fail",
+            duration=_fmt_duration(detail.get("duration")),
+            run_id=(stats.get("run_ids") or [None])[-1],
+        )
+    return True
+
+
+def reconcile_running_pipelines(db) -> int:
+    """Re-query the provider for every 'running' pipeline and finalize the ones
+    that have actually finished. Returns the count updated."""
+    running = db.query(models.Pipeline).filter(models.Pipeline.status == "running").all()
+    updated = 0
+    for pipe in running:
+        if not pipe.integration_id:
+            continue   # pushed via API without a source integration — can't re-query
+        intg = db.query(models.Integration).filter(models.Integration.id == pipe.integration_id).first()
+        if not intg:
+            continue
+        try:
+            if pipe.platform == "github" and pipe.id.startswith("gh-run-"):
+                updated += _reconcile_github(db, pipe, intg)
+            elif pipe.platform == "gitlab" and pipe.id.startswith("gl-pipeline-"):
+                updated += _reconcile_gitlab(db, pipe, intg)
+        except Exception as e:
+            logger.warning("reconcile of pipeline %s failed: %s", pipe.id, e)
+    return updated
+
+
+@router.post("/pipelines/reconcile")
+def pipelines_reconcile(db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
+    """Poll the provider for any stuck 'running' pipelines and finalize them.
+    Called by the pipelines page's live poll so rows self-heal. Returns the
+    fresh pipeline list so the client can refresh in one round-trip."""
+    updated = reconcile_running_pipelines(db)
+    pipes = db.query(models.Pipeline).order_by(models.Pipeline.id).all()
+    return {"updated": updated, "pipelines": [PipelineOut.model_validate(p) for p in pipes]}
