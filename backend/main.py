@@ -462,7 +462,7 @@ async def initial_data(db: Session = Depends(get_db), _: models.User = Depends(g
         {
             "id": p.id, "name": p.name, "platform": p.platform, "status": p.status,
             "duration": p.duration, "commit": p.commit, "author": p.author,
-            "branch": p.branch, "when": p.when,
+            "branch": p.branch, "when": p.when, "url": p.url, "run_id": p.run_id,
         }
         for p in all_pipelines
     ]
