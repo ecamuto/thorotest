@@ -6,6 +6,7 @@ const DOC_SECTIONS = [
   { id: "cli",        label: "CLI",         icon: "play" },
   { id: "sdks",       label: "SDKs",        icon: "filter" },
   { id: "webhooks",   label: "Webhooks",    icon: "plug" },
+  { id: "about",      label: "About",       icon: "clock" },
 ];
 
 const METHOD_STYLE = {
@@ -518,6 +519,120 @@ function WebhooksSection() {
 
 /* ── main Docs component ──────────────────────────────── */
 
+/* ── About section ────────────────────────────────────── */
+
+const RELEASE_GROUP_STYLE = {
+  Added:      { color: "var(--pass)",  bg: "var(--pass-soft)" },
+  Fixed:      { color: "var(--warn)",  bg: "var(--warn-soft)" },
+  Changed:    { color: "var(--info)",  bg: "var(--info-soft)" },
+  Removed:    { color: "var(--fail)",  bg: "var(--fail-soft)" },
+  Security:   { color: "var(--fail)",  bg: "var(--fail-soft)" },
+  Deprecated: { color: "var(--text-muted)", bg: "var(--surface)" },
+};
+
+function ReleaseCard({ release, isCurrent, defaultOpen }) {
+  const [open, setOpen] = React.useState(defaultOpen);
+  const unreleased = release.version === "Unreleased";
+
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface)", overflow: "hidden" }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 14px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left" }}
+        aria-expanded={open}
+      >
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 13.5, fontWeight: 700, color: "var(--text)" }}>
+          {unreleased ? "Unreleased" : `v${release.version}`}
+        </span>
+        {isCurrent && (
+          <span style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, color: "var(--accent)", border: "1px solid var(--accent)", borderRadius: 4, padding: "1px 6px" }}>
+            current
+          </span>
+        )}
+        {unreleased && (
+          <span style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, color: "var(--text-dim)", border: "1px solid var(--border)", borderRadius: 4, padding: "1px 6px" }}>
+            in development
+          </span>
+        )}
+        <span style={{ flex: 1 }} />
+        {release.date && <span style={{ fontSize: 11.5, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>{release.date}</span>}
+        <Icon name="chev" className="" />
+      </button>
+
+      {open && (
+        <div style={{ padding: "2px 14px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
+          {release.notes && (
+            <div style={{ fontSize: 12.5, color: "var(--text-muted)", lineHeight: 1.55 }}>{release.notes}</div>
+          )}
+          {release.sections.map((s, si) => {
+            const st = RELEASE_GROUP_STYLE[s.title] || { color: "var(--text-muted)", bg: "var(--surface)" };
+            return (
+              <div key={si}>
+                {s.title && (
+                  <span style={{ display: "inline-block", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: st.color, background: st.bg, padding: "2px 7px", borderRadius: 4, marginBottom: 6 }}>
+                    {s.title}
+                  </span>
+                )}
+                <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 3 }}>
+                  {s.items.map((it, ii) => (
+                    <li key={ii} style={{ fontSize: 12.5, color: "var(--text)", lineHeight: 1.55 }}>{it}</li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AboutSection() {
+  const [data, setData] = React.useState(null);
+  const [err, setErr] = React.useState(null);
+
+  React.useEffect(() => {
+    fetch("/api/about", { headers: window.authHeaders() })
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then(setData)
+      .catch(() => setErr("Could not load /api/about"));
+  }, []);
+
+  if (err) return <div style={{ color: "var(--fail)", fontSize: 13 }}>{err}</div>;
+  if (!data) return <div style={{ color: "var(--text-muted)", fontSize: 13 }}>Loading…</div>;
+
+  const releases = data.releases || [];
+
+  return (
+    <div style={{ maxWidth: 700 }}>
+      <div className="page-title" style={{ fontSize: 18, marginBottom: 4 }}>About ThoroTest</div>
+      <div style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 20, lineHeight: 1.6 }}>
+        Self-hosted test management — manual and automated tests on one timeline.
+      </div>
+
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "14px 16px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface)", marginBottom: 22 }}>
+        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Version</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 700, color: "var(--text)" }}>v{data.version}</span>
+      </div>
+
+      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>Changelog</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {releases.length === 0 && (
+          <div style={{ fontSize: 12.5, color: "var(--text-muted)" }}>No changelog available on this install.</div>
+        )}
+        {releases.map((rel) => (
+          <ReleaseCard
+            key={rel.version}
+            release={rel}
+            isCurrent={rel.version === data.version}
+            defaultOpen={rel.version === data.version}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Docs() {
   const [section, setSection] = React.useState("quickstart");
 
@@ -552,6 +667,7 @@ function Docs() {
         {section === "cli"        && <CliSection />}
         {section === "sdks"       && <SdksSection />}
         {section === "webhooks"   && <WebhooksSection />}
+        {section === "about"      && <AboutSection />}
       </div>
     </div>
   );
