@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import time
@@ -239,9 +240,14 @@ async def health():
     Intended for load balancers, Docker healthchecks, and uptime monitors —
     it deliberately exposes no version or configuration details.
     """
-    try:
+    def _ping_db():
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
+
+    try:
+        # Run the blocking DB ping in a worker thread so a slow/hung database
+        # can't block the async event loop for every other in-flight request.
+        await asyncio.to_thread(_ping_db)
         db_ok = True
     except Exception:
         logging.getLogger("thorotest.health").exception("Health check DB ping failed")
