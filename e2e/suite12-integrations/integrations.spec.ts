@@ -94,7 +94,16 @@ test.describe('Suite 12 — Integrations, API Tokens, Webhooks', () => {
     await expect(page.locator('text="Edit integration"')).toBeVisible({ timeout: 5000 });
     await page.locator('label:has-text("Configured by") + input.login-input').fill('updated-config');
     await page.selectOption('select', 'disabled');
-    await page.click('button:has-text("Save")');
+    // Wait for the PATCH to actually land before reading back the list — clicking
+    // Save and immediately GET-ing the list races the write (the old flake).
+    const [patchResponse] = await Promise.all([
+      page.waitForResponse(r =>
+        r.url().includes(`/api/integrations/${integration.id}`) && r.request().method() === 'PATCH'),
+      page.click('button:has-text("Save")'),
+    ]);
+    expect(patchResponse.status()).toBe(200);
+    // Modal closes on a successful save.
+    await expect(page.locator('text="Edit integration"')).not.toBeVisible({ timeout: 5000 });
 
     // Verify update via list endpoint (no single-GET endpoint exists)
     const list = await page.request.get(`${BASE}/api/integrations`, {
