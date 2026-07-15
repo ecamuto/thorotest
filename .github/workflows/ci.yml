@@ -37,6 +37,19 @@ jobs:
           name: junit                     # ThoroTest's default "JUnit artifact" name
           path: junit.xml
 
+  cli:
+    name: CLI tests (node:test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # The CLI has zero dependencies — no npm ci, just the runtime.
+      - name: Run CLI test suite
+        run: node --test test/
+        working-directory: cli
+
   e2e:
     name: End-to-end tests (Playwright)
     runs-on: ubuntu-latest
