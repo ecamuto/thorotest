@@ -14,9 +14,10 @@ from .. import models
 from ..schemas import RequirementOut, RequirementCreate, RequirementUpdate, RequirementCoverage
 from ..auth_utils import require_role, get_current_user
 from ..activity_utils import log_activity
-from ..record_history import log_create, log_update, log_delete
+from ..record_history import log_create, log_update, log_delete, write_changes
 from ..notifications import _notify_assignment
 from ._pagination import paginate, MAX_LIMIT
+from .custom_fields import validate_and_merge, diff_custom_fields
 
 router = APIRouter(tags=["requirements"])
 
@@ -111,6 +112,7 @@ def _serialize(req: models.Requirement) -> RequirementOut:
         description=req.description, owner=req.owner, created_at=req.created_at, created_by=req.created_by,
         external_provider=req.external_provider, external_key=req.external_key, external_url=req.external_url,
         test_ids=req.test_ids, coverage=_coverage(req),
+        custom_fields=req.custom_fields or {},
     )
 
 
@@ -191,6 +193,7 @@ def create_requirement(
         owner=payload.owner,
         created_at="just now",
         created_by=created_by,
+        custom_fields=validate_and_merge(db, "requirement", payload.custom_fields),
     )
     r.tests = _resolve_tests(db, payload.test_ids)
     db.add(r)
@@ -276,9 +279,16 @@ def update_requirement(req_id: str, payload: RequirementUpdate, db: Session = De
     data = payload.model_dump(exclude_unset=True)
     if "test_ids" in data:
         r.tests = _resolve_tests(db, data.pop("test_ids") or [])
+    incoming_cf = data.pop("custom_fields", None)
+    if incoming_cf is not None:
+        merged_cf = validate_and_merge(db, "requirement", incoming_cf, r.custom_fields, partial=True)
+        write_changes(db, "requirement", req_id, current_user,
+                      diff_custom_fields(db, "requirement", r.custom_fields, merged_cf))
+        data["custom_fields"] = merged_cf
     owner_changed = "owner" in data and (data.get("owner") or None) != (r.owner or None)
     new_owner = data.get("owner")
-    log_update(db, "requirement", req_id, current_user, r, data)
+    log_update(db, "requirement", req_id, current_user, r,
+               {k: v for k, v in data.items() if k != "custom_fields"})
     for field, value in data.items():
         setattr(r, field, value)
     db.commit()

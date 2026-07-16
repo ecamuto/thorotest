@@ -10,8 +10,9 @@ from .. import models
 from ..schemas import DefectOut, DefectCreate, DefectUpdate
 from ..auth_utils import require_role, get_current_user
 from ..activity_utils import log_activity, actor_name
-from ..record_history import log_create, log_update, log_delete
+from ..record_history import log_create, log_update, log_delete, write_changes
 from ._pagination import paginate, MAX_LIMIT
+from .custom_fields import validate_and_merge, diff_custom_fields
 
 router = APIRouter(tags=["defects"])
 
@@ -76,6 +77,7 @@ def create_defect(
         status="open",
         created_at="just now",
         created_by=created_by,
+        custom_fields=validate_and_merge(db, "defect", payload.custom_fields),
     )
     db.add(d)
     log_activity(db, created_by, "filed defect", bug_id, payload.title)
@@ -91,7 +93,13 @@ def update_defect(defect_id: str, payload: DefectUpdate, db: Session = Depends(g
     if not d:
         raise HTTPException(status_code=404, detail="Defect not found")
     data = payload.model_dump(exclude_unset=True)
-    log_update(db, "defect", defect_id, current_user, d, data)
+    incoming_cf = data.pop("custom_fields", None)
+    if incoming_cf is not None:
+        merged_cf = validate_and_merge(db, "defect", incoming_cf, d.custom_fields, partial=True)
+        write_changes(db, "defect", defect_id, current_user,
+                      diff_custom_fields(db, "defect", d.custom_fields, merged_cf))
+        data["custom_fields"] = merged_cf
+    log_update(db, "defect", defect_id, current_user, d, {k: v for k, v in data.items() if k != "custom_fields"})
     for field, value in data.items():
         setattr(d, field, value)
     db.commit()

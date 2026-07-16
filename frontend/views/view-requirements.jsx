@@ -272,11 +272,15 @@ function RequirementModal({ requirement, onClose, onSaved }) {
     description: requirement?.description || "",
     test_ids: requirement?.test_ids || [],
   });
+  const [customFields, setCustomFields] = useState(requirement?.custom_fields || {});
+  const [cfDefs] = useCustomFieldDefs("requirement");
   const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
 
   const save = async () => {
     if (!form.title.trim()) return;
     setSaving(true);
+    setErr(null);
     try {
       const payload = {
         title: form.title.trim(),
@@ -286,12 +290,13 @@ function RequirementModal({ requirement, onClose, onSaved }) {
         owner: form.owner.trim() || null,
         description: form.description.trim() || null,
         test_ids: form.test_ids,
+        custom_fields: customFields,
       };
       const r = isNew
         ? await TH_API.createRequirement(payload)
         : await TH_API.updateRequirement(requirement.id, payload);
       onSaved(r, isNew);
-    } catch (e) {}
+    } catch (e) { setErr(e.message); }
     setSaving(false);
   };
 
@@ -342,11 +347,13 @@ function RequirementModal({ requirement, onClose, onSaved }) {
             <label style={L}>Description (optional)</label>
             <textarea className="textarea" style={{width:"100%", boxSizing:"border-box", minHeight:60}} value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))} />
           </div>
+          <CustomFieldsInputs defs={cfDefs} values={customFields} onChange={setCustomFields} />
           <div>
             <label style={L}>Linked tests</label>
             <TestPicker selected={form.test_ids} onChange={ids => setForm(f => ({...f, test_ids: ids}))} />
           </div>
         </div>
+        {err && <div style={{color:"var(--fail)", fontSize:12, marginTop:10}}>{err}</div>}
         {!isNew && (
           <div style={{marginTop:18, borderTop:"1px solid var(--border)", paddingTop:6}}>
             <label style={L}>Change history</label>

@@ -8,9 +8,17 @@ This file is the single source of truth for the in-app About page
 (`GET /api/about` parses it), so keep the structure: one `## [x.y.z] - YYYY-MM-DD`
 heading per release, `### <Group>` subsections, `-` bullets.
 
-## [Unreleased]
+## [1.9.0] - 2026-07-16
 
 ### Added
+- Custom fields on tests, defects, and requirements: admins define extra
+  fields (text, number, select, date, checkbox — optionally required) from
+  Admin → Custom Fields; they appear on every create/edit form, on the test
+  detail page, and as chips in the defect table. Values are validated
+  server-side and tracked in each record's change history.
+- Defect edit dialog: title, description, severity, status, and custom
+  fields — defects were previously only editable via the inline status
+  dropdown.
 - `thorotest` CLI v0.1 (beta, in-repo under `cli/`): `status`, `lint`, `sync`,
   `token create` — tests-as-code sync from any CI provider or fully airgapped
   installs, no Git server needed. Zero-dependency Node 18+, full reference in
@@ -18,6 +26,10 @@ heading per release, `### <Group>` subsections, `-` bullets.
 - `POST /api/sync/yaml` — CLI-facing sync endpoint reusing the Git sync
   pipeline (same id/path matching, dry-run support).
 - CI job running the CLI test suite (node:test).
+
+### Fixed
+- Crash ("setTest is not defined") when pushing a git-synced test back to
+  its source repo from the test detail page.
 
 ## [1.8.0] - 2026-07-15
 
