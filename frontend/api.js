@@ -1005,6 +1005,43 @@
       return new WebSocket(`${proto}://${location.host}/ws/notifications?token=${encodeURIComponent(token)}`);
     },
 
+    // Custom field definitions (admin-managed; values live on each record)
+    async getCustomFields(entityType) {
+      const qs = entityType ? `?entity_type=${encodeURIComponent(entityType)}` : "";
+      const res = await fetch(BASE + `/api/custom-fields${qs}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error("Failed to load custom fields");
+      return res.json();
+    },
+
+    async createCustomField(payload) {
+      const res = await fetch(BASE + "/api/custom-fields", {
+        method: "POST", headers: authHeaders(), body: JSON.stringify(payload),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "Create failed"); }
+      return res.json();
+    },
+
+    async updateCustomField(id, payload) {
+      const res = await fetch(BASE + `/api/custom-fields/${id}`, {
+        method: "PATCH", headers: authHeaders(), body: JSON.stringify(payload),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "Update failed"); }
+      return res.json();
+    },
+
+    async deleteCustomField(id) {
+      const res = await fetch(BASE + `/api/custom-fields/${id}`, { method: "DELETE", headers: authHeaders() });
+      if (!res.ok && res.status !== 204) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "Delete failed"); }
+    },
+
+    async updateTest(id, payload) {
+      const res = await fetch(BASE + `/api/tests/${id}`, {
+        method: "PATCH", headers: authHeaders(), body: JSON.stringify(payload),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "Update failed"); }
+      return res.json();
+    },
+
     async getAuditLog({ start_date, end_date, page = 1, page_size = 50 } = {}) {
       const params = new URLSearchParams();
       if (start_date) params.set("start_date", start_date);

@@ -16,6 +16,7 @@ function AdminPage({ currentUser, onNav }) {
 
   const ADMIN_TABS = [
     { id: "users",     label: t("admin.users") || "User Management" },
+    { id: "custom-fields", label: "Custom Fields" },
     ...(window.can && window.can(currentUser, "manage") ? [{ id: "audit-log", label: "Audit Log" }] : []),
   ];
 
@@ -170,6 +171,7 @@ function AdminPage({ currentUser, onNav }) {
           )}
         </div>
       )}
+      {tab === "custom-fields" && <CustomFieldsAdmin />}
       {tab === "audit-log" && <AuditLogTab currentUser={currentUser} />}
     </div>
   );

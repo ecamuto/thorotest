@@ -1,5 +1,5 @@
 from pydantic import BaseModel, field_validator
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict
 
 
 class FolderOut(BaseModel):
@@ -37,8 +37,14 @@ class TestOut(BaseModel):
     source_ref: Optional[str] = None
     source_body: Optional[str] = None
     source_synced_at: Optional[str] = None
+    custom_fields: Dict[str, Any] = {}
 
     model_config = {"from_attributes": True}
+
+    @field_validator("custom_fields", mode="before")
+    @classmethod
+    def _cf_default(cls, v):
+        return v or {}
 
 
 class TestCreate(BaseModel):
@@ -55,6 +61,7 @@ class TestCreate(BaseModel):
     updated_at: Optional[str] = None
     last_run_at: Optional[str] = None
     duration: Optional[str] = None
+    custom_fields: Dict[str, Any] = {}
 
 
 class TestUpdate(BaseModel):
@@ -66,6 +73,7 @@ class TestUpdate(BaseModel):
     folder_id: Optional[str] = None
     project_id: Optional[str] = None
     category_ids: Optional[List[str]] = None
+    custom_fields: Optional[Dict[str, Any]] = None   # merged per-key; null value removes the key
 
 
 class RunCaseOut(BaseModel):
@@ -217,8 +225,14 @@ class DefectOut(BaseModel):
     external_provider: Optional[str] = None
     external_key: Optional[str] = None
     external_url: Optional[str] = None
+    custom_fields: Dict[str, Any] = {}
 
     model_config = {"from_attributes": True}
+
+    @field_validator("custom_fields", mode="before")
+    @classmethod
+    def _cf_default(cls, v):
+        return v or {}
 
 
 class DefectCreate(BaseModel):
@@ -227,6 +241,7 @@ class DefectCreate(BaseModel):
     description: Optional[str] = None
     test_id: Optional[str] = None
     run_id: Optional[str] = None
+    custom_fields: Dict[str, Any] = {}
 
 
 class DefectUpdate(BaseModel):
@@ -234,6 +249,7 @@ class DefectUpdate(BaseModel):
     status: Optional[str] = None
     severity: Optional[str] = None
     description: Optional[str] = None
+    custom_fields: Optional[Dict[str, Any]] = None   # merged per-key; null value removes the key
 
 
 class RequirementCoverage(BaseModel):
@@ -259,8 +275,14 @@ class RequirementOut(BaseModel):
     external_url: Optional[str] = None
     test_ids: List[str] = []
     coverage: RequirementCoverage = RequirementCoverage()
+    custom_fields: Dict[str, Any] = {}
 
     model_config = {"from_attributes": True}
+
+    @field_validator("custom_fields", mode="before")
+    @classmethod
+    def _cf_default(cls, v):
+        return v or {}
 
 
 class RequirementCreate(BaseModel):
@@ -271,6 +293,7 @@ class RequirementCreate(BaseModel):
     description: Optional[str] = None
     owner: Optional[str] = None
     test_ids: List[str] = []
+    custom_fields: Dict[str, Any] = {}
 
 
 class RequirementUpdate(BaseModel):
@@ -281,6 +304,43 @@ class RequirementUpdate(BaseModel):
     description: Optional[str] = None
     owner: Optional[str] = None
     test_ids: Optional[List[str]] = None
+    custom_fields: Optional[Dict[str, Any]] = None   # merged per-key; null value removes the key
+
+
+class CustomFieldDefOut(BaseModel):
+    id: int
+    entity_type: str
+    key: str
+    label: str
+    field_type: str
+    options: List[str] = []
+    required: bool = False
+    order: int = 0
+
+    model_config = {"from_attributes": True}
+
+    @field_validator("options", mode="before")
+    @classmethod
+    def _options_default(cls, v):
+        return v or []
+
+
+class CustomFieldDefCreate(BaseModel):
+    entity_type: str                   # test | defect | requirement
+    key: Optional[str] = None          # derived from label when omitted
+    label: str
+    field_type: str = "text"           # text | number | select | date | checkbox
+    options: List[str] = []
+    required: bool = False
+    order: int = 0
+
+
+class CustomFieldDefUpdate(BaseModel):
+    label: Optional[str] = None
+    field_type: Optional[str] = None
+    options: Optional[List[str]] = None
+    required: Optional[bool] = None
+    order: Optional[int] = None
 
 
 class CommentOut(BaseModel):

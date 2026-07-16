@@ -19,6 +19,7 @@ from ..git_push import find_vcs_integration, PushConflict
 from ..github_sync import push_test as github_push_test
 from ..gitlab_sync import push_test as gitlab_push_test
 from ._pagination import paginate, MAX_LIMIT
+from .custom_fields import validate_and_merge, diff_custom_fields
 
 router = APIRouter(tags=["tests"])
 
@@ -134,6 +135,7 @@ def create_test(payload: TestCreate, db: Session = Depends(get_db), current_user
         raise HTTPException(status_code=409, detail="Test ID already exists")
     data = payload.model_dump()
     data["id"] = test_id
+    data["custom_fields"] = validate_and_merge(db, "test", data.get("custom_fields"))
     t = models.Test(**data)
     db.add(t)
     log_activity(db, actor_name(current_user), "created", test_id, t.title)
@@ -158,9 +160,14 @@ def update_test(test_id: str, payload: TestUpdate, db: Session = Depends(get_db)
         raise HTTPException(status_code=404, detail="Test not found")
     data = payload.model_dump(exclude_unset=True)
     category_ids = data.pop("category_ids", None)
+    incoming_cf = data.pop("custom_fields", None)
     owner_changed = "owner" in data and (data.get("owner") or None) != (t.owner or None)
     new_owner = data.get("owner")
     changes = diff_fields(t, data)
+    if incoming_cf is not None:
+        merged_cf = validate_and_merge(db, "test", incoming_cf, t.custom_fields, partial=True)
+        changes.extend(diff_custom_fields(db, "test", t.custom_fields, merged_cf))
+        data["custom_fields"] = merged_cf
     if category_ids is not None:
         old_cats = sorted(t.category_ids)
         new_cats = sorted(category_ids)

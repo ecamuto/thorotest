@@ -546,6 +546,8 @@ function NewTestModal({ folders, defaultFolderId, onClose, onCreate }) {
   const [form, setForm] = useState({
     id: "", title: "", folder_id: defaultFolderId || "", type: "manual", priority: "med", owner: "", tags: ""
   });
+  const [customFields, setCustomFields] = useState({});
+  const [cfDefs] = useCustomFieldDefs("test");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -566,6 +568,7 @@ function NewTestModal({ folders, defaultFolderId, onClose, onCreate }) {
         tags: form.tags.split(",").map(t => t.trim()).filter(Boolean),
         auto: form.type === "automated",
         status: "pending",
+        custom_fields: customFields,
       };
       const res = await fetch("/api/tests", {
         method: "POST",
@@ -626,6 +629,7 @@ function NewTestModal({ folders, defaultFolderId, onClose, onCreate }) {
           <FormField label="Tags" hint="comma-separated">
             <input className="input" value={form.tags} onChange={e => setF("tags", e.target.value)} placeholder="smoke, payment, p0" />
           </FormField>
+          <CustomFieldsInputs defs={cfDefs} values={customFields} onChange={setCustomFields} />
         </div>
 
         {err && <div style={{color:"var(--fail)", fontSize:12, marginTop:12}}>{err}</div>}

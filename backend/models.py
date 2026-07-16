@@ -64,6 +64,7 @@ class Test(Base):
     priority = Column(String(32), default="med")
     owner = Column(String(255), nullable=True)
     tags = Column(JSON, default=list)
+    custom_fields = Column(JSON, default=dict)   # {def key: value} — keys defined in custom_field_defs
     auto = Column(Boolean, default=False)
     runner = Column(String(255), nullable=True)
     updated_at = Column(String(64), nullable=True)
@@ -187,6 +188,7 @@ class Defect(Base):
     external_provider = Column(String(64), nullable=True)   # e.g. "jira"
     external_key = Column(String(128), nullable=True)       # e.g. "PROJ-123"
     external_url = Column(String(512), nullable=True)
+    custom_fields = Column(JSON, default=dict)   # {def key: value} — keys defined in custom_field_defs
 
     test_rel = relationship("Test", back_populates="defects")
 
@@ -206,12 +208,31 @@ class Requirement(Base):
     external_provider = Column(String(64), nullable=True)   # e.g. "jira"
     external_key = Column(String(128), nullable=True)       # e.g. "PROJ-45"
     external_url = Column(String(512), nullable=True)
+    custom_fields = Column(JSON, default=dict)   # {def key: value} — keys defined in custom_field_defs
 
     tests = relationship("Test", secondary=requirement_tests, back_populates="requirements")
 
     @property
     def test_ids(self):
         return [t.id for t in self.tests]
+
+
+class CustomFieldDef(Base):
+    """Admin-defined extra field for tests / defects / requirements.
+
+    Values live in the entity's `custom_fields` JSON column, keyed by `key`.
+    """
+    __tablename__ = "custom_field_defs"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    entity_type = Column(String(32), nullable=False)          # "test" | "defect" | "requirement"
+    key = Column(String(64), nullable=False)                  # machine key, e.g. "browser"
+    label = Column(String(255), nullable=False)               # display name, e.g. "Browser"
+    field_type = Column(String(16), nullable=False, default="text")  # text|number|select|date|checkbox
+    options = Column(JSON, default=list)                      # select only: list[str]
+    required = Column(Boolean, default=False)
+    order = Column(Integer, default=0)                        # display order within entity_type
+
+    __table_args__ = (UniqueConstraint("entity_type", "key", name="uq_custom_field_entity_key"),)
 
 
 class Comment(Base):

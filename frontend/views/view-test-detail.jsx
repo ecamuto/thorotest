@@ -143,7 +143,7 @@ function TestDetail({ testId, onBack, currentUser }) {
       </div>
 
       <div style={{overflowY:"auto", flex:1}}>
-        {tab === "definition" && <DefinitionTab test={test} currentUser={currentUser} />}
+        {tab === "definition" && <DefinitionTab test={test} currentUser={currentUser} onTestPatch={patch => setTest(t => ({...t, ...patch}))} />}
         {tab === "history" && <HistoryTab test={test} />}
         {tab === "defects" && <DefectsTab test={test} currentUser={currentUser} />}
         {tab === "requirements" && <RequirementsTab test={test} currentUser={currentUser} onCountChange={setReqCount} />}
@@ -168,7 +168,7 @@ function TestDetail({ testId, onBack, currentUser }) {
   );
 }
 
-function DefinitionTab({ test, currentUser }) {
+function DefinitionTab({ test, currentUser, onTestPatch }) {
   const [steps, setSteps] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -322,7 +322,7 @@ function DefinitionTab({ test, currentUser }) {
 
         {/* YAML source — rendered only when this test is synced from git */}
         {test.source_path && <YamlSourceCard test={test}
-          onPushed={patch => setTest(t => ({...t, ...patch}))} />}
+          onPushed={patch => onTestPatch && onTestPatch(patch)} />}
       </div>
 
       {/* Side column — keep unchanged from original */}
@@ -343,6 +343,49 @@ function DefinitionTab({ test, currentUser }) {
             } />
           </div>
         </div>
+        <TestCustomFieldsCard test={test} />
+      </div>
+    </div>
+  );
+}
+
+// Editable custom fields (admin-defined) for one test. Hidden when no
+// definitions exist for tests. Owns its values state — the parent's copy of
+// test.custom_fields is not re-read after mount.
+function TestCustomFieldsCard({ test }) {
+  const [defs] = useCustomFieldDefs("test");
+  const [values, setValues] = useState(test.custom_fields || {});
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => { setValues(test.custom_fields || {}); setDirty(false); }, [test.id]);
+
+  if (!defs || defs.length === 0) return null;
+
+  const save = async () => {
+    setSaving(true); setErr(null);
+    try {
+      const updated = await TH_API.updateTest(test.id, { custom_fields: values });
+      setValues(updated.custom_fields || {});
+      setDirty(false);
+    } catch (e) { setErr(e.message); }
+    setSaving(false);
+  };
+
+  return (
+    <div className="card">
+      <div className="card-h"><div className="card-title">Custom fields</div></div>
+      <div className="card-b" style={{display:"flex", flexDirection:"column", gap:10, fontSize:12}}>
+        <CustomFieldsInputs defs={defs} values={values} onChange={v => { setValues(v); setDirty(true); }} />
+        {err && <div style={{color:"var(--fail)", fontSize:12}}>{err}</div>}
+        {dirty && (
+          <div style={{display:"flex", justifyContent:"flex-end"}}>
+            <button className="btn accent sm" onClick={save} disabled={saving}>
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

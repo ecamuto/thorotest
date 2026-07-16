@@ -7,9 +7,11 @@ function Defects({ focusId }) {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterSeverity, setFilterSeverity] = useState("all");
   const [showCreate, setShowCreate] = useState(false);
+  const [editingDefect, setEditingDefect] = useState(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [historyId, setHistoryId] = useState(null);
   const [runs, setRuns] = useState([]);
+  const [cfDefs] = useCustomFieldDefs("defect");
 
   const load = () => {
     setLoading(true);
@@ -165,6 +167,15 @@ function Defects({ focusId }) {
                         </div>
                       )}
                       {d.created_by && <div style={{fontSize:10.5, color:"var(--text-dim)", marginTop:2}}>Filed by {d.created_by}</div>}
+                      {cfDefs.length > 0 && d.custom_fields && Object.keys(d.custom_fields).length > 0 && (
+                        <div style={{display:"flex", gap:4, flexWrap:"wrap", marginTop:3}}>
+                          {cfDefs.filter(f => d.custom_fields[f.key] !== undefined && d.custom_fields[f.key] !== null && d.custom_fields[f.key] !== "").map(f => (
+                            <span key={f.key} className="tag" style={{fontSize:10}}>
+                              {f.label}: {f.field_type === "checkbox" ? (d.custom_fields[f.key] ? "yes" : "no") : String(d.custom_fields[f.key])}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td>
                       <select
@@ -199,6 +210,12 @@ function Defects({ focusId }) {
                       <button
                         className="btn ghost sm"
                         style={{padding:"2px 6px"}}
+                        onClick={() => setEditingDefect(d)}
+                        title="Edit"
+                      ><Icon name="settings" /></button>
+                      <button
+                        className="btn ghost sm"
+                        style={{padding:"2px 6px"}}
                         onClick={() => setHistoryId(d.id)}
                         title="Change history"
                       ><Icon name="clock" /></button>
@@ -222,6 +239,14 @@ function Defects({ focusId }) {
           runs={runs}
           onClose={() => setShowCreate(false)}
           onCreated={(d) => { setDefects(prev => [d, ...prev]); setShowCreate(false); }}
+        />
+      )}
+
+      {editingDefect && (
+        <EditDefectModal
+          defect={editingDefect}
+          onClose={() => setEditingDefect(null)}
+          onSaved={(d) => { setDefects(prev => prev.map(x => x.id === d.id ? d : x)); setEditingDefect(null); }}
         />
       )}
 
@@ -256,11 +281,15 @@ function Defects({ focusId }) {
 
 function CreateDefectModal({ runs, onClose, onCreated }) {
   const [form, setForm] = useState({ title: "", severity: "med", run_id: "", test_id: "", description: "" });
+  const [customFields, setCustomFields] = useState({});
+  const [cfDefs] = useCustomFieldDefs("defect");
   const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
 
   const handleCreate = async () => {
     if (!form.title.trim()) return;
     setSaving(true);
+    setErr(null);
     try {
       const d = await TH_API.createDefect({
         title: form.title.trim(),
@@ -268,9 +297,10 @@ function CreateDefectModal({ runs, onClose, onCreated }) {
         description: form.description.trim() || null,
         test_id: form.test_id.trim() || null,
         run_id: form.run_id || null,
+        custom_fields: customFields,
       });
       onCreated(d);
-    } catch (e) {}
+    } catch (e) { setErr(e.message); }
     setSaving(false);
   };
 
@@ -309,11 +339,91 @@ function CreateDefectModal({ runs, onClose, onCreated }) {
               {runs.map(r => <option key={r.id} value={r.id}>{r.id} · {r.name.slice(0,40)}</option>)}
             </select>
           </div>
+          <CustomFieldsInputs defs={cfDefs} values={customFields} onChange={setCustomFields} />
         </div>
+        {err && <div style={{color:"var(--fail)", fontSize:12, marginTop:10}}>{err}</div>}
         <div style={{display:"flex", gap:8, justifyContent:"flex-end", marginTop:20}}>
           <button className="btn" onClick={onClose}>Cancel</button>
           <button className="btn accent" onClick={handleCreate} disabled={saving || !form.title.trim()}>
             {saving ? "Creating…" : "Create"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditDefectModal({ defect, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    title: defect.title || "",
+    severity: defect.severity || "med",
+    status: defect.status || "open",
+    description: defect.description || "",
+  });
+  const [customFields, setCustomFields] = useState(defect.custom_fields || {});
+  const [cfDefs] = useCustomFieldDefs("defect");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const save = async () => {
+    if (!form.title.trim()) return;
+    setSaving(true);
+    setErr(null);
+    try {
+      const d = await TH_API.updateDefect(defect.id, {
+        title: form.title.trim(),
+        severity: form.severity,
+        status: form.status,
+        description: form.description.trim() || null,
+        custom_fields: customFields,
+      });
+      onSaved(d);
+    } catch (e) { setErr(e.message); }
+    setSaving(false);
+  };
+
+  const L = { fontSize:11, color:"var(--text-dim)", textTransform:"uppercase", letterSpacing:"0.06em", display:"block", marginBottom:4 };
+
+  return (
+    <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} onClick={onClose}>
+      <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:500, maxHeight:"85vh", overflowY:"auto"}} onClick={e => e.stopPropagation()}>
+        <h2 style={{fontSize:15, fontWeight:600, margin:"0 0 16px"}}>Edit {defect.id}</h2>
+        <div style={{display:"flex", flexDirection:"column", gap:10}}>
+          <div>
+            <label style={L}>Title</label>
+            <input className="input" style={{width:"100%", boxSizing:"border-box"}} value={form.title} onChange={e => setForm(f => ({...f, title: e.target.value}))} autoFocus />
+          </div>
+          <div>
+            <label style={L}>Description</label>
+            <textarea className="textarea" style={{width:"100%", boxSizing:"border-box", minHeight:60}} value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))} />
+          </div>
+          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:10}}>
+            <div>
+              <label style={L}>Severity</label>
+              <select className="input" value={form.severity} onChange={e => setForm(f => ({...f, severity: e.target.value}))}>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="med">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+            <div>
+              <label style={L}>Status</label>
+              <select className="input" value={form.status} onChange={e => setForm(f => ({...f, status: e.target.value}))}>
+                <option value="open">Open</option>
+                <option value="in_progress">In progress</option>
+                <option value="resolved">Resolved</option>
+                <option value="closed">Closed</option>
+              </select>
+            </div>
+          </div>
+          <CustomFieldsInputs defs={cfDefs} values={customFields} onChange={setCustomFields} />
+        </div>
+        {err && <div style={{color:"var(--fail)", fontSize:12, marginTop:10}}>{err}</div>}
+        <div style={{display:"flex", gap:8, justifyContent:"flex-end", marginTop:20}}>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn accent" onClick={save} disabled={saving || !form.title.trim()}>
+            {saving ? "Saving…" : "Save"}
           </button>
         </div>
       </div>
