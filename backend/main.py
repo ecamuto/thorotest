@@ -232,6 +232,18 @@ app.add_middleware(
 _STARTED_AT = time.monotonic()
 
 
+@app.get("/api/config")
+async def public_config():
+    """Public UI bootstrap flags.
+
+    Deliberately unauthenticated — the login screen needs them (e.g. the demo
+    ribbon) — and deliberately minimal: booleans only, no version, no secrets.
+    """
+    from .ws_manager import DEMO_MODE  # read at call time so tests can patch it
+
+    return {"demo_mode": DEMO_MODE}
+
+
 @app.get("/health")
 async def health():
     """Liveness/readiness probe: unauthenticated, checks DB connectivity.

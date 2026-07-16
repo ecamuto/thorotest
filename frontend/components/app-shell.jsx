@@ -253,6 +253,36 @@ function Topbar({ crumbs, actions, theme, onToggleTheme }) {
   );
 }
 
+// Corner ribbon shown when the backend runs with DEMO_MODE=1 (demo instance).
+// Rendered at the app root so it covers every screen, login included.
+// pointer-events:none — purely visual, never intercepts clicks; the band is
+// placed so it doesn't visually cover the topbar controls in the corner.
+function DemoRibbon() {
+  const [demo, setDemo] = useState(false);
+  useEffect(() => {
+    fetch("/api/config")
+      .then(r => (r.ok ? r.json() : {}))
+      .then(c => setDemo(!!c.demo_mode))
+      .catch(() => {});
+  }, []);
+  if (!demo) return null;
+  return (
+    <div aria-hidden="true" style={{position:"fixed", top:0, right:0, width:120, height:120, overflow:"hidden", pointerEvents:"none", zIndex:5000}}>
+      <div style={{
+        position:"absolute", top:30, right:-34, transform:"rotate(45deg)",
+        background:"var(--warn, #f59e0b)", color:"#1a1208",
+        fontSize:11, fontWeight:700, letterSpacing:"0.18em", textTransform:"uppercase",
+        textAlign:"center", padding:"4px 40px",
+        boxShadow:"0 2px 8px rgba(0,0,0,0.35)",
+        fontFamily:"var(--font-mono, monospace)",
+      }}>
+        Demo
+      </div>
+    </div>
+  );
+}
+
 window.Sidebar = Sidebar;
 window.Topbar = Topbar;
 window.NAV = NAV_CONFIG;
+window.DemoRibbon = DemoRibbon;
