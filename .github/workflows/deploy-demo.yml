@@ -1,0 +1,63 @@
+name: Deploy demo
+
+# Deploys a release to the demo VPS. Fires when a version tag is pushed or a
+# GitHub release is published; can also be run by hand (workflow_dispatch)
+# against any tag/branch.
+#
+# Required repository secrets (see DEPLOY.local.md for VPS-side setup):
+#   DEMO_SSH_HOST   VPS hostname or IP
+#   DEMO_SSH_USER   SSH user owning /opt/thorotest-demo
+#   DEMO_SSH_KEY    private key (ed25519) authorized on the VPS
+#   DEMO_SSH_PORT   optional, defaults to 22
+
+on:
+  push:
+    tags: ['v*.*.*']
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Tag or branch to deploy (defaults to the triggering ref)'
+        required: false
+
+# One deploy at a time; a queued deploy waits instead of clobbering the
+# in-flight one mid-restart.
+concurrency:
+  group: deploy-demo
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to demo VPS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up SSH
+        env:
+          SSH_KEY: ${{ secrets.DEMO_SSH_KEY }}
+          SSH_HOST: ${{ secrets.DEMO_SSH_HOST }}
+          SSH_PORT: ${{ secrets.DEMO_SSH_PORT || '22' }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy
+        env:
+          SSH_HOST: ${{ secrets.DEMO_SSH_HOST }}
+          SSH_USER: ${{ secrets.DEMO_SSH_USER }}
+          SSH_PORT: ${{ secrets.DEMO_SSH_PORT || '22' }}
+          REF: ${{ github.event.inputs.ref || github.ref_name }}
+        run: |
+          # refuse refs with shell metacharacters — REF lands on a remote command line
+          [[ "$REF" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "invalid ref: $REF"; exit 1; }
+          echo "Deploying ref: $REF"
+          ssh -i ~/.ssh/id_deploy -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            REF="$REF" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /opt/thorotest-demo
+          git fetch origin --tags --force
+          git reset --hard "$REF"
+          ./scripts/deploy-demo.sh
+          REMOTE
