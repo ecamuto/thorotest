@@ -62,16 +62,31 @@ def test_config_demo_mode_off_by_default(client, monkeypatch):
     monkeypatch.setattr(ws_manager, "DEMO_MODE", False)
     r = client.get("/api/config")
     assert r.status_code == 200
-    assert r.json() == {"demo_mode": False}
+    assert r.json() == {"demo_mode": False, "demo_accounts": []}
 
 
 def test_config_demo_mode_on(client, monkeypatch):
     monkeypatch.setattr(ws_manager, "DEMO_MODE", True)
-    assert client.get("/api/config").json() == {"demo_mode": True}
+    body = client.get("/api/config").json()
+    assert body["demo_mode"] is True
+    assert len(body["demo_accounts"]) >= 1
+
+
+def test_demo_accounts_only_exposed_under_demo_mode(client, monkeypatch):
+    """Seeded demo logins must never be advertised on a normal deploy."""
+    monkeypatch.setattr(ws_manager, "DEMO_MODE", False)
+    assert client.get("/api/config").json()["demo_accounts"] == []
+
+    monkeypatch.setattr(ws_manager, "DEMO_MODE", True)
+    accounts = client.get("/api/config").json()["demo_accounts"]
+    assert accounts, "demo_accounts must be populated under DEMO_MODE"
+    for acct in accounts:
+        assert set(acct.keys()) == {"email", "password", "role", "display_name"}
+        assert acct["role"] in ("admin", "manager", "tester")
 
 
 def test_config_is_public_and_minimal(db, monkeypatch):
-    """No auth required (login screen needs it), and nothing but the flag."""
+    """No auth required (login screen needs it), and only the documented keys."""
     from fastapi.testclient import TestClient
     from backend.main import app
     from backend.db import get_db
@@ -85,4 +100,4 @@ def test_config_is_public_and_minimal(db, monkeypatch):
         r = c.get("/api/config")
     app.dependency_overrides.clear()
     assert r.status_code == 200
-    assert set(r.json().keys()) == {"demo_mode"}
+    assert set(r.json().keys()) == {"demo_mode", "demo_accounts"}

@@ -232,16 +232,33 @@ app.add_middleware(
 _STARTED_AT = time.monotonic()
 
 
+# Demo accounts advertised on the login screen when DEMO_MODE is on. These
+# mirror the throwaway users created by backend.seed (seed_db) — never real
+# credentials. Exposed ONLY under DEMO_MODE, which the app refuses to run with
+# ENVIRONMENT=production, so these passwords can never surface on a prod deploy.
+DEMO_ACCOUNTS = [
+    {"email": "admin@localhost", "password": "admin", "role": "admin", "display_name": "Admin"},
+    {"email": "marco@acme.com", "password": "demo123", "role": "admin", "display_name": "Marco Rossi"},
+    {"email": "lisa@acme.com", "password": "demo123", "role": "tester", "display_name": "Lisa Park"},
+    {"email": "alex@acme.com", "password": "demo123", "role": "tester", "display_name": "Alex Rivera"},
+]
+
+
 @app.get("/api/config")
 async def public_config():
     """Public UI bootstrap flags.
 
     Deliberately unauthenticated — the login screen needs them (e.g. the demo
-    ribbon) — and deliberately minimal: booleans only, no version, no secrets.
+    ribbon). Minimal by design: no version, no secrets. `demo_accounts` is only
+    populated under DEMO_MODE (a demo instance), listing the seeded throwaway
+    logins so visitors can sign in; it is an empty list otherwise.
     """
     from .ws_manager import DEMO_MODE  # read at call time so tests can patch it
 
-    return {"demo_mode": DEMO_MODE}
+    return {
+        "demo_mode": DEMO_MODE,
+        "demo_accounts": DEMO_ACCOUNTS if DEMO_MODE else [],
+    }
 
 
 @app.get("/health")
