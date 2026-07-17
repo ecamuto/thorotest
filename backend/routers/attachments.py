@@ -15,9 +15,21 @@ from ..auth_utils import get_current_user, require_role
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./uploads")
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "50"))
 
+# Entity types an attachment may be bound to. Restricting this also constrains
+# the on-disk directory name, closing the path-traversal vector below.
+ALLOWED_ENTITY_TYPES = {"test", "step", "run_case"}
+
 router = APIRouter(tags=["attachments"])
 
 WRITE_ROLES = require_role("admin", "manager", "tester")
+
+
+def _safe_component(value: str) -> str:
+    """Reject any value that could escape UPLOAD_DIR when used as a path part."""
+    value = (value or "").strip()
+    if not value or "/" in value or "\\" in value or value in (".", "..") or "\x00" in value:
+        raise HTTPException(status_code=422, detail="Invalid path component")
+    return value
 
 
 @router.get("/attachments", response_model=List[AttachmentOut])
@@ -45,6 +57,11 @@ async def upload_attachment(
     db: Session = Depends(get_db),
     _: models.User = WRITE_ROLES,
 ):
+    if entity_type not in ALLOWED_ENTITY_TYPES:
+        raise HTTPException(status_code=422, detail="Invalid entity_type")
+    # entity_id and the stored filename must not be able to walk out of UPLOAD_DIR.
+    safe_entity_id = _safe_component(str(entity_id))
+
     content = await file.read()  # read stream ONCE
     size_mb = len(content) / (1024 * 1024)
     if size_mb > MAX_UPLOAD_MB:
@@ -53,14 +70,22 @@ async def upload_attachment(
             detail=f"File exceeds {MAX_UPLOAD_MB}MB limit",
         )
 
-    # Store relative path — safe for Docker and moves
-    rel_dir = os.path.join(entity_type, str(entity_id))
+    # Store relative path — safe for Docker and moves. The on-disk name is a
+    # random UUID plus only the client filename's *basename*, so a filename like
+    # "../../etc/passwd" can't traverse; the original name is kept in the DB.
+    rel_dir = os.path.join(entity_type, safe_entity_id)
     abs_dir = os.path.join(UPLOAD_DIR, rel_dir)
     os.makedirs(abs_dir, exist_ok=True)
 
-    safe_filename = f"{uuid.uuid4().hex}_{file.filename}"
+    client_basename = os.path.basename(file.filename or "")
+    safe_filename = f"{uuid.uuid4().hex}_{client_basename}"
     rel_path = os.path.join(rel_dir, safe_filename)
     abs_path = os.path.join(UPLOAD_DIR, rel_path)
+
+    # Defense in depth: refuse if the resolved path escapes UPLOAD_DIR.
+    upload_root = os.path.realpath(UPLOAD_DIR)
+    if os.path.commonpath([upload_root, os.path.realpath(abs_path)]) != upload_root:
+        raise HTTPException(status_code=422, detail="Invalid attachment path")
 
     async with aiofiles.open(abs_path, "wb") as f:
         await f.write(content)
@@ -84,7 +109,10 @@ def download_attachment(att_id: int, db: Session = Depends(get_db), current_user
     att = db.query(models.Attachment).filter(models.Attachment.id == att_id).first()
     if not att:
         raise HTTPException(status_code=404, detail="Attachment not found")
-    abs_path = os.path.join(UPLOAD_DIR, att.storage_path)
+    upload_root = os.path.realpath(UPLOAD_DIR)
+    abs_path = os.path.realpath(os.path.join(UPLOAD_DIR, att.storage_path))
+    if os.path.commonpath([upload_root, abs_path]) != upload_root:
+        raise HTTPException(status_code=404, detail="File not found on disk")
     if not os.path.exists(abs_path):
         raise HTTPException(status_code=404, detail="File not found on disk")
     return FileResponse(

@@ -21,7 +21,7 @@ def list_integrations(db: Session = Depends(get_db), _: models.User = Depends(ge
 
 
 @router.post("/integrations", response_model=IntegrationOut, status_code=201)
-def create_integration(payload: IntegrationCreate, db: Session = Depends(get_db)):
+def create_integration(payload: IntegrationCreate, db: Session = Depends(get_db), _: models.User = WRITE_ROLES):
     existing = db.query(models.Integration).filter(models.Integration.id == payload.id).first()
     if existing:
         raise HTTPException(status_code=409, detail="Integration ID already exists")
@@ -33,7 +33,7 @@ def create_integration(payload: IntegrationCreate, db: Session = Depends(get_db)
 
 
 @router.patch("/integrations/{intg_id}", response_model=IntegrationOut)
-def update_integration(intg_id: str, payload: IntegrationUpdate, db: Session = Depends(get_db)):
+def update_integration(intg_id: str, payload: IntegrationUpdate, db: Session = Depends(get_db), _: models.User = WRITE_ROLES):
     intg = db.query(models.Integration).filter(models.Integration.id == intg_id).first()
     if not intg:
         raise HTTPException(status_code=404, detail="Integration not found")
@@ -85,7 +85,7 @@ def sync_integration_now(intg_id: str, db: Session = Depends(get_db), _: models.
 
 
 @router.delete("/integrations/{intg_id}", status_code=204)
-def delete_integration(intg_id: str, db: Session = Depends(get_db)):
+def delete_integration(intg_id: str, db: Session = Depends(get_db), _: models.User = WRITE_ROLES):
     intg = db.query(models.Integration).filter(models.Integration.id == intg_id).first()
     if not intg:
         raise HTTPException(status_code=404, detail="Integration not found")
