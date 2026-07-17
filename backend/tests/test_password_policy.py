@@ -47,6 +47,32 @@ class TestValidatePassword:
         validate_password("abcdefgh1234", username="abc")
 
 
+class TestInitialAdminPassword:
+    """SECURITY L-2 / roadmap Q-5: fresh installs get a random admin password."""
+
+    def test_random_when_no_env(self, monkeypatch):
+        from backend.seed import _initial_admin_password
+        monkeypatch.delenv("ADMIN_INITIAL_PASSWORD", raising=False)
+        monkeypatch.delenv("DEMO_MODE", raising=False)
+        pw, generated = _initial_admin_password()
+        assert generated is True
+        assert len(pw) >= 16
+        assert pw != "admin"
+
+    def test_env_override_wins(self, monkeypatch):
+        from backend.seed import _initial_admin_password
+        monkeypatch.setenv("ADMIN_INITIAL_PASSWORD", "operator-chosen-pw")
+        pw, generated = _initial_admin_password()
+        assert (pw, generated) == ("operator-chosen-pw", False)
+
+    def test_demo_mode_keeps_fixed_default(self, monkeypatch):
+        from backend.seed import _initial_admin_password
+        monkeypatch.delenv("ADMIN_INITIAL_PASSWORD", raising=False)
+        monkeypatch.setenv("DEMO_MODE", "1")
+        pw, generated = _initial_admin_password()
+        assert (pw, generated) == ("admin", False)
+
+
 class TestPolicyAtEndpoints:
     def test_register_rejects_short(self, client):
         r = client.post("/api/auth/register", json={

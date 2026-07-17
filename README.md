@@ -108,7 +108,7 @@ make docker-up-sqlite
 
 Database is created automatically on first run. Seed data: 19 test cases across 12 folders, 11 runs, 9 defects. Pipelines are not seeded — the page fills from real CI runs (Configure ▸ Integrations ▸ Run CI).
 
-First login uses the seeded admin — `admin@localhost` / `admin` (change it immediately).
+First login uses the seeded admin — `admin@localhost`, with a random password printed once in the server log on first boot (set `ADMIN_INITIAL_PASSWORD` to choose it yourself; under `DEMO_MODE` it stays `admin`). Change it after signing in.
 
 ---
 
@@ -141,7 +141,7 @@ Prefer the API? Everything the UI does is REST (and GraphQL):
 # login → token
 TOKEN=$(curl -s localhost:8000/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"admin@localhost","password":"admin"}' | jq -r .access_token)
+  -d '{"email":"admin@localhost","password":"<your-admin-password>"}' | jq -r .access_token)
 
 # list tests (paginated; total in X-Total-Count header)
 curl -s localhost:8000/api/tests -H "Authorization: Bearer $TOKEN" | jq '.[0]'
