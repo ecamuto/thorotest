@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 from typing import List
+from ..csv_safe import neutralize
 from ..db import get_db
 from .. import models
 from ..schemas import RunOut, RunDetailOut, RunCreate, DefectOut, StepResultOut, StepResultIn, RunCaseAssign, RunCaseUpdate, RunCaseOut
@@ -397,11 +398,11 @@ def export_run(
         writer.writerow(["test_name", "status", "assigned_to", "duration", "actual_result"])
         for c in cases:
             writer.writerow([
-                c.test.title if c.test else c.test_id,
+                neutralize(c.test.title if c.test else c.test_id),
                 c.status,
-                c.assigned_to or "",
-                c.test.duration if c.test else "",
-                c.actual_result or "",
+                neutralize(c.assigned_to or ""),
+                neutralize(c.test.duration if c.test else ""),
+                neutralize(c.actual_result or ""),
             ])
         content = output.getvalue().encode("utf-8-sig")  # BOM for Excel compatibility
         return Response(

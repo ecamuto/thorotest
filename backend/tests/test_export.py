@@ -140,3 +140,35 @@ class TestExportEndpoints:
         tester = auth_client("tester")
         res = tester.get("/api/tests/export?format=pdf")
         assert res.status_code == 400
+
+    # --- CSV formula-injection neutralization (SECURITY M-3) ---
+
+    def test_tests_export_neutralizes_formula_titles(self, auth_client, seeded, db):
+        from backend import models
+        db.add(models.Test(id="TC-EVIL", title='=HYPERLINK("http://evil","x")',
+                           folder_id="checkout", type="manual", status="pending"))
+        db.flush()
+        tester = auth_client("tester")
+        res = tester.get("/api/tests/export?format=csv")
+        assert res.status_code == 200
+        text = res.content.decode("utf-8-sig")
+        evil_line = next(l for l in text.splitlines() if "HYPERLINK" in l)
+        # csv module quotes the cell (it contains a comma); the payload inside
+        # must start with the neutralizing apostrophe, not a raw '='
+        assert "'=HYPERLINK" in evil_line
+        assert not evil_line.startswith("=")
+
+    def test_run_export_neutralizes_formula_cells(self, auth_client, seeded, db):
+        from backend import models
+        db.add(models.Test(id="TC-EVIL2", title="+cmd|' /C calc'!A0",
+                           folder_id="checkout", type="manual", status="pending"))
+        db.add(models.RunCase(run_id="R-TEST", test_id="TC-EVIL2", status="pending",
+                              actual_result="@SUM(1+9)*cmd"))
+        db.flush()
+        tester = auth_client("tester")
+        res = tester.get("/api/runs/R-TEST/export?format=csv")
+        assert res.status_code == 200
+        text = res.content.decode("utf-8-sig")
+        evil_line = next(l for l in text.splitlines() if "cmd|" in l)
+        assert "'+cmd|" in evil_line
+        assert "'@SUM" in evil_line

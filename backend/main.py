@@ -526,16 +526,35 @@ async def initial_data(db: Session = Depends(get_db), _: models.User = Depends(g
         .limit(INITIAL_DATA_CAPS["requirements"])
         .all()
     )
+    # One query for all requirement→test links instead of a lazy-load per
+    # requirement (N+1): fetch (requirement_id, test_id, status) pairs and
+    # aggregate coverage in Python.
+    req_ids = [r.id for r in all_requirements]
+    linked_by_req: dict[str, list[tuple[str, str]]] = {}
+    if req_ids:
+        link_rows = (
+            db.query(
+                models.requirement_tests.c.requirement_id,
+                models.Test.id,
+                models.Test.status,
+            )
+            .join(models.Test, models.Test.id == models.requirement_tests.c.test_id)
+            .filter(models.requirement_tests.c.requirement_id.in_(req_ids))
+            .all()
+        )
+        for rid, tid, tstatus in link_rows:
+            linked_by_req.setdefault(rid, []).append((tid, tstatus))
+
     requirements_out = []
     for r in all_requirements:
-        linked = r.tests
-        passed = sum(1 for t in linked if t.status == "pass")
-        failed = sum(1 for t in linked if t.status == "fail")
+        linked = linked_by_req.get(r.id, [])
+        passed = sum(1 for _, s in linked if s == "pass")
+        failed = sum(1 for _, s in linked if s == "fail")
         requirements_out.append({
             "id": r.id, "title": r.title, "type": r.type, "status": r.status,
             "priority": r.priority, "owner": r.owner,
             "externalKey": r.external_key, "externalUrl": r.external_url,
-            "testIds": [t.id for t in linked],
+            "testIds": [tid for tid, _ in linked],
             "coverage": {
                 "linked": len(linked), "passed": passed, "failed": failed,
                 "untested": len(linked) - passed - failed,

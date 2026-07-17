@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import or_, cast, String
 from sqlalchemy.orm import Session
 from typing import List, Optional
+from ..csv_safe import neutralize
 from ..db import get_db
 from .. import models
 from ..schemas import TestOut, TestCreate, TestUpdate, BulkAction, DefectOut, CommentOut, CommentCreate, TestStepOut, TestStepIn
@@ -105,8 +106,8 @@ def export_tests(
     writer.writerow(["title", "folder", "priority", "status", "steps_count", "created_at"])
     for t in tests:
         writer.writerow([
-            t.title,
-            t.folder_rel.name if t.folder_rel else "",
+            neutralize(t.title),
+            neutralize(t.folder_rel.name if t.folder_rel else ""),
             t.priority or "",
             t.status or "",
             len(t.steps),
