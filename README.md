@@ -4,7 +4,7 @@
 
 [![version](https://img.shields.io/badge/version-1.10.0-blue)](package.json)
 [![license](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-576%20unit%20%2B%2031%20e2e%20suites-brightgreen)](#tests)
+[![tests](https://img.shields.io/badge/tests-653%20unit%20%2B%2037%20e2e%20suites-brightgreen)](#tests)
 [![backend](https://img.shields.io/badge/backend-FastAPI-009688)](#stack)
 [![frontend](https://img.shields.io/badge/frontend-React%2018-61DAFB)](#stack)
 [![docker](https://img.shields.io/badge/deploy-Docker-2496ED)](#quickstart)
@@ -351,7 +351,7 @@ lives in one place (the run), never in the YAML.
 
 ## Tests
 
-**576 backend unit tests** (pytest) + **31 Playwright e2e suites** covering every major flow — CI-gated.
+**653 backend unit tests** (pytest) + **37 Playwright e2e suites** covering every major flow — CI-gated.
 
 ```bash
 make test        # backend unit tests

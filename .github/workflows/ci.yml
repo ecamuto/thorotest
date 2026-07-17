@@ -26,6 +26,8 @@ jobs:
           python -m venv venv
           ./venv/bin/pip install --upgrade pip
           ./venv/bin/pip install -r requirements.lock
+      - name: README badge counts match the tree
+        run: python3 scripts/update-badges.py --check
       - name: Run pytest → JUnit XML
         run: ./venv/bin/pytest backend/tests/ -q --junitxml=junit.xml
       - name: Upload JUnit artifact
