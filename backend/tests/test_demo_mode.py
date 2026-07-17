@@ -54,3 +54,35 @@ def test_demo_mode_env_parsing(monkeypatch):
     # Restore module state for other tests
     monkeypatch.delenv("DEMO_MODE", raising=False)
     importlib.reload(ws_manager)
+
+
+# ── /api/config — public UI bootstrap flags ─────────────────────
+
+def test_config_demo_mode_off_by_default(client, monkeypatch):
+    monkeypatch.setattr(ws_manager, "DEMO_MODE", False)
+    r = client.get("/api/config")
+    assert r.status_code == 200
+    assert r.json() == {"demo_mode": False}
+
+
+def test_config_demo_mode_on(client, monkeypatch):
+    monkeypatch.setattr(ws_manager, "DEMO_MODE", True)
+    assert client.get("/api/config").json() == {"demo_mode": True}
+
+
+def test_config_is_public_and_minimal(db, monkeypatch):
+    """No auth required (login screen needs it), and nothing but the flag."""
+    from fastapi.testclient import TestClient
+    from backend.main import app
+    from backend.db import get_db
+
+    monkeypatch.setattr(ws_manager, "DEMO_MODE", True)
+
+    def override():
+        yield db
+    app.dependency_overrides[get_db] = override
+    with TestClient(app) as c:
+        r = c.get("/api/config")
+    app.dependency_overrides.clear()
+    assert r.status_code == 200
+    assert set(r.json().keys()) == {"demo_mode"}

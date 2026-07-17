@@ -380,6 +380,7 @@ async function boot() {
   root.render(
     <I18nProvider>
       <AuthRoot />
+      <DemoRibbon />
     </I18nProvider>
   );
 }

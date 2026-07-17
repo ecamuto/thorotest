@@ -8,6 +8,13 @@ This file is the single source of truth for the in-app About page
 (`GET /api/about` parses it), so keep the structure: one `## [x.y.z] - YYYY-MM-DD`
 heading per release, `### <Group>` subsections, `-` bullets.
 
+## [Unreleased]
+
+### Added
+- "Demo" corner ribbon overlay when the instance runs with `DEMO_MODE=1` —
+  always visible (login included), purely visual, never intercepts clicks.
+  Backed by the new public `GET /api/config` bootstrap-flags endpoint.
+
 ## [1.9.0] - 2026-07-16
 
 ### Added
