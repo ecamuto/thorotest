@@ -84,6 +84,7 @@ class Test(Base):
 
     __table_args__ = (
         Index("ix_test_external", "external_provider", "external_key"),
+        Index("ix_tests_folder_status", "folder_id", "status"),
     )
 
     folder_rel = relationship("Folder", back_populates="tests")
@@ -123,8 +124,8 @@ class Run(Base):
 class RunCase(Base):
     __tablename__ = "run_cases"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    run_id = Column(String(255), ForeignKey("runs.id"))
-    test_id = Column(String(255), ForeignKey("tests.id"))
+    run_id = Column(String(255), ForeignKey("runs.id"), index=True)
+    test_id = Column(String(255), ForeignKey("tests.id"), index=True)
     status = Column(String(32), default="pending")
 
     actual_result = Column(Text, nullable=True)
@@ -189,6 +190,10 @@ class Defect(Base):
     external_key = Column(String(128), nullable=True)       # e.g. "PROJ-123"
     external_url = Column(String(512), nullable=True)
     custom_fields = Column(JSON, default=dict)   # {def key: value} — keys defined in custom_field_defs
+
+    __table_args__ = (
+        Index("ix_defects_status_severity", "status", "severity"),
+    )
 
     test_rel = relationship("Test", back_populates="defects")
 
