@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from .. import models
 from ..schemas import UserOut, AdminUserCreate, UserRoleUpdate
-from ..auth_utils import require_role, hash_password
+from ..auth_utils import require_role, hash_password, validate_password
 from ..audit_utils import log_event, EVT_USER_CREATED, EVT_USER_DELETED, EVT_ROLE_CHANGED
 
 router = APIRouter(tags=["admin"])
@@ -36,6 +36,7 @@ def create_user(
         raise HTTPException(status_code=409, detail="Email already registered")
     if db.query(models.User).filter(models.User.username == payload.username).first():
         raise HTTPException(status_code=409, detail="Username already taken")
+    validate_password(payload.password, email=payload.email, username=payload.username)
     user = models.User(
         username=payload.username,
         email=payload.email,

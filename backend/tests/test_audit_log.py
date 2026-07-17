@@ -64,7 +64,7 @@ class TestAuthEvents:
         """A successful password change creates a password_change audit entry."""
         tester = auth_client("tester")
         # Route is PUT /api/me/password; auth_client sets password to "pass123"
-        resp = tester.put("/api/me/password", json={"current_password": "pass123", "new_password": "NewPass123!"})
+        resp = tester.put("/api/me/password", json={"current_password": "pass123", "new_password": "NewPass123!-extra"})
         assert resp.status_code == 204
         admin = auth_client("admin")
         entries = _audit_entries(admin)
@@ -74,7 +74,7 @@ class TestAuthEvents:
         """A failed password change (wrong current password) creates a password_change_fail entry."""
         tester = auth_client("tester")
         # Route is PUT /api/me/password; "WRONG" is intentionally incorrect
-        resp = tester.put("/api/me/password", json={"current_password": "WRONG", "new_password": "NewPass123!"})
+        resp = tester.put("/api/me/password", json={"current_password": "WRONG", "new_password": "NewPass123!-extra"})
         assert resp.status_code in (400, 401)
         admin = auth_client("admin")
         entries = _audit_entries(admin)
@@ -91,7 +91,7 @@ class TestUserMgmtEvents:
         admin = auth_client("admin")
         resp = admin.post("/api/admin/users", json={
             "username": "newuser_audit", "email": "newaudit@example.com",
-            "password": "Pass123!", "display_name": "Audit Test", "role": "tester"
+            "password": "Str0ng-Audit-Pw!", "display_name": "Audit Test", "role": "tester"
         })
         assert resp.status_code == 201
         entries = _audit_entries(admin)
@@ -104,7 +104,7 @@ class TestUserMgmtEvents:
         # Create a user to delete
         resp = admin.post("/api/admin/users", json={
             "username": "todelete_audit", "email": "todelete@example.com",
-            "password": "Pass123!", "display_name": "To Delete", "role": "viewer"
+            "password": "Str0ng-Audit-Pw!", "display_name": "To Delete", "role": "viewer"
         })
         assert resp.status_code == 201
         user_id = resp.json()["id"]
@@ -118,7 +118,7 @@ class TestUserMgmtEvents:
         admin = auth_client("admin")
         resp = admin.post("/api/admin/users", json={
             "username": "rolechange_audit", "email": "rolechange@example.com",
-            "password": "Pass123!", "display_name": "Role Change", "role": "tester"
+            "password": "Str0ng-Audit-Pw!", "display_name": "Role Change", "role": "tester"
         })
         assert resp.status_code == 201
         user_id = resp.json()["id"]

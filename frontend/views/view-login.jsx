@@ -144,7 +144,7 @@ function LoginPage({ onLogin, oauthError, onDismissOAuthError }) {
             <div className="login-field">
               <label className="login-label">New password</label>
               <input className="login-input" type="password" value={newPassword}
-                     onChange={e => setNewPassword(e.target.value)} minLength={6} required autoFocus />
+                     onChange={e => setNewPassword(e.target.value)} minLength={12} required autoFocus />
             </div>
             {error && <div className="login-error">{error}</div>}
             <button type="submit" className="btn primary login-btn" disabled={loading}>

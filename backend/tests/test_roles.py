@@ -48,7 +48,7 @@ class TestRegisterDefault:
         resp = client.post("/api/auth/register", json={
             "username": "newuser",
             "email": "newuser@test.com",
-            "password": "pass1234",
+            "password": "pass1234-long-enough",
         })
         assert resp.status_code == 201
         data = resp.json()

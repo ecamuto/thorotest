@@ -41,6 +41,49 @@ pwd_context = CryptContext(schemes=["argon2", "sha256_crypt"], deprecated="auto"
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
+PASSWORD_MIN_LENGTH = 12
+PASSWORD_MAX_LENGTH = 128
+
+# Very common passwords long enough to pass the length check. Compared
+# lowercase-exact. A breached-password service (HIBP) is the roadmap upgrade;
+# this list only catches the worst offenders without a network dependency.
+_COMMON_PASSWORDS = {
+    "password1234", "password12345", "password123456",
+    "123456789012", "1234567890123", "12345678901234",
+    "qwertyuiop12", "qwertyuiopas", "qwerty123456",
+    "adminadmin123", "administrator", "letmeinletmein",
+    "welcome12345", "changeme12345", "iloveyou12345",
+    "thorotest1234",
+}
+
+
+def validate_password(password: str, *, email: str | None = None, username: str | None = None) -> None:
+    """Enforce the password policy; raise HTTPException(422) on violation.
+
+    NIST-style: length + blocklist, no composition rules. Also rejects
+    passwords built on the account's own identifiers.
+    """
+    if len(password) < PASSWORD_MIN_LENGTH:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Password must be at least {PASSWORD_MIN_LENGTH} characters",
+        )
+    if len(password) > PASSWORD_MAX_LENGTH:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Password must be at most {PASSWORD_MAX_LENGTH} characters",
+        )
+    lowered = password.lower()
+    if lowered in _COMMON_PASSWORDS or len(set(lowered)) == 1:
+        raise HTTPException(status_code=422, detail="Password is too common")
+    for ident in (username, email.split("@", 1)[0] if email else None):
+        if ident and len(ident) >= 4 and ident.lower() in lowered:
+            raise HTTPException(
+                status_code=422,
+                detail="Password must not contain your username or email",
+            )
+
+
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 

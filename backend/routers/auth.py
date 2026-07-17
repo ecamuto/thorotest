@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from .. import models
 from ..schemas import UserCreate, UserLogin, UserOut, UserListItem, UserUpdate, PasswordChange, ForgotPasswordIn, ResetPasswordIn
-from ..auth_utils import hash_password, verify_password, verify_and_update, create_access_token, get_current_user
+from ..auth_utils import hash_password, verify_password, verify_and_update, create_access_token, get_current_user, validate_password
 from ..totp_utils import create_partial_token
 from ..audit_utils import (
     log_event,
@@ -66,8 +66,7 @@ def _clear_login_failures(key: str) -> None:
 
 @router.post("/auth/register", response_model=UserOut, status_code=201)
 def register(payload: UserCreate, db: Session = Depends(get_db)):
-    if len(payload.password) < 6:
-        raise HTTPException(status_code=422, detail="Password must be at least 6 characters")
+    validate_password(payload.password, email=payload.email, username=payload.username)
     if db.query(models.User).filter(models.User.email == payload.email).first():
         raise HTTPException(status_code=409, detail="Email already registered")
     if db.query(models.User).filter(models.User.username == payload.username).first():
@@ -197,8 +196,7 @@ def change_password(
             ip_address=ip,
         )
         raise HTTPException(status_code=400, detail="Current password is incorrect")
-    if len(payload.new_password) < 6:
-        raise HTTPException(status_code=422, detail="New password must be at least 6 characters")
+    validate_password(payload.new_password, email=current_user.email, username=current_user.username)
     current_user.hashed_password = hash_password(payload.new_password)
     db.commit()
     log_event(
@@ -264,8 +262,7 @@ def forgot_password(
 
 @router.post("/auth/reset-password", status_code=204)
 def reset_password(request: Request, payload: ResetPasswordIn, db: Session = Depends(get_db)):
-    if len(payload.new_password) < 6:
-        raise HTTPException(status_code=422, detail="New password must be at least 6 characters")
+    validate_password(payload.new_password)
     ip = request.client.host if request.client else None
     token_hash = hashlib.sha256(payload.token.encode()).hexdigest()
     prt = db.query(models.PasswordResetToken).filter(

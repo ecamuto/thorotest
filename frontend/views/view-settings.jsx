@@ -171,7 +171,7 @@ function PasswordTab() {
   const save = async () => {
     setError(null); setSuccess(false);
     if (next !== confirm) { setError(t("settings.passwordSection.noMatch")); return; }
-    if (next.length < 6)  { setError(t("settings.passwordSection.tooShort")); return; }
+    if (next.length < 12) { setError(t("settings.passwordSection.tooShort")); return; }
     setLoading(true);
     try {
       await window.TH_API.changePassword(current, next);

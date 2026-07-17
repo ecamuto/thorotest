@@ -73,13 +73,13 @@ window.TH_LOCALES.es = {
     },
     passwordSection: {
       title: "Cambiar contraseña",
-      sub: "Elige una contraseña segura de al menos 6 caracteres.",
+      sub: "Elige una contraseña segura de al menos 12 caracteres.",
       current: "Contraseña actual",
       new: "Nueva contraseña",
       confirm: "Confirmar nueva contraseña",
       updateBtn: "Actualizar contraseña",
       noMatch: "Las nuevas contraseñas no coinciden",
-      tooShort: "La contraseña debe tener al menos 6 caracteres",
+      tooShort: "La contraseña debe tener al menos 12 caracteres",
     },
     projectsSection: {
       title: "Proyectos",

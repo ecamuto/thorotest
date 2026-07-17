@@ -25,7 +25,7 @@ class TestAdminUserManagement:
         resp = admin_c.post("/api/admin/users", json={
             "username": "newbie",
             "email": "newbie@test.com",
-            "password": "secure123",
+            "password": "secure123-and-long",
             "role": "tester",
         })
         assert resp.status_code == 201
