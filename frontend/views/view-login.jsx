@@ -12,6 +12,22 @@ function LoginPage({ onLogin, oauthError, onDismissOAuthError }) {
   const [mode, setMode] = useState(resetToken ? "reset" : "login");
   const [newPassword, setNewPassword] = useState("");
   const [resetDone, setResetDone] = useState(false);
+  // Demo instances (DEMO_MODE) advertise seeded throwaway logins so visitors
+  // can sign in; empty on a normal deploy.
+  const [demoAccounts, setDemoAccounts] = useState([]);
+
+  useEffect(() => {
+    fetch("/api/config")
+      .then(r => (r.ok ? r.json() : {}))
+      .then(c => setDemoAccounts(Array.isArray(c.demo_accounts) ? c.demo_accounts : []))
+      .catch(() => {});
+  }, []);
+
+  const fillDemo = (acct) => {
+    setEmail(acct.email);
+    setPassword(acct.password);
+    setError(null);
+  };
 
   const handleForgot = async (e) => {
     e.preventDefault();
@@ -177,6 +193,54 @@ function LoginPage({ onLogin, oauthError, onDismissOAuthError }) {
             Forgot password?
           </button>
         </form>
+        )}
+
+        {mode === "login" && demoAccounts.length > 0 && (
+          <div className="demo-accounts" role="group" aria-label="Demo accounts" style={{
+            marginTop: 16, padding: 12, borderRadius: 10,
+            border: "1px solid var(--warn, #f59e0b)",
+            background: "color-mix(in srgb, var(--warn, #f59e0b) 8%, transparent)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--warn, #f59e0b)" }}>
+                Demo accounts
+              </span>
+              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>— click to sign in</span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {demoAccounts.map(acct => (
+                <button
+                  key={acct.email}
+                  type="button"
+                  onClick={() => fillDemo(acct)}
+                  title={`Fill ${acct.email}`}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+                    padding: "7px 10px", borderRadius: 8, cursor: "pointer",
+                    border: "1px solid var(--border, #3f3f5a)", background: "var(--surface, #1e1e2e)",
+                    textAlign: "left", width: "100%",
+                  }}
+                >
+                  <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text, #e5e7eb)", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {acct.email}
+                    </span>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
+                      {acct.password}
+                    </span>
+                  </span>
+                  <span style={{
+                    flexShrink: 0, fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
+                    padding: "2px 8px", borderRadius: 999,
+                    color: acct.role === "admin" ? "#1a1208" : "var(--text, #e5e7eb)",
+                    background: acct.role === "admin" ? "var(--warn, #f59e0b)" : "var(--border, #3f3f5a)",
+                  }}>
+                    {acct.role}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
         )}
 
         {mode === "login" && (<React.Fragment>
