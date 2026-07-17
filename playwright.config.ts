@@ -36,6 +36,9 @@ export default defineConfig({
     env: {
       DATABASE_URL: 'sqlite:///./e2e.db',
       LOGIN_RATELIMIT_DISABLED: '1',
+      // e2e webhook tests point at a local target; allow private hosts for the
+      // SSRF guard in this environment only (never in production).
+      WEBHOOK_ALLOW_PRIVATE_HOSTS: '1',
       PYTHONUNBUFFERED: '1',
     },
   },

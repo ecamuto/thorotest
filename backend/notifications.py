@@ -13,6 +13,7 @@ from . import emailer
 from .db import SessionLocal
 from . import models
 from .webhook_utils import sign_payload
+from .net_guard import assert_public_http_url, UnsafeURLError
 
 # @mention tokens: an @ followed by a username-ish run (letters, digits, _ . -).
 _MENTION_RE = re.compile(r"@([A-Za-z0-9_][A-Za-z0-9_.\-]*)")
@@ -201,9 +202,13 @@ async def _fire_webhooks(run_id: str):
                 headers["X-Hub-Signature-256"] = sign_payload(body_bytes, wh.hmac_secret)
             status_code = 0
             try:
+                # SSRF guard at delivery time — never POST to an internal host.
+                assert_public_http_url(wh.url)
                 async with httpx.AsyncClient(timeout=5.0) as client:
                     r = await client.post(wh.url, content=body_bytes, headers=headers)
                     status_code = r.status_code
+            except UnsafeURLError:
+                status_code = 0
             except Exception:
                 status_code = 0
             wh.last_status_code = status_code
