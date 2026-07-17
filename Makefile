@@ -1,4 +1,4 @@
-.PHONY: help setup install dev frontend-build frontend-watch db-reset db-revision db-upgrade db-seed demo test test-e2e test-e2e-auth test-e2e-import test-all test-report hooks-install open clean docker-up docker-up-sqlite docker-down docker-logs
+.PHONY: help setup install dev frontend-build frontend-watch db-reset db-revision db-upgrade db-seed demo test test-e2e test-e2e-auth test-e2e-import test-all test-report hooks-install open clean clean-data docker-up docker-up-sqlite docker-down docker-logs
 
 PYTHON  := python3
 VENV    := venv
@@ -81,5 +81,10 @@ docker-down: ## Stop and remove Docker containers
 docker-logs: ## Tail Docker container logs
 	docker compose logs -f
 
-clean: ## Remove venv, node_modules, DB, test artifacts
-	rm -rf $(VENV) node_modules testhub.db playwright-report test-results frontend/dist
+clean-data: ## Remove local DBs, WAL/SHM files, and test artifacts (keeps venv/node_modules)
+	rm -f testhub.db e2e.db *.db-shm *.db-wal scratch-batch.log
+	rm -rf scratch-junit playwright-report test-results
+	@echo "Local DBs and test artifacts removed. presentation.db kept — delete manually if stale."
+
+clean: clean-data ## Remove venv, node_modules, DBs, build output, test artifacts
+	rm -rf $(VENV) node_modules frontend/dist
