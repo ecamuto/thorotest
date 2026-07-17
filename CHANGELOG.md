@@ -8,12 +8,32 @@ This file is the single source of truth for the in-app About page
 (`GET /api/about` parses it), so keep the structure: one `## [x.y.z] - YYYY-MM-DD`
 heading per release, `### <Group>` subsections, `-` bullets.
 
-## [Unreleased]
+## [1.10.0] - 2026-07-17
+
+### Security
+- Require authentication on the Webhooks API (list/create/update/delete,
+  regenerate-secret, test) — every route was previously unauthenticated,
+  allowing anonymous callers to enumerate delivery URLs, obtain the HMAC
+  signing secret, and trigger server-side requests. Now admin/manager only.
+- Require authentication on Integrations create/update/delete — previously
+  unauthenticated, exposing the stored git/Jira tokens to anonymous
+  modification and retargeting. Now admin/manager only.
+- Add an SSRF egress guard for webhook targets (`backend/net_guard.py`):
+  refuse URLs that resolve to private, loopback, link-local, reserved, or
+  cloud-metadata addresses; enforced at create/update, on test, and at
+  delivery. Escape hatch `WEBHOOK_ALLOW_PRIVATE_HOSTS=1` for local dev/e2e.
+- Harden attachment upload against path traversal: whitelist `entity_type`,
+  reject traversal in `entity_id`, store only the client filename's basename,
+  and assert the resolved path stays within `UPLOAD_DIR` (upload and download).
 
 ### Added
 - "Demo" corner ribbon overlay when the instance runs with `DEMO_MODE=1` —
   always visible (login included), purely visual, never intercepts clicks.
   Backed by the new public `GET /api/config` bootstrap-flags endpoint.
+- Demo-account logins on the login screen under `DEMO_MODE`: a "Demo accounts"
+  balloon lists the seeded throwaway logins (email, password, role); clicking a
+  row fills the form. `GET /api/config` returns `demo_accounts` only under
+  `DEMO_MODE` (which is refused when `ENVIRONMENT=production`).
 
 ## [1.9.0] - 2026-07-16
 
