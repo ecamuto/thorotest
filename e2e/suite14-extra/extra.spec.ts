@@ -190,7 +190,7 @@ test.describe('Suite 14 — Extra Coverage, Edge Cases & Library Gaps', () => {
   // EXTRA-10 · POST /api/auth/register — username duplicato [P1]
   test('EXTRA-10: register with duplicate username returns 409', async ({ page }) => {
     const res = await page.request.post(`${BASE}/api/auth/register`, {
-      data: { username: 'marco', email: 'newuser@test.com', password: 'secret123' },
+      data: { username: 'marco', email: 'newuser@test.com', password: 'secret123-long-pw' },
       headers: { 'Content-Type': 'application/json' },
     });
     expect(res.status()).toBe(409);

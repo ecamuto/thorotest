@@ -124,7 +124,7 @@ test.describe('Suite P2 — RBAC (Roles & Permissions)', () => {
 
     await page.fill('input[placeholder="Username *"]', `tmpuser${uid}`);
     await page.fill('input[placeholder="Email *"]', tmpEmail);
-    await page.fill('input[placeholder="Password *"]', 'tmppass123');
+    await page.fill('input[placeholder="Password *"]', 'tmppass123-long');
     await page.fill('input[placeholder="Display name"], input[placeholder="Nome visualizzato"]', 'Tmp User');
     await page.locator('form select').selectOption('viewer');
     await page.click('button[type="submit"]:has-text("Crea utente")');
@@ -146,7 +146,7 @@ test.describe('Suite P2 — RBAC (Roles & Permissions)', () => {
     await apiJSON(page, 'POST', '/api/admin/users', {
       username: `todel${uid}`,
       email: tmpEmail,
-      password: 'test123',
+      password: 'test123-long-pw',
       display_name: 'To Delete',
       role: 'tester',
     });
