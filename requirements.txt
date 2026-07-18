@@ -9,7 +9,7 @@ pytest>=8.0.0
 httpx>=0.27.0
 python-jose[cryptography]>=3.3.0
 passlib>=1.7.4
-argon2-cffi>=23.1.0        # argon2id password hashing backend for passlib
+argon2-cffi>=25.1.0        # argon2id password hashing backend for passlib
 python-dotenv>=1.0.0
 anthropic>=0.105.0
 openai>=1.40.0             # only used when AI_PROVIDER=openai (OpenAI-compatible / local LLMs)
