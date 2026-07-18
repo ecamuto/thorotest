@@ -34,7 +34,7 @@ jobs:
         # `!cancelled()` runs even if pytest failed, so results publish while
         # the job still goes red — the CI gate is preserved.
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: junit                     # ThoroTest's default "JUnit artifact" name
           path: junit.xml
@@ -100,13 +100,13 @@ jobs:
           PLAYWRIGHT_JUNIT_OUTPUT_NAME: junit-e2e.xml
       - name: Upload JUnit artifact
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: junit-e2e                 # set the integration's "JUnit artifact" to this to import e2e
           path: junit-e2e.xml
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: playwright-report/
