@@ -86,7 +86,7 @@ test.describe('Suite 10 — Settings', () => {
     const suffix = Date.now().toString(36);
     const email = `pwtest-${suffix}@acme.com`;
     const created = await page.request.post(`${BASE}/api/admin/users`, {
-      data: { username: `pwtest-${suffix}`, email, password: 'demo123', role: 'tester' },
+      data: { username: `pwtest-${suffix}`, email, password: 'demo123-throwaway', role: 'tester' },
       headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
     });
     expect(created.ok()).toBeTruthy();
@@ -94,23 +94,23 @@ test.describe('Suite 10 — Settings', () => {
 
     // Re-login as the throwaway user and change its password through the UI
     await page.evaluate(() => localStorage.removeItem('th_token'));
-    await loginAs(page, email);
+    await loginAs(page, email, 'demo123-throwaway');
     await page.goto('/#/settings');
     await page.click('button:has-text("Password")');
 
     await expect(page.locator('input[placeholder="••••••••"]').first()).toBeVisible({ timeout: 8000 });
 
     const inputs = page.locator('input[type="password"]');
-    await inputs.nth(0).fill('demo123');
-    await inputs.nth(1).fill('newpass123');
-    await inputs.nth(2).fill('newpass123');
+    await inputs.nth(0).fill('demo123-throwaway');
+    await inputs.nth(1).fill('newpass123-long');
+    await inputs.nth(2).fill('newpass123-long');
     await page.click('button:has-text("Update password")');
 
     await expect(page.locator('text=Saved.')).toBeVisible({ timeout: 8000 });
 
     // New password works
     const relogin = await page.request.post(`${BASE}/api/auth/login`, {
-      data: { email, password: 'newpass123' },
+      data: { email, password: 'newpass123-long' },
       headers: { 'Content-Type': 'application/json' },
     });
     expect(relogin.status()).toBe(200);
@@ -131,8 +131,8 @@ test.describe('Suite 10 — Settings', () => {
 
     const inputs = page.locator('input[type="password"]');
     await inputs.nth(0).fill('demo123');
-    await inputs.nth(1).fill('newpass123');
-    await inputs.nth(2).fill('different456');
+    await inputs.nth(1).fill('newpass123-long');
+    await inputs.nth(2).fill('different456-long');
     await page.click('button:has-text("Update password")');
 
     await expect(page.locator("text=don't match")).toBeVisible({ timeout: 5000 });
@@ -154,7 +154,7 @@ test.describe('Suite 10 — Settings', () => {
     await inputs.nth(2).fill('abc');
     await page.click('button:has-text("Update password")');
 
-    await expect(page.locator('text=/at least 6/i').first()).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('text=/at least 12/i').first()).toBeVisible({ timeout: 5000 });
   });
 
   // SETT-07 · Cambio password — password attuale errata [P1]
@@ -167,8 +167,8 @@ test.describe('Suite 10 — Settings', () => {
 
     const inputs = page.locator('input[type="password"]');
     await inputs.nth(0).fill('wrongpassword');
-    await inputs.nth(1).fill('newpass123');
-    await inputs.nth(2).fill('newpass123');
+    await inputs.nth(1).fill('newpass123-long');
+    await inputs.nth(2).fill('newpass123-long');
     await page.click('button:has-text("Update password")');
 
     await expect(page.locator('text=/incorrect|wrong/i')).toBeVisible({ timeout: 8000 });

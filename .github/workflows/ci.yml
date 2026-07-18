@@ -25,7 +25,9 @@ jobs:
         run: |
           python -m venv venv
           ./venv/bin/pip install --upgrade pip
-          ./venv/bin/pip install -r requirements.txt
+          ./venv/bin/pip install -r requirements.lock
+      - name: README badge counts match the tree
+        run: python3 scripts/update-badges.py --check
       - name: Run pytest → JUnit XML
         run: ./venv/bin/pytest backend/tests/ -q --junitxml=junit.xml
       - name: Upload JUnit artifact
@@ -36,6 +38,23 @@ jobs:
         with:
           name: junit                     # ThoroTest's default "JUnit artifact" name
           path: junit.xml
+
+  deps-audit:
+    name: Dependency CVE scan (pip-audit)
+    runs-on: ubuntu-latest
+    # Report-only for now: new advisories in transitive deps shouldn't block
+    # unrelated PRs. Dependabot opens the fix PRs; tighten to blocking later.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: pip-audit against the lock
+        # --ignore-vuln PYSEC-2026-1325: ecdsa (transitive via python-jose) has
+        # no fixed release — upstream considers pure-python timing side channels
+        # out of scope. Revisit if python-jose is replaced (e.g. PyJWT).
+        run: pipx run pip-audit -r requirements.lock --ignore-vuln PYSEC-2026-1325
 
   cli:
     name: CLI tests (node:test)
@@ -67,7 +86,7 @@ jobs:
         run: |
           python -m venv venv
           ./venv/bin/pip install --upgrade pip
-          ./venv/bin/pip install -r requirements.txt
+          ./venv/bin/pip install -r requirements.lock
       - name: Install node deps
         run: npm ci
       - name: Install Playwright browser

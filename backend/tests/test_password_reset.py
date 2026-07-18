@@ -49,22 +49,22 @@ class TestResetPassword:
         old_tv = user.token_version or 0
         token = _reset_token_for(db, client)
 
-        r = client.post("/api/auth/reset-password", json={"token": token, "new_password": "brandnew1"})
+        r = client.post("/api/auth/reset-password", json={"token": token, "new_password": "brandnew1-longer"})
         assert r.status_code == 204
 
         db.refresh(user)
         assert (user.token_version or 0) == old_tv + 1  # old JWTs revoked
 
         # login works with the new password
-        r = client.post("/api/auth/login", json={"email": "admin@test.com", "password": "brandnew1"})
+        r = client.post("/api/auth/login", json={"email": "admin@test.com", "password": "brandnew1-longer"})
         assert r.status_code == 200
 
         # token is single-use
-        r = client.post("/api/auth/reset-password", json={"token": token, "new_password": "another1"})
+        r = client.post("/api/auth/reset-password", json={"token": token, "new_password": "another1-longer"})
         assert r.status_code == 400
 
     def test_invalid_token_rejected(self, client):
-        r = client.post("/api/auth/reset-password", json={"token": "bogus", "new_password": "whatever1"})
+        r = client.post("/api/auth/reset-password", json={"token": "bogus", "new_password": "whatever1-longer"})
         assert r.status_code == 400
 
     def test_expired_token_rejected(self, client, db):
@@ -72,7 +72,7 @@ class TestResetPassword:
         row = db.query(models.PasswordResetToken).one()
         row.expires_at = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
         db.commit()
-        r = client.post("/api/auth/reset-password", json={"token": token, "new_password": "whatever1"})
+        r = client.post("/api/auth/reset-password", json={"token": token, "new_password": "whatever1-longer"})
         assert r.status_code == 400
 
     def test_short_password_rejected(self, client, db):

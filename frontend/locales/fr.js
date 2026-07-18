@@ -73,13 +73,13 @@ window.TH_LOCALES.fr = {
     },
     passwordSection: {
       title: "Changer le mot de passe",
-      sub: "Choisissez un mot de passe solide d'au moins 6 caractères.",
+      sub: "Choisissez un mot de passe solide d'au moins 12 caractères.",
       current: "Mot de passe actuel",
       new: "Nouveau mot de passe",
       confirm: "Confirmer le nouveau mot de passe",
       updateBtn: "Mettre à jour le mot de passe",
       noMatch: "Les nouveaux mots de passe ne correspondent pas",
-      tooShort: "Le mot de passe doit comporter au moins 6 caractères",
+      tooShort: "Le mot de passe doit comporter au moins 12 caractères",
     },
     projectsSection: {
       title: "Projets",

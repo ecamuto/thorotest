@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import secrets
 import sys
 import os
@@ -23,19 +24,47 @@ def _seed_token(name, scope, prefix_suffix, created_at, last_used_at=None):
     )
 
 
+def _initial_admin_password() -> tuple[str, bool]:
+    """Resolve the first-boot admin password.
+
+    Order: ADMIN_INITIAL_PASSWORD env → fixed "admin" under DEMO_MODE (the
+    login screen advertises it; DEMO_MODE refuses to boot in production) →
+    a random secret, printed once to the log (SECURITY L-2: no more
+    universal default credential on fresh installs).
+    Returns (password, generated).
+    """
+    env_pw = os.getenv("ADMIN_INITIAL_PASSWORD", "").strip()
+    if env_pw:
+        return env_pw, False
+    demo = os.getenv("DEMO_MODE", "").strip().lower() in ("1", "true", "yes")
+    if demo:
+        return "admin", False
+    return secrets.token_urlsafe(16), True
+
+
 def init_db():
     """Create minimal structure for a fresh install — admin user only, no demo data."""
     db = SessionLocal()
     try:
         if db.query(models.User).count() == 0:
+            password, generated = _initial_admin_password()
             db.add(models.User(
                 username="admin",
                 email="admin@localhost",
-                hashed_password=hash_password("admin"),
+                hashed_password=hash_password(password),
                 display_name="Admin",
                 role="admin",
             ))
             db.commit()
+            if generated:
+                logging.getLogger("thorotest.seed").warning(
+                    "\n" + "=" * 72 +
+                    "\nInitial admin account created:  admin@localhost / %s"
+                    "\nThis password is shown ONCE — sign in and change it now."
+                    "\n(Set ADMIN_INITIAL_PASSWORD to choose it yourself.)"
+                    "\n" + "=" * 72,
+                    password,
+                )
     except Exception:
         db.rollback()
         raise

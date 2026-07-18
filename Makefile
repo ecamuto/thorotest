@@ -1,4 +1,4 @@
-.PHONY: help setup install dev frontend-build frontend-watch db-reset db-revision db-upgrade db-seed demo test test-e2e test-e2e-auth test-e2e-import test-all test-report hooks-install open clean docker-up docker-up-sqlite docker-down docker-logs
+.PHONY: help setup install lock dev frontend-build frontend-watch db-reset db-revision db-upgrade db-seed demo test test-e2e test-e2e-auth test-e2e-import test-all test-report hooks-install open clean clean-data docker-up docker-up-sqlite docker-down docker-logs
 
 PYTHON  := python3
 VENV    := venv
@@ -35,6 +35,16 @@ db-revision: ## Create an Alembic migration from model changes: make db-revision
 
 db-upgrade: ## Apply pending Alembic migrations to the local DB
 	$(VENV)/bin/alembic upgrade head
+
+lock: ## Regenerate requirements.lock from the venv (run after changing requirements.txt)
+	$(PIP) install -r requirements.txt
+	$(PIP) freeze --exclude-editable > requirements.lock.tmp
+	@{ echo "# Pinned transitive lock generated from the project venv (DEBT D-8)."; \
+	   echo "# Regenerate after changing requirements.txt:  make lock"; \
+	   echo "# CI installs from this file; requirements.txt keeps the direct-dep ranges."; \
+	   cat requirements.lock.tmp; } > requirements.lock
+	@rm -f requirements.lock.tmp
+	@echo "requirements.lock regenerated."
 
 db-seed: ## Populate DB with demo data (deletes existing DB first)
 	rm -f testhub.db
@@ -81,5 +91,10 @@ docker-down: ## Stop and remove Docker containers
 docker-logs: ## Tail Docker container logs
 	docker compose logs -f
 
-clean: ## Remove venv, node_modules, DB, test artifacts
-	rm -rf $(VENV) node_modules testhub.db playwright-report test-results frontend/dist
+clean-data: ## Remove local DBs, WAL/SHM files, and test artifacts (keeps venv/node_modules)
+	rm -f testhub.db e2e.db *.db-shm *.db-wal scratch-batch.log
+	rm -rf scratch-junit playwright-report test-results
+	@echo "Local DBs and test artifacts removed. presentation.db kept — delete manually if stale."
+
+clean: clean-data ## Remove venv, node_modules, DBs, build output, test artifacts
+	rm -rf $(VENV) node_modules frontend/dist

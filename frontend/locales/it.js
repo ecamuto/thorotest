@@ -74,13 +74,13 @@ window.TH_LOCALES.it = {
     },
     passwordSection: {
       title: "Cambia password",
-      sub: "Scegli una password sicura di almeno 6 caratteri.",
+      sub: "Scegli una password sicura di almeno 12 caratteri.",
       current: "Password attuale",
       new: "Nuova password",
       confirm: "Conferma nuova password",
       updateBtn: "Aggiorna password",
       noMatch: "Le nuove password non corrispondono",
-      tooShort: "La password deve essere di almeno 6 caratteri",
+      tooShort: "La password deve essere di almeno 12 caratteri",
     },
     projectsSection: {
       title: "Progetti",

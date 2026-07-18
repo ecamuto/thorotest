@@ -49,7 +49,7 @@ test.describe('Suite P17 — Password reset', () => {
     await page.goto('/#/reset-password/bogus-token');
     await page.waitForSelector('.login-page', { timeout: 10000 });
 
-    await page.fill('input[type="password"]', 'newpassword1');
+    await page.fill('input[type="password"]', 'newpassword1-long');
     const [response] = await Promise.all([
       page.waitForResponse(r => r.url().includes('/api/auth/reset-password')),
       page.click('button:has-text("Set new password")'),

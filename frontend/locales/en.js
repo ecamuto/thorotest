@@ -75,13 +75,13 @@ window.TH_LOCALES.en = {
     },
     passwordSection: {
       title: "Change password",
-      sub: "Choose a strong password of at least 6 characters.",
+      sub: "Choose a strong password of at least 12 characters.",
       current: "Current password",
       new: "New password",
       confirm: "Confirm new password",
       updateBtn: "Update password",
       noMatch: "New passwords don't match",
-      tooShort: "Password must be at least 6 characters",
+      tooShort: "Password must be at least 12 characters",
     },
     projectsSection: {
       title: "Projects",

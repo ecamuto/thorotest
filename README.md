@@ -4,7 +4,7 @@
 
 [![version](https://img.shields.io/badge/version-1.10.0-blue)](package.json)
 [![license](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-576%20unit%20%2B%2031%20e2e%20suites-brightgreen)](#tests)
+[![tests](https://img.shields.io/badge/tests-653%20unit%20%2B%2037%20e2e%20suites-brightgreen)](#tests)
 [![backend](https://img.shields.io/badge/backend-FastAPI-009688)](#stack)
 [![frontend](https://img.shields.io/badge/frontend-React%2018-61DAFB)](#stack)
 [![docker](https://img.shields.io/badge/deploy-Docker-2496ED)](#quickstart)
@@ -108,7 +108,7 @@ make docker-up-sqlite
 
 Database is created automatically on first run. Seed data: 19 test cases across 12 folders, 11 runs, 9 defects. Pipelines are not seeded — the page fills from real CI runs (Configure ▸ Integrations ▸ Run CI).
 
-First login uses the seeded admin — `admin@localhost` / `admin` (change it immediately).
+First login uses the seeded admin — `admin@localhost`, with a random password printed once in the server log on first boot (set `ADMIN_INITIAL_PASSWORD` to choose it yourself; under `DEMO_MODE` it stays `admin`). Change it after signing in.
 
 ---
 
@@ -141,7 +141,7 @@ Prefer the API? Everything the UI does is REST (and GraphQL):
 # login → token
 TOKEN=$(curl -s localhost:8000/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"admin@localhost","password":"admin"}' | jq -r .access_token)
+  -d '{"email":"admin@localhost","password":"<your-admin-password>"}' | jq -r .access_token)
 
 # list tests (paginated; total in X-Total-Count header)
 curl -s localhost:8000/api/tests -H "Authorization: Bearer $TOKEN" | jq '.[0]'
@@ -351,7 +351,7 @@ lives in one place (the run), never in the YAML.
 
 ## Tests
 
-**576 backend unit tests** (pytest) + **31 Playwright e2e suites** covering every major flow — CI-gated.
+**653 backend unit tests** (pytest) + **37 Playwright e2e suites** covering every major flow — CI-gated.
 
 ```bash
 make test        # backend unit tests
