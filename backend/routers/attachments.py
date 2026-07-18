@@ -19,6 +19,26 @@ MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "50"))
 # the on-disk directory name, closing the path-traversal vector below.
 ALLOWED_ENTITY_TYPES = {"test", "step", "run_case"}
 
+# Extension allow-list (SECURITY M-2). Test-evidence formats only: images,
+# video, documents, logs/reports, archives. Extends via env, e.g.
+# UPLOAD_EXTRA_EXTENSIONS=".psd,.sketch". Notably absent: .html/.svg (render
+# as markup → stored XSS), executables, scripts.
+ALLOWED_EXTENSIONS = {
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp",
+    ".mp4", ".webm", ".mov",
+    ".pdf", ".txt", ".log", ".md", ".csv", ".json", ".xml", ".yaml", ".yml",
+    ".har", ".zip", ".gz", ".xlsx", ".docx",
+}
+ALLOWED_EXTENSIONS |= {
+    e.strip().lower()
+    for e in os.getenv("UPLOAD_EXTRA_EXTENSIONS", "").split(",")
+    if e.strip().startswith(".")
+}
+
+# Types a browser will render inline with active content — never echo these
+# back as their claimed MIME type on download.
+_NEVER_INLINE_MIME = {"text/html", "application/xhtml+xml", "image/svg+xml"}
+
 router = APIRouter(tags=["attachments"])
 
 WRITE_ROLES = require_role("admin", "manager", "tester")
@@ -61,6 +81,14 @@ async def upload_attachment(
         raise HTTPException(status_code=422, detail="Invalid entity_type")
     # entity_id and the stored filename must not be able to walk out of UPLOAD_DIR.
     safe_entity_id = _safe_component(str(entity_id))
+
+    ext = os.path.splitext(os.path.basename(file.filename or ""))[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"File type '{ext or '(none)'}' not allowed. Allowed: "
+                   + ", ".join(sorted(ALLOWED_EXTENSIONS)),
+        )
 
     content = await file.read()  # read stream ONCE
     size_mb = len(content) / (1024 * 1024)
@@ -115,10 +143,17 @@ def download_attachment(att_id: int, db: Session = Depends(get_db), current_user
         raise HTTPException(status_code=404, detail="File not found on disk")
     if not os.path.exists(abs_path):
         raise HTTPException(status_code=404, detail="File not found on disk")
+    # filename= makes FileResponse emit Content-Disposition: attachment.
+    # Client-declared MIME is untrusted: renderable-markup types are forced to
+    # octet-stream so a spoofed content_type can't turn a download into a page.
+    mime = att.mime_type or "application/octet-stream"
+    if mime.split(";")[0].strip().lower() in _NEVER_INLINE_MIME:
+        mime = "application/octet-stream"
     return FileResponse(
         path=abs_path,
         filename=att.filename,
-        media_type=att.mime_type or "application/octet-stream",
+        media_type=mime,
+        headers={"X-Content-Type-Options": "nosniff"},
     )
 
 

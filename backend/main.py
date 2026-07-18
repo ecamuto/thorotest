@@ -229,6 +229,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Security headers (SECURITY M-2 hardening). The frontend is fully
+# self-contained (vendored React, local fonts, no CDN), so a same-origin CSP
+# costs nothing and blunts stored-XSS via uploaded/linked content.
+# 'unsafe-inline' for styles only: React sets style={{}} via CSSOM (allowed),
+# but third-party-free inline <style> usage stays possible.
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: blob:; "
+    "font-src 'self'; "
+    "connect-src 'self' ws: wss:; "
+    "object-src 'none'; "
+    "frame-ancestors 'self'; "
+    "base-uri 'self'"
+)
+
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("Content-Security-Policy", _CSP)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "same-origin")
+    return response
+
+
 _STARTED_AT = time.monotonic()
 
 
