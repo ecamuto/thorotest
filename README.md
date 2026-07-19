@@ -2,7 +2,7 @@
 
 > **Self-hosted test management that treats manual and automated tests as one timeline.** Organize, run, and track every test — trace features, stories, and epics to the tests that cover them, and see coverage at a glance.
 
-[![version](https://img.shields.io/badge/version-1.10.0-blue)](package.json)
+[![version](https://img.shields.io/badge/version-1.11.0-blue)](package.json)
 [![license](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-green)](LICENSE)
 [![tests](https://img.shields.io/badge/tests-661%20unit%20%2B%2037%20e2e%20suites-brightgreen)](#tests)
 [![backend](https://img.shields.io/badge/backend-FastAPI-009688)](#stack)
