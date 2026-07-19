@@ -1,17 +1,39 @@
-# Weekly dependency update PRs + security advisories (DEBT D-8).
+# Dependency update PRs (DEBT D-8) — grouped and monthly to keep PR noise
+# low: one combined PR per ecosystem instead of one per package.
 version: 2
 updates:
   - package-ecosystem: pip
     directory: "/"
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      python-deps:
+        patterns: ["*"]
+
   - package-ecosystem: npm
     directory: "/"
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      npm-deps:
+        patterns: ["*"]
+    ignore:
+      # React is vendored as production UMD 18 in the frontend — a major bump
+      # is a migration project (DEBT D-5 / roadmap M-3), not a dep update.
+      - dependency-name: react
+        update-types: ["version-update:semver-major"]
+      - dependency-name: react-dom
+        update-types: ["version-update:semver-major"]
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
-      interval: weekly
+      interval: monthly
+    open-pull-requests-limit: 1
+    groups:
+      actions:
+        patterns: ["*"]
