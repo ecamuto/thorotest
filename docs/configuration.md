@@ -54,12 +54,19 @@ cp .env.example .env
 
 ### Database URLs
 
-```bash
-# SQLite (default)
-DATABASE_URL=sqlite:///./testhub.db
+**PostgreSQL is the recommended production database.** SQLite is the
+out-of-the-box default for evaluation and small single-team installs: it
+allows one writer at a time, so live runs, imports, and provider sync
+contend under load. `make docker-up` already provisions Postgres; for a
+bare-metal install, point `DATABASE_URL` at your server and the schema is
+created on first boot.
 
-# PostgreSQL
+```bash
+# PostgreSQL — recommended for production
 DATABASE_URL=postgresql://user:pass@localhost:5432/thorotest
+
+# SQLite — default; evaluation / small installs
+DATABASE_URL=sqlite:///./testhub.db
 
 # MySQL / MariaDB
 DATABASE_URL=mysql+pymysql://user:pass@localhost:3306/thorotest

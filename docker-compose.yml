@@ -6,7 +6,9 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://thorotest:thorotest@db:5432/thorotest
+      # Set POSTGRES_PASSWORD in .env (or the shell) for any non-local deploy;
+      # the weak fallback exists only so `make docker-up` works out of the box.
+      DATABASE_URL: postgresql://thorotest:${POSTGRES_PASSWORD:-thorotest}@db:5432/thorotest
     depends_on:
       db:
         condition: service_healthy
@@ -25,7 +27,7 @@ services:
     environment:
       POSTGRES_DB: thorotest
       POSTGRES_USER: thorotest
-      POSTGRES_PASSWORD: thorotest
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-thorotest}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

@@ -4,7 +4,7 @@
 
 [![version](https://img.shields.io/badge/version-1.10.0-blue)](package.json)
 [![license](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-653%20unit%20%2B%2037%20e2e%20suites-brightgreen)](#tests)
+[![tests](https://img.shields.io/badge/tests-661%20unit%20%2B%2037%20e2e%20suites-brightgreen)](#tests)
 [![backend](https://img.shields.io/badge/backend-FastAPI-009688)](#stack)
 [![frontend](https://img.shields.io/badge/frontend-React%2018-61DAFB)](#stack)
 [![docker](https://img.shields.io/badge/deploy-Docker-2496ED)](#quickstart)
@@ -68,7 +68,7 @@ Already on TestRail/Zephyr/Xray? The import pipeline is built for **migrating of
 |---|---|
 | Frontend | React 18 (vendored production UMD), JSX transpiled + minified by esbuild at build time |
 | Backend | FastAPI, SQLAlchemy |
-| Database | SQLite (default) · PostgreSQL · MySQL / MariaDB (via `DATABASE_URL`) |
+| Database | PostgreSQL (recommended for production) · SQLite (default, eval/small installs) · MySQL / MariaDB (via `DATABASE_URL`) |
 | Realtime | WebSocket (native FastAPI) |
 | API | REST + GraphQL (Strawberry) |
 | Auth | JWT (python-jose), passlib (sha256_crypt) |
@@ -351,7 +351,7 @@ lives in one place (the run), never in the YAML.
 
 ## Tests
 
-**653 backend unit tests** (pytest) + **37 Playwright e2e suites** covering every major flow — CI-gated.
+**661 backend unit tests** (pytest) + **37 Playwright e2e suites** covering every major flow — CI-gated.
 
 ```bash
 make test        # backend unit tests

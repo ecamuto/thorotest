@@ -137,3 +137,70 @@ class TestAttachmentAuthGuards:
         c = auth_client("viewer")
         r = c.delete("/api/attachments/999")
         assert r.status_code == 403
+
+
+class TestUploadTypeAllowlist:
+    """SECURITY M-2 (roadmap S-5): extension allow-list + safe download headers."""
+
+    def _upload(self, client, filename, content_type="application/octet-stream"):
+        return client.post("/api/attachments", data={
+            "entity_type": "test", "entity_id": "TC-SEC",
+        }, files=[make_file(filename=filename, content_type=content_type)])
+
+    def test_rejects_executable(self, client, tmp_path, monkeypatch):
+        import backend.routers.attachments as att_module
+        monkeypatch.setattr(att_module, "UPLOAD_DIR", str(tmp_path))
+        r = self._upload(client, "payload.exe")
+        assert r.status_code == 422
+
+    def test_rejects_html(self, client, tmp_path, monkeypatch):
+        import backend.routers.attachments as att_module
+        monkeypatch.setattr(att_module, "UPLOAD_DIR", str(tmp_path))
+        r = self._upload(client, "xss.html", "text/html")
+        assert r.status_code == 422
+
+    def test_rejects_svg(self, client, tmp_path, monkeypatch):
+        import backend.routers.attachments as att_module
+        monkeypatch.setattr(att_module, "UPLOAD_DIR", str(tmp_path))
+        r = self._upload(client, "vector.svg", "image/svg+xml")
+        assert r.status_code == 422
+
+    def test_rejects_no_extension(self, client, tmp_path, monkeypatch):
+        import backend.routers.attachments as att_module
+        monkeypatch.setattr(att_module, "UPLOAD_DIR", str(tmp_path))
+        r = self._upload(client, "noext")
+        assert r.status_code == 422
+
+    def test_extension_check_is_case_insensitive(self, client, tmp_path, monkeypatch):
+        import backend.routers.attachments as att_module
+        monkeypatch.setattr(att_module, "UPLOAD_DIR", str(tmp_path))
+        r = self._upload(client, "SHOT.PNG", "image/png")
+        assert r.status_code == 201
+
+    def test_download_forces_attachment_and_nosniff(self, client, tmp_path, monkeypatch):
+        import backend.routers.attachments as att_module
+        monkeypatch.setattr(att_module, "UPLOAD_DIR", str(tmp_path))
+        up = self._upload(client, "report.txt", "text/plain")
+        att_id = up.json()["id"]
+        r = client.get(f"/api/attachments/{att_id}")
+        assert "attachment" in r.headers.get("content-disposition", "")
+        assert r.headers.get("x-content-type-options") == "nosniff"
+
+    def test_download_neuters_spoofed_html_mime(self, client, tmp_path, monkeypatch):
+        # A .txt upload whose declared content_type claims text/html must not
+        # be served back as text/html.
+        import backend.routers.attachments as att_module
+        monkeypatch.setattr(att_module, "UPLOAD_DIR", str(tmp_path))
+        up = self._upload(client, "sneaky.txt", "text/html")
+        att_id = up.json()["id"]
+        r = client.get(f"/api/attachments/{att_id}")
+        assert r.headers["content-type"].startswith("application/octet-stream")
+
+
+class TestSecurityHeaders:
+    def test_csp_and_nosniff_on_responses(self, client):
+        r = client.get("/api/config")
+        csp = r.headers.get("content-security-policy", "")
+        assert "default-src 'self'" in csp
+        assert "object-src 'none'" in csp
+        assert r.headers.get("x-content-type-options") == "nosniff"
