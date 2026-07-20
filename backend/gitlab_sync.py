@@ -13,6 +13,7 @@ import httpx
 
 from . import models  # noqa: F401  (kept for symmetry / future use)
 from .github_sync import sync_repo
+from .net_guard import assert_public_http_url
 
 _YAML_EXT = (".yml", ".yaml")
 
@@ -52,6 +53,9 @@ class GitLabClient:
     """Thin GitLab REST v4 wrapper. Raises RuntimeError on API errors."""
 
     def __init__(self, api_base: str, token: str | None = None, timeout: float = 15.0):
+        # api_base is admin-controlled (self-hosted GitLab) — refuse internal
+        # targets at the last hop so no config path can turn sync into SSRF.
+        assert_public_http_url(api_base)
         headers = {"Accept": "application/json"}
         if token:
             headers["PRIVATE-TOKEN"] = token

@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 import httpx
 
 from . import models
+from .net_guard import assert_public_http_url
 
 _ISSUE_TYPE_MAP = {
     "epic": "epic",
@@ -74,6 +75,10 @@ class JiraClient:
 
     def __init__(self, base_url: str, email: str, api_token: str, timeout: float = 15.0):
         self.base_url = normalize_base_url(base_url)
+        # base_url is admin-controlled — the https/hostname regex in
+        # normalize_base_url still admits internal hosts and raw IPs, so
+        # refuse non-public targets here (SECURITY M-1).
+        assert_public_http_url(self.base_url)
         self._client = httpx.Client(
             base_url=self.base_url,
             auth=(email, api_token),

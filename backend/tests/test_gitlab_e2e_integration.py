@@ -52,6 +52,10 @@ if not (TOKEN and _gitlab_up()):
         allow_module_level=True,
     )
 
+# Only reached when the live suite actually runs: it talks to a GitLab on
+# localhost by design, so lift the SSRF egress guard for this process.
+os.environ.setdefault("NET_GUARD_ALLOW_PRIVATE_HOSTS", "1")
+
 pytestmark = pytest.mark.integration
 
 

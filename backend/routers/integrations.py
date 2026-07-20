@@ -6,13 +6,39 @@ from .. import models
 from ..schemas import IntegrationOut, IntegrationCreate, IntegrationUpdate
 from ..auth_utils import require_role, get_current_user
 from ..github_sync import sync_integration
-from ..gitlab_sync import sync_integration as sync_gitlab_integration
-from ..jira_sync import sync_jira_requirements
+from ..gitlab_sync import sync_integration as sync_gitlab_integration, parse_gitlab_repo
+from ..jira_sync import sync_jira_requirements, normalize_base_url
+from ..net_guard import assert_public_http_url, UnsafeURLError
 from ..vcs import detect_provider
 
 router = APIRouter(tags=["integrations"])
 
 WRITE_ROLES = require_role("admin", "manager")
+
+
+def _assert_safe_outbound_urls(intg_type: str, config: dict) -> None:
+    """Fail fast (422) when a config points outbound HTTP at a non-public host
+    (SECURITY M-1 / roadmap S-8). The sync/push clients re-check at use time;
+    this surfaces the error at save instead of at the next sync.
+
+    GitHub needs no check: its client always calls the fixed api.github.com.
+    """
+    config = config or {}
+    try:
+        if intg_type == "jira":
+            if config.get("base_url"):
+                assert_public_http_url(normalize_base_url(config["base_url"]), resolve=False)
+        elif config.get("repo_url") or config.get("api_base"):
+            try:
+                provider = detect_provider(config)
+            except ValueError:
+                return  # provider undetectable — sync will reject with its own error
+            if provider == "gitlab":
+                api_base, _ = parse_gitlab_repo(config.get("repo_url") or "",
+                                                config.get("api_base"))
+                assert_public_http_url(api_base, resolve=False)
+    except (UnsafeURLError, ValueError) as e:
+        raise HTTPException(status_code=422, detail=f"Unsafe integration URL: {e}")
 
 
 @router.get("/integrations", response_model=List[IntegrationOut])
@@ -25,6 +51,7 @@ def create_integration(payload: IntegrationCreate, db: Session = Depends(get_db)
     existing = db.query(models.Integration).filter(models.Integration.id == payload.id).first()
     if existing:
         raise HTTPException(status_code=409, detail="Integration ID already exists")
+    _assert_safe_outbound_urls(payload.type, payload.config or {})
     intg = models.Integration(**payload.model_dump())
     db.add(intg)
     db.commit()
@@ -53,6 +80,7 @@ def update_integration(intg_id: str, payload: IntegrationUpdate, db: Session = D
                     merged.pop(secret_key, None)
         merged.pop("token_set", None)
         merged.pop("api_token_set", None)
+        _assert_safe_outbound_urls(updates.get("type") or intg.type, merged)
         intg.config = merged
     for field, value in updates.items():
         setattr(intg, field, value)
