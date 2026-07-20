@@ -8,6 +8,46 @@ This file is the single source of truth for the in-app About page
 (`GET /api/about` parses it), so keep the structure: one `## [x.y.z] - YYYY-MM-DD`
 heading per release, `### <Group>` subsections, `-` bullets.
 
+## [1.11.0] - 2026-07-19
+
+### Security
+- Neutralize CSV formula injection in run and test-library exports: cells
+  starting with `= + - @` (or tab/CR) are prefixed with an apostrophe so
+  spreadsheets don't execute them.
+- Raise the password policy to 12–128 characters with a common-password
+  blocklist and rejection of passwords containing the account's own
+  username or email; enforced on register, password change, password reset,
+  and admin user creation. Existing passwords are unaffected.
+- Fresh installs no longer seed the fixed `admin@localhost / admin`
+  credential: the first-boot admin password is `ADMIN_INITIAL_PASSWORD` if
+  set, the demo default only under `DEMO_MODE`, otherwise a random secret
+  printed once in the server log.
+- Attachment uploads are restricted to an allow-list of test-evidence file
+  types (extensible via `UPLOAD_EXTRA_EXTENSIONS`); `.html`/`.svg` are
+  excluded because they render as active markup. Downloads force
+  `application/octet-stream` for renderable MIME types and send
+  `X-Content-Type-Options: nosniff`.
+- All responses now carry a same-origin Content-Security-Policy,
+  `X-Content-Type-Options: nosniff`, and `Referrer-Policy: same-origin`.
+
+### Changed
+- PostgreSQL is now the documented production database; SQLite remains the
+  out-of-the-box default for evaluation and small installs, with a boot-time
+  warning when `ENVIRONMENT=production` runs on SQLite. docker-compose reads
+  `POSTGRES_PASSWORD` from the environment instead of hardcoding it.
+- Faster dashboards at scale: indexes on the hot `run_cases`, `tests`, and
+  `defects` filter columns (Alembic `a7c3e9f14b02`), and the requirement
+  coverage block in `/api/initial-data` now runs as a single query instead
+  of one per requirement.
+
+### Added
+- `make clean-data` (remove local databases and test artifacts) and
+  `make lock` (regenerate the pinned `requirements.lock`).
+- Supply-chain hygiene: CI installs from `requirements.lock`, a pip-audit
+  CVE scan job, and grouped monthly Dependabot updates.
+- README test-count badges are derived from the tree
+  (`scripts/update-badges.py`) and drift now fails CI.
+
 ## [1.10.0] - 2026-07-17
 
 ### Security
