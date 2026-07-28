@@ -286,19 +286,30 @@ function QuickstartSection() {
 make dev          # builds the frontend and starts the app on :8000`}</CodeBlock>
       </DocStep>
 
-      <DocStep n="2" title="Register an account">
-        <CodeBlock>{`curl -X POST http://localhost:8000/api/auth/register \\
-  -H "Content-Type: application/json" \\
-  -d '{"username": "alice", "email": "alice@example.com", "password": "secret1"}'`}</CodeBlock>
-      </DocStep>
+      <DocStep n="2" title="Sign in">
+        <CodeBlock>{`# Accounts are invite-only: /api/auth/register returns 403 unless the
+# instance sets ALLOW_OPEN_REGISTRATION=1. Admins create accounts under
+# Configure ▸ Admin. On a fresh install, use the seeded admin — its
+# password is printed once in the server log on first boot.
 
-      <DocStep n="3" title="Get a token">
-        <CodeBlock>{`curl -X POST http://localhost:8000/api/auth/login \\
+curl -X POST http://localhost:8000/api/auth/login \\
   -H "Content-Type: application/json" \\
-  -d '{"email": "alice@example.com", "password": "secret1"}'
+  -d '{"email": "admin@localhost", "password": "<from the first-boot log>"}'
 
 # → { "access_token": "eyJ...", "token_type": "bearer" }
 TOKEN="eyJ..."`}</CodeBlock>
+      </DocStep>
+
+      <DocStep n="3" title="Mint an API token for CI">
+        <CodeBlock>{`# scope "read" restricts the token to GET/HEAD/OPTIONS; "write" grants
+# your full role. Tokens expire after API_TOKEN_EXPIRE_DAYS (90 default).
+
+curl -X POST http://localhost:8000/api/tokens \\
+  -H "Authorization: Bearer $TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"name": "ci-nightly", "scope": "write"}'
+
+# → { "token": "th_...", "expires_at": "..." }   shown once`}</CodeBlock>
       </DocStep>
 
       <DocStep n="4" title="List your tests">

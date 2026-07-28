@@ -12,9 +12,11 @@ async function run(cfg, flags, args) {
   if (!flags.name) throw new UsageError("token create requires --name <name>");
   requireAuth(cfg);
 
+  // Send the default explicitly rather than "" so --json reports the scope the
+  // server actually stored. The server rejects anything other than read/write.
   const { data } = await request(cfg, "POST", "/api/tokens", {
     name: flags.name,
-    scope: flags.scope || "",
+    scope: flags.scope || "write",
   });
 
   if (flags.json) return printJson(data), 0;
