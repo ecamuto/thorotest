@@ -1,8 +1,5 @@
 import os
 import json
-import time
-from collections import defaultdict, deque
-import asyncio
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
@@ -12,6 +9,7 @@ import anthropic as anthropic_lib
 
 from ..db import get_db
 from .. import models
+from ..rate_limit import SlidingWindowLimiter
 from ..auth_utils import require_role, get_current_user
 
 router = APIRouter(tags=["ai"])
@@ -20,8 +18,9 @@ WRITE_ROLES = require_role("admin", "manager", "tester")
 
 RATE_LIMIT = 20
 RATE_WINDOW = 3600
-_rate_store: dict = defaultdict(deque)
-_rate_lock = asyncio.Lock()
+# Bounded and per-process — see backend/rate_limit.py. Note this quota spends the
+# operator's API credit, so with multiple workers the real ceiling is N * RATE_LIMIT.
+_rate_store = SlidingWindowLimiter(RATE_LIMIT, RATE_WINDOW)
 _ai_client: AsyncAnthropic | None = None
 _openai_client = None  # openai.AsyncOpenAI, created lazily
 
@@ -75,14 +74,14 @@ def _get_openai_client():
 
 
 async def _check_rate(user_id: int) -> None:
-    async with _rate_lock:
-        now = time.time()
-        dq = _rate_store[user_id]
-        while dq and dq[0] < now - RATE_WINDOW:
-            dq.popleft()
-        if len(dq) >= RATE_LIMIT:
-            raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {RATE_LIMIT} AI requests per hour. Try again later.")
-        dq.append(now)
+    allowed, retry_after = _rate_store.check(str(user_id))
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded: {RATE_LIMIT} AI requests per hour. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    _rate_store.record(str(user_id))
 
 
 def _upstream_message(e: Exception) -> str:

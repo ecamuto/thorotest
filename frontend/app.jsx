@@ -75,6 +75,8 @@ function App({ currentUser: initialUser, onLogout, onProfileUpdate }) {
   const currentUser = initialUser;
   const [toastMsg, setToastMsg] = React.useState(null);
   const [toastSeverity, setToastSeverity] = React.useState(null);
+  // Off-canvas nav drawer, only reachable below the 900px breakpoint.
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Show toast if initial hash was #/admin but user is not admin
   useEffect(() => {
@@ -218,12 +220,40 @@ function App({ currentUser: initialUser, onLogout, onProfileUpdate }) {
 
   return (
     <div className="app" data-screen-label={view}>
-      <Sidebar current={view === "test-detail" ? "library" : view === "run-detail" ? "runs" : view} onNav={nav} onOpenTest={openTest} density={tweaks.density} currentUser={currentUser} onLogout={onLogout} />
+      <a className="skip-link" href="#main-content">Skip to content</a>
+      <Sidebar
+        current={view === "test-detail" ? "library" : view === "run-detail" ? "runs" : view}
+        onNav={(v) => { setSidebarOpen(false); nav(v); }}
+        onOpenTest={openTest}
+        density={tweaks.density}
+        currentUser={currentUser}
+        onLogout={onLogout}
+        open={sidebarOpen}
+      />
+      {/* Below the responsive breakpoint the sidebar is an overlay drawer; the
+          scrim closes it on tap. Hidden at desktop widths via CSS. */}
+      {sidebarOpen && (
+        <button
+          type="button"
+          className="sidebar-scrim"
+          aria-label="Close menu"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
       <div className="main">
-        {!hideTopbar && <Topbar crumbs={crumbs} actions={actions} theme={theme} onToggleTheme={toggleTheme} />}
-        <div className="content" style={hideTopbar ? {} : {}}>
+        {!hideTopbar && (
+          <Topbar
+            crumbs={crumbs}
+            actions={actions}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+            onToggleSidebar={() => setSidebarOpen(o => !o)}
+            sidebarOpen={sidebarOpen}
+          />
+        )}
+        <main className="content" id="main-content" tabIndex={-1}>
           {body}
-        </div>
+        </main>
       </div>
 
       <Toast msg={toastMsg} severity={toastSeverity} onDone={() => { setToastMsg(null); setToastSeverity(null); }} />

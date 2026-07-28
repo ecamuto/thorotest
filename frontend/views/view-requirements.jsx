@@ -249,7 +249,7 @@ function TestPicker({ selected, onChange }) {
         {open && results.length > 0 && (
           <div style={{position:"absolute", top:"100%", left:0, right:0, zIndex:10, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:6, marginTop:2, maxHeight:200, overflowY:"auto"}}>
             {results.map(t => (
-              <div key={t.id} className="nav-item" style={{padding:"6px 10px", cursor:"pointer", display:"flex", gap:8, alignItems:"center"}} onClick={() => add(t.id)}>
+              <div key={t.id} className="nav-item" style={{padding:"6px 10px", cursor:"pointer", display:"flex", gap:8, alignItems:"center"}} {...clickable(() => add(t.id))}>
                 <span className="mono" style={{fontSize:11, color:"var(--text-dim)"}}>{t.id}</span>
                 <span style={{fontSize:12, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{t.title}</span>
               </div>

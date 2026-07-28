@@ -13,8 +13,6 @@ def notif_client(db):
     db.add(user)
     db.flush()
     cfg = models.NotificationConfig(user_id=user.id, email_enabled=True,
-                                    smtp_host="smtp.example.com", smtp_port=587,
-                                    smtp_user="u", smtp_pass="p", smtp_from="from@example.com",
                                     slack_enabled=True, slack_webhook_url="https://hooks.slack.com/test")
     db.add(cfg)
     db.commit()
@@ -37,14 +35,56 @@ class TestNotificationConfig:
 
     def test_put_config_upserts(self, notif_client):
         r = notif_client.put("/api/notifications/config",
-                             json={"email_enabled": True, "smtp_host": "smtp.gmail.com",
-                                   "smtp_port": 587, "smtp_user": "u", "smtp_pass": "p",
-                                   "smtp_from": "me@gmail.com", "slack_enabled": False,
+                             json={"email_enabled": True, "slack_enabled": False,
                                    "slack_webhook_url": None, "notify_run_complete": True,
                                    "notify_consecutive_fail": True,
                                    "consecutive_fail_threshold": 3, "notify_comment": True})
         assert r.status_code == 200
-        assert r.json()["smtp_host"] == "smtp.gmail.com"
+        assert r.json()["email_enabled"] is True
+
+    def test_config_never_exposes_smtp_credentials(self, notif_client):
+        """Per-user SMTP settings are not part of the API (SECURITY H-1): the
+        relay is operator config, and echoing a stored password was a leak."""
+        body = notif_client.get("/api/notifications/config").json()
+        for leaked in ("smtp_host", "smtp_user", "smtp_pass", "smtp_from", "smtp_port"):
+            assert leaked not in body
+
+    def test_put_config_ignores_submitted_smtp_fields(self, notif_client, db):
+        """Submitting the removed fields must not write them back to the row."""
+        r = notif_client.put("/api/notifications/config",
+                             json={"email_enabled": True, "smtp_host": "attacker.example",
+                                   "smtp_pass": "hunter2", "notify_run_complete": True})
+        assert r.status_code == 200
+        cfg = db.query(models.NotificationConfig).first()
+        assert cfg.smtp_host is None
+        assert cfg.smtp_pass is None
+
+
+class TestSlackWebhookSSRF:
+    """The server POSTs to slack_webhook_url on run/comment events, so it is an
+    outbound-request primitive and gets the same guard as webhooks (SECURITY H-1)."""
+
+    @pytest.mark.parametrize("url", [
+        "http://169.254.169.254/latest/meta-data/",   # cloud metadata
+        "http://127.0.0.1:8000/api/admin/users",      # loopback
+        "http://10.0.0.1/",                           # RFC-1918
+        "file:///etc/passwd",                         # non-http scheme
+    ])
+    def test_rejects_non_public_targets(self, notif_client, url, monkeypatch):
+        monkeypatch.delenv("NET_GUARD_ALLOW_PRIVATE_HOSTS", raising=False)
+        monkeypatch.delenv("WEBHOOK_ALLOW_PRIVATE_HOSTS", raising=False)
+        r = notif_client.put("/api/notifications/config",
+                             json={"slack_enabled": True, "slack_webhook_url": url})
+        assert r.status_code == 422
+        assert "unsafe" in r.json()["detail"].lower()
+
+    def test_accepts_public_target(self, notif_client, monkeypatch):
+        monkeypatch.delenv("NET_GUARD_ALLOW_PRIVATE_HOSTS", raising=False)
+        monkeypatch.delenv("WEBHOOK_ALLOW_PRIVATE_HOSTS", raising=False)
+        r = notif_client.put("/api/notifications/config",
+                             json={"slack_enabled": True,
+                                   "slack_webhook_url": "https://hooks.slack.com/services/T/B/x"})
+        assert r.status_code == 200
 
 
 class TestTriggers:
@@ -141,29 +181,24 @@ class TestTriggers:
 
 
 class TestDelivery:
-    def test_email_triggered(self, notif_client, db):
-        """_send_email calls smtplib.SMTP when invoked."""
+    def test_email_goes_through_operator_relay(self, notif_client, db):
+        """_send_email delegates to the operator-configured relay rather than
+        per-user SMTP settings (SECURITY H-1)."""
         import asyncio
+        from unittest.mock import patch
         from backend.notifications import _send_email
-        from unittest.mock import patch, MagicMock
-        cfg = models.NotificationConfig(
-            id=1, user_id=1, email_enabled=True,
-            smtp_host="smtp.test.com", smtp_port=587,
-            smtp_user="u", smtp_pass="p", smtp_from="from@test.com",
-        )
         notif = models.Notification(
             id=1, user_id=1, event_type="run_complete",
             title="Run passed", link="#/runs/R-1", read=False,
             created_at="2026-01-01T00:00:00+00:00",
         )
-        with patch("smtplib.SMTP") as mock_smtp:
-            mock_smtp.return_value.__enter__ = MagicMock(return_value=MagicMock())
-            mock_smtp.return_value.__exit__ = MagicMock(return_value=False)
-            asyncio.run(
-                _send_email(cfg, "to@test.com", notif)
-            )
-        # Fire-and-forget — just checking it doesn't raise
-        assert True
+        with patch("backend.emailer.send_email", return_value=True) as mock_send:
+            asyncio.run(_send_email("to@test.com", notif))
+        mock_send.assert_called_once()
+        to, subject, body = mock_send.call_args[0]
+        assert to == "to@test.com"
+        assert "Run passed" in subject
+        assert "#/runs/R-1" in body
 
     def test_slack_triggered(self, notif_client, db):
         """_send_slack posts to webhook URL."""

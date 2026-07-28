@@ -4,8 +4,14 @@
 
 Base URL: `http://localhost:8000`
 
-All endpoints except `/auth/register`, `/auth/login`, and public pages require
+All endpoints except the auth flows (`/auth/register`, `/auth/login`,
+`/auth/forgot-password`, `/auth/reset-password`, the OAuth redirect/callback
+pairs, `/auth/login/2fa`), `/api/config`, and `/health` require
 `Authorization: Bearer <token>`.
+
+`POST /auth/register` returns **403** unless the instance sets
+`ALLOW_OPEN_REGISTRATION=1`; accounts are otherwise created by an admin through
+`POST /api/admin/users`. Self-registered accounts get the read-only `viewer` role.
 
 | Area | Base path |
 |---|---|
@@ -35,9 +41,27 @@ List endpoints (`/api/tests`, `/api/runs`, `/api/defects`, `/api/pipelines`, `/a
 accept `limit` and `offset` query params (max 1000 rows per page) and return the total filtered
 row count in the `X-Total-Count` response header.
 
+### API tokens
+
+`POST /api/tokens` mints a `th_…` token that authenticates as its creator.
+
+- **`scope`** is enforced, not decorative. `read` restricts the token to safe
+  HTTP methods (`GET`/`HEAD`/`OPTIONS`) and returns 403 on anything else;
+  `write` (the default) grants the creator's full role. A `viewer` can only
+  mint `read` tokens.
+- **Tokens expire** after `API_TOKEN_EXPIRE_DAYS` (90 by default). Pass
+  `expires_at` (ISO UTC) to choose your own.
+- **Revocation** follows the owner: logging out everywhere or resetting the
+  password invalidates that user's API tokens along with their sessions.
+- Callers see and revoke only their own tokens; admins see all.
+
 ### WebSocket
 
-- `ws://localhost:8000/ws/runs/{run_id}` — emits `state`, `step`, `complete` events during a live run.
+Both sockets require a valid session token, passed as a `token` query parameter
+because a browser cannot set headers on a WebSocket handshake. Connections
+without one are closed with code 1008. API tokens are not accepted here.
+
+- `ws://localhost:8000/ws/runs/{run_id}?token=<jwt>` — emits `state`, `step`, `complete` events during a live run.
 - `ws://localhost:8000/ws/notifications?token=<jwt>` — per-user notification push channel.
 
 ## Tests

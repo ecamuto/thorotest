@@ -1,9 +1,7 @@
 import asyncio
 import json
+import logging
 import re
-import smtplib
-import ssl
-from email.mime.text import MIMEText
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 import httpx
@@ -14,6 +12,8 @@ from .db import SessionLocal
 from . import models
 from .webhook_utils import sign_payload
 from .net_guard import assert_public_http_url, UnsafeURLError
+
+logger = logging.getLogger("thorotest.notifications")
 
 # @mention tokens: an @ followed by a username-ish run (letters, digits, _ . -).
 _MENTION_RE = re.compile(r"@([A-Za-z0-9_][A-Za-z0-9_.\-]*)")
@@ -47,23 +47,20 @@ class NotificationManager:
 notif_manager = NotificationManager()
 
 
-def _smtp_send_sync(host, port, user, password, msg):
-    context = ssl.create_default_context()
-    with smtplib.SMTP(host, port) as s:
-        s.starttls(context=context)
-        if user and password:
-            s.login(user, password)
-        s.send_message(msg)
+async def _send_email(to_email: str, notif: models.Notification):
+    """Deliver a notification through the operator-configured relay.
 
-
-async def _send_email(cfg: models.NotificationConfig, to_email: str, notif: models.Notification):
+    Uses backend.emailer (SMTP_HOST etc from the environment) rather than
+    per-user SMTP settings: those let any authenticated user aim the server at
+    an arbitrary host:port and stored a relay password in plaintext (SECURITY
+    H-1). No-op when the operator has not configured a relay.
+    """
     try:
-        msg = MIMEText(f"{notif.title}\n\n{notif.link or ''}", "plain")
-        msg["Subject"] = f"[ThoroTest] {notif.title}"
-        msg["From"] = cfg.smtp_from or cfg.smtp_user or "noreply@thorotest"
-        msg["To"] = to_email
         await asyncio.to_thread(
-            _smtp_send_sync, cfg.smtp_host, cfg.smtp_port, cfg.smtp_user, cfg.smtp_pass, msg
+            emailer.send_email,
+            to_email,
+            f"[ThoroTest] {notif.title}",
+            f"{notif.title}\n\n{notif.link or ''}".strip(),
         )
     except Exception:
         pass  # Fire-and-forget
@@ -71,12 +68,18 @@ async def _send_email(cfg: models.NotificationConfig, to_email: str, notif: mode
 
 async def _send_slack(webhook_url: str, notif: models.Notification):
     try:
+        # Re-check at delivery time: the stored URL may pre-date the guard, or
+        # its host may have been re-pointed at an internal address since it was
+        # saved. Full resolution here, unlike the fail-fast check on save.
+        assert_public_http_url(webhook_url)
         async with httpx.AsyncClient() as client:
             await client.post(
                 webhook_url,
                 json={"text": f"*{notif.title}*\n{notif.link or ''}"},
                 timeout=5,
             )
+    except UnsafeURLError:
+        logger.warning("refusing Slack delivery to non-public host")
     except Exception:
         pass  # Fire-and-forget
 
@@ -114,10 +117,10 @@ async def _notify_run_events(run_id: str):
                 "created_at": notif.created_at,
             }))
             # Email delivery (fire-and-forget)
-            if cfg.email_enabled and cfg.smtp_host:
+            if cfg.email_enabled and emailer.is_configured():
                 user = db.query(models.User).filter_by(id=cfg.user_id).first()
                 if user and user.email:
-                    asyncio.create_task(_send_email(cfg, user.email, notif))
+                    asyncio.create_task(_send_email(user.email, notif))
             # Slack delivery (fire-and-forget)
             if cfg.slack_enabled and cfg.slack_webhook_url:
                 asyncio.create_task(_send_slack(cfg.slack_webhook_url, notif))
@@ -248,10 +251,10 @@ async def _notify_comment_event(test_id: str, commenter_username: str):
                 "read": False,
                 "created_at": notif.created_at,
             }))
-            if cfg.email_enabled and cfg.smtp_host:
+            if cfg.email_enabled and emailer.is_configured():
                 user = db.query(models.User).filter_by(id=cfg.user_id).first()
                 if user and user.email:
-                    asyncio.create_task(_send_email(cfg, user.email, notif))
+                    asyncio.create_task(_send_email(user.email, notif))
             if cfg.slack_enabled and cfg.slack_webhook_url:
                 asyncio.create_task(_send_slack(cfg.slack_webhook_url, notif))
 

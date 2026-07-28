@@ -17,6 +17,12 @@ cases carry their attributes as child elements rather than XML attributes::
 Nested suites become the folder hierarchy, mirroring the TestRail XML importer.
 """
 import xml.etree.ElementTree as ET
+# Parse untrusted XML with defusedxml: stdlib ElementTree expands internal
+# entities, so a ~1 KB "billion laughs" document inside the upload limit
+# exhausts memory (SECURITY H-6). ET is still used to *build* trees, which is
+# safe — only the parsing entry point needs replacing.
+from defusedxml.ElementTree import fromstring as _safe_fromstring
+from defusedxml.common import DefusedXmlException
 from .base import ImportResult, TestData
 
 # TestLink importance: 1 Low, 2 Medium, 3 High.
@@ -70,8 +76,8 @@ def parse_testlink_xml(content: bytes) -> ImportResult:
     warnings: list[str] = []
 
     try:
-        root = ET.fromstring(content.decode("utf-8", errors="replace"))
-    except ET.ParseError as e:
+        root = _safe_fromstring(content.decode("utf-8", errors="replace"))
+    except (ET.ParseError, DefusedXmlException) as e:
         return ImportResult(warnings=[f"XML parse error: {e}"], format_detected="testlink_xml",
                             source_provider="testlink")
 

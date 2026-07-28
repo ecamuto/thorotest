@@ -521,13 +521,19 @@ class ApiTokenOut(BaseModel):
     scope: str
     created_at: Optional[str] = None
     last_used_at: Optional[str] = None
+    expires_at: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
 
 class ApiTokenCreate(BaseModel):
     name: str
-    scope: str = ""
+    # "read" restricts the token to safe HTTP methods; "write" grants the
+    # creator's full role. Defaults to write for backward compatibility with
+    # existing CI setups that omit it.
+    scope: str = "write"
+    # ISO UTC expiry. Omit to use API_TOKEN_EXPIRE_DAYS (90 by default).
+    expires_at: Optional[str] = None
 
 
 class ApiTokenCreated(ApiTokenOut):

@@ -6,7 +6,7 @@ from typing import Optional, Tuple
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
@@ -15,23 +15,49 @@ from . import models
 
 logger = logging.getLogger("thorotest.auth")
 
-_DEFAULT_SECRET = "thorotest-dev-secret-change-in-production"
-SECRET_KEY = os.getenv("SECRET_KEY", _DEFAULT_SECRET)
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_DAYS = 7
 
-# Refuse to boot with the placeholder JWT key in production; warn loudly otherwise.
-if SECRET_KEY == _DEFAULT_SECRET:
-    _env = os.getenv("ENVIRONMENT", os.getenv("ENV", "")).strip().lower()
-    if _env in ("production", "prod"):
+# Historic placeholder that shipped in .env.example. Still rejected by name so an
+# existing .env carried forward from an older checkout fails loudly rather than
+# silently signing tokens with a key published in the repo.
+_DEFAULT_SECRET = "thorotest-dev-secret-change-in-production"
+
+# The JWT signing key also derives the Fernet key that encrypts TOTP secrets at
+# rest, so a known key means forgeable admin sessions AND readable 2FA secrets.
+# This is enforced in EVERY environment, not just production: the failure mode is
+# silent, and the deployment most likely to hit it (docker-compose with a copied
+# .env.example) is exactly the one that never sets ENVIRONMENT.
+_ALLOW_INSECURE = os.getenv("ALLOW_INSECURE_SECRET_KEY", "").strip().lower() in ("1", "true", "yes")
+_MIN_SECRET_LENGTH = 32
+
+SECRET_KEY = os.getenv("SECRET_KEY", "").strip()
+
+if not _ALLOW_INSECURE:
+    _problem = None
+    if not SECRET_KEY:
+        _problem = "SECRET_KEY is not set"
+    elif SECRET_KEY == _DEFAULT_SECRET:
+        _problem = "SECRET_KEY is the placeholder that ships in .env.example"
+    elif len(SECRET_KEY) < _MIN_SECRET_LENGTH:
+        _problem = f"SECRET_KEY is shorter than {_MIN_SECRET_LENGTH} characters"
+    if _problem:
         raise RuntimeError(
-            "SECRET_KEY is the built-in dev default in a production environment. "
-            "Generate one: python3 -c \"import secrets; print(secrets.token_hex(32))\" "
-            "and set SECRET_KEY in the environment / .env before starting."
+            f"{_problem}. It signs session tokens and encrypts TOTP secrets, so a "
+            "shared or guessable value lets anyone forge an admin session. Generate one:\n"
+            '  python3 -c "import secrets; print(secrets.token_hex(32))"\n'
+            "and set SECRET_KEY in the environment or .env before starting. "
+            "For a throwaway local run only, set ALLOW_INSECURE_SECRET_KEY=1."
         )
+elif not SECRET_KEY:
+    # Explicitly opted out of the check and supplied nothing — use the historic
+    # placeholder so local dev still boots, and say so on every start.
+    SECRET_KEY = _DEFAULT_SECRET
+
+if _ALLOW_INSECURE:
     logger.warning(
-        "SECRET_KEY is the built-in dev default — INSECURE. "
-        "Set a random SECRET_KEY before any non-local deployment."
+        "ALLOW_INSECURE_SECRET_KEY is set — the JWT signing key is not being "
+        "validated. Never use this outside a throwaway local run."
     )
 
 # argon2id is the primary scheme. sha256_crypt stays for verifying (and silently
@@ -108,22 +134,54 @@ def create_access_token(user_id: int, token_version: int = 0) -> str:
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def _user_from_api_token(raw: str, db: Session) -> Optional[models.User]:
-    """Resolve a `th_`-prefixed API token to its owning user, or None. The token
-    authenticates as that user (inherits their role); last_used_at is stamped."""
+# A read-scoped token may only issue safe requests. Enforcing by HTTP method
+# covers every route uniformly instead of relying on 130 handlers to opt in.
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+READ_SCOPE = "read"
+
+# Default lifetime for a newly minted API token. Long enough for a CI runner not
+# to churn, short enough that a leaked token stops working on its own.
+API_TOKEN_EXPIRE_DAYS = int(os.getenv("API_TOKEN_EXPIRE_DAYS", "90"))
+
+
+def _user_from_api_token(raw: str, db: Session, method: str) -> Optional[models.User]:
+    """Resolve a `th_`-prefixed API token to its owning user, or None.
+
+    The token authenticates as that user (inherits their role) and is rejected
+    when expired, when its scope forbids the request's method, or when the
+    owner's token_version has moved past the value captured at mint time
+    (logout / "log out everywhere" / password reset). last_used_at is stamped.
+    """
     token_hash = hashlib.sha256(raw.encode()).hexdigest()
     tok = db.query(models.ApiToken).filter(models.ApiToken.token_hash == token_hash).first()
     if not tok or not tok.user_id:
         return None
+
+    now = datetime.now(timezone.utc)
+    if tok.expires_at and tok.expires_at < now.isoformat():
+        return None
+
     user = db.query(models.User).filter(models.User.id == tok.user_id).first()
     if user is None:
         return None
-    tok.last_used_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    if int(tok.token_version or 0) != int(user.token_version or 0):
+        return None
+
+    # Scope is a real restriction, not a label: a read token cannot write even
+    # though it authenticates as a user whose role permits writes.
+    if (tok.scope or "").strip().lower() == READ_SCOPE and method.upper() not in _SAFE_METHODS:
+        raise HTTPException(
+            status_code=403,
+            detail="This API token is read-only.",
+        )
+
+    tok.last_used_at = now.strftime("%Y-%m-%d %H:%M UTC")
     db.commit()
     return user
 
 
 def get_optional_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> Optional[models.User]:
@@ -131,7 +189,7 @@ def get_optional_user(
         return None
     # Long-lived API tokens (th_…) for CI / scripts, resolved before JWT.
     if credentials.credentials.startswith("th_"):
-        return _user_from_api_token(credentials.credentials, db)
+        return _user_from_api_token(credentials.credentials, db, request.method)
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = int(payload.get("sub"))
@@ -143,6 +201,33 @@ def get_optional_user(
     # Token revocation: a token is valid only while its embedded version matches
     # the user's current token_version. logout / "log out everywhere" bumps the
     # user's version, instantly invalidating all previously issued tokens.
+    if int(payload.get("tv", 0)) != int(user.token_version or 0):
+        return None
+    return user
+
+
+def user_from_bearer_token(token: str, db: Session) -> Optional[models.User]:
+    """Resolve a raw bearer token string to a User, or None.
+
+    The transport-independent core of get_optional_user, for callers that cannot
+    use FastAPI dependencies — WebSocket handlers (which take the token as a
+    query parameter, since browsers cannot set headers on a WS handshake) and the
+    GraphQL context builder. Applies the same token_version revocation check, so
+    a revoked token cannot open a socket that a REST call would reject.
+
+    API tokens are deliberately NOT accepted here: they are for CI and scripts,
+    which have no reason to open a browser push channel.
+    """
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = int(payload.get("sub"))
+    except (JWTError, ValueError, TypeError):
+        return None
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if user is None:
+        return None
     if int(payload.get("tv", 0)) != int(user.token_version or 0):
         return None
     return user

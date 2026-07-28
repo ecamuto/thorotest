@@ -562,27 +562,26 @@ function FoldersTab() {
 function NotificationsTab({ currentUser }) {
   const { t } = useI18n();
   const [cfg, setCfg] = React.useState({
-    email_enabled: false, smtp_host: "", smtp_port: 587,
-    smtp_user: "", smtp_pass: "", smtp_from: "",
+    email_enabled: false,
     slack_enabled: false, slack_webhook_url: "",
     notify_run_complete: true, notify_consecutive_fail: true,
     consecutive_fail_threshold: 3, notify_comment: true,
     notify_mention: true, notify_assigned: true,
   });
+  // Whether the operator has configured an SMTP relay (SMTP_HOST). Email
+  // delivery is server-wide config, not a per-user setting.
+  const [emailAvailable, setEmailAvailable] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
+  const [error, setError] = React.useState(null);
 
   React.useEffect(() => {
     window.TH_API.getNotificationConfig().then(data => {
       if (data && typeof data === "object") {
+        setEmailAvailable(!!data.email_available);
         setCfg(prev => ({
           ...prev,
           email_enabled: !!data.email_enabled,
-          smtp_host: data.smtp_host || "",
-          smtp_port: data.smtp_port || 587,
-          smtp_user: data.smtp_user || "",
-          smtp_pass: data.smtp_pass || "",
-          smtp_from: data.smtp_from || "",
           slack_enabled: !!data.slack_enabled,
           slack_webhook_url: data.slack_webhook_url || "",
           notify_run_complete: data.notify_run_complete !== false,
@@ -598,20 +597,21 @@ function NotificationsTab({ currentUser }) {
 
   function handleSave() {
     setSaving(true);
+    setError(null);
     window.TH_API.putNotificationConfig({
       ...cfg,
-      smtp_port: parseInt(cfg.smtp_port, 10) || 587,
       consecutive_fail_threshold: parseInt(cfg.consecutive_fail_threshold, 10) || 3,
-      smtp_host: cfg.smtp_host || null,
-      smtp_user: cfg.smtp_user || null,
-      smtp_pass: cfg.smtp_pass || null,
-      smtp_from: cfg.smtp_from || null,
       slack_webhook_url: cfg.slack_webhook_url || null,
     }).then(() => {
       setSaving(false);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    }).catch(() => setSaving(false));
+    }).catch(err => {
+      setSaving(false);
+      // The server rejects Slack URLs pointing at non-public hosts; surface the
+      // reason rather than silently failing to save.
+      setError((err && err.detail) || "Could not save notification settings.");
+    });
   }
 
   function field(label, key, type = "text", placeholder = "") {
@@ -666,20 +666,13 @@ function NotificationsTab({ currentUser }) {
 
       {/* Email section */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Email (SMTP)</div>
+        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Email</div>
         {toggle("Enable email notifications", "email_enabled")}
-        {cfg.email_enabled && (
-          <div style={{ paddingLeft: 4 }}>
-            {field("SMTP host", "smtp_host", "text", "smtp.gmail.com")}
-            {field("SMTP port", "smtp_port", "number", "587")}
-            {field("Username", "smtp_user", "text", "you@gmail.com")}
-            {field("Password", "smtp_pass", "password", "app password")}
-            {field("From address", "smtp_from", "email", "you@gmail.com")}
-            <p style={{ fontSize: 11, color: "var(--muted)", marginTop: -6 }}>
-              Credentials are stored as-is. Use an app password for Gmail.
-            </p>
-          </div>
-        )}
+        <p style={{ fontSize: 11, color: "var(--muted)", marginTop: -4 }}>
+          {emailAvailable
+            ? "Mail is sent through the relay this instance is configured with."
+            : "No mail relay is configured on this instance, so email notifications will not be delivered. An administrator sets SMTP_HOST in the server environment."}
+        </p>
       </div>
 
       {/* Slack section */}
@@ -692,6 +685,10 @@ function NotificationsTab({ currentUser }) {
           </div>
         )}
       </div>
+
+      {error && (
+        <div className="login-error" role="alert" style={{ marginBottom: 12 }}>{error}</div>
+      )}
 
       <button className="btn primary" onClick={handleSave} disabled={saving}>
         {saving ? "Saving…" : saved ? "Saved." : "Save changes"}

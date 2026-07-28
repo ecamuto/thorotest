@@ -275,7 +275,12 @@
 
     connectRunWS(runId) {
       const proto = location.protocol === "https:" ? "wss" : "ws";
-      return new WebSocket(`${proto}://${location.host}/ws/runs/${runId}`);
+      // Token goes in the query string: a browser cannot set an Authorization
+      // header on a WebSocket handshake. The server closes with 1008 without it.
+      const token = getToken() || "";
+      return new WebSocket(
+        `${proto}://${location.host}/ws/runs/${runId}?token=${encodeURIComponent(token)}`
+      );
     },
 
     async getTestHistory(id) {

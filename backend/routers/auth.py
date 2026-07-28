@@ -1,15 +1,13 @@
 import hashlib
 import os
 import secrets
-import time
-import threading
-from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from ..db import get_db
+from ..rate_limit import SlidingWindowLimiter
 from .. import models
 from ..schemas import UserCreate, UserLogin, UserOut, UserListItem, UserUpdate, PasswordChange, ForgotPasswordIn, ResetPasswordIn
 from ..auth_utils import hash_password, verify_password, verify_and_update, create_access_token, get_current_user, validate_password
@@ -34,8 +32,11 @@ _LOGIN_WINDOW_SECONDS = int(os.getenv("LOGIN_WINDOW_SECONDS", "300"))
 # failed/repeated logins from a single host and would otherwise self-throttle.
 # Never set this in production.
 _LOGIN_RATELIMIT_DISABLED = os.getenv("LOGIN_RATELIMIT_DISABLED", "").strip().lower() in ("1", "true", "yes")
-_login_failures: dict = defaultdict(deque)
-_login_lock = threading.Lock()
+
+# Bounded: the key is ip|email, so an attacker rotating either dimension would
+# otherwise grow this without limit (SECURITY H-7). Per-process — see
+# backend/rate_limit.py.
+_login_failures = SlidingWindowLimiter(_LOGIN_MAX_FAILURES, _LOGIN_WINDOW_SECONDS)
 
 
 def _login_key(ip, email):
@@ -45,27 +46,41 @@ def _login_key(ip, email):
 def _check_login_rate(key: str) -> None:
     if _LOGIN_RATELIMIT_DISABLED:
         return
-    now = time.time()
-    with _login_lock:
-        dq = _login_failures[key]
-        while dq and dq[0] < now - _LOGIN_WINDOW_SECONDS:
-            dq.popleft()
-        if len(dq) >= _LOGIN_MAX_FAILURES:
-            raise HTTPException(status_code=429, detail="Too many failed login attempts. Try again later.")
+    allowed, retry_after = _login_failures.check(key)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many failed login attempts. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
 
 
 def _record_login_failure(key: str) -> None:
-    with _login_lock:
-        _login_failures[key].append(time.time())
+    _login_failures.record(key)
 
 
 def _clear_login_failures(key: str) -> None:
-    with _login_lock:
-        _login_failures.pop(key, None)
+    _login_failures.clear(key)
+
+
+# ── Self-registration ────────────────────────────────────────────────────────
+# Closed by default: a self-hosted instance reachable from the internet must not
+# hand out write access to anyone who finds it. Admins provision accounts via
+# POST /api/admin/users. Set ALLOW_OPEN_REGISTRATION=1 to run an open instance
+# (a public demo, or a trusted network) — new accounts then get the read-only
+# `viewer` role and an admin promotes from there.
+def _registration_open() -> bool:
+    """Read at call time so tests and runtime config changes take effect."""
+    return os.getenv("ALLOW_OPEN_REGISTRATION", "").strip().lower() in ("1", "true", "yes")
 
 
 @router.post("/auth/register", response_model=UserOut, status_code=201)
 def register(payload: UserCreate, db: Session = Depends(get_db)):
+    if not _registration_open():
+        raise HTTPException(
+            status_code=403,
+            detail="Self-registration is disabled on this instance. Ask an administrator for an account.",
+        )
     validate_password(payload.password, email=payload.email, username=payload.username)
     if db.query(models.User).filter(models.User.email == payload.email).first():
         raise HTTPException(status_code=409, detail="Email already registered")
@@ -76,7 +91,8 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
         email=payload.email,
         hashed_password=hash_password(payload.password),
         display_name=payload.display_name or payload.username,
-        role="tester",
+        # Self-registered accounts start read-only; an admin promotes them.
+        role="viewer",
     )
     db.add(user)
     db.commit()

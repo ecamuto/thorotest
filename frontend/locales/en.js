@@ -16,6 +16,7 @@ window.TH_LOCALES.en = {
     newTest: "New test",
   },
   nav: {
+    toggleMenu: "Toggle navigation menu",
     workspace: "Workspace",
     configure: "Configure",
     favorites: "Favorites",

@@ -1068,3 +1068,160 @@ a { color: inherit; text-decoration: none; }
   background: var(--surface-2);
   border-color: var(--border);
 }
+
+/* ============= ACCESSIBILITY ============= */
+/* The app is driven largely by clickable elements rendered as divs and rows.
+   Anything interactive must show a visible focus ring for keyboard users —
+   :focus-visible keeps it off for mouse clicks. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible,
+.tree-row:focus-visible,
+.row:focus-visible,
+.clickable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius);
+}
+
+/* Reset for elements that are semantically buttons but styled as rows/cards.
+   Using a real <button> gets keyboard activation, focus, and the right role
+   for free; this strips the default chrome so the visual design is unchanged. */
+/* Deliberately does not set `display`: the element's own class owns its layout
+   (.sidebar-brand and .nav-item are flex), and this rule is later in the file so
+   a display here would win and break them. */
+.as-button {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  width: 100%;
+}
+
+/* Jump past the sidebar straight to the view. Visible only when focused. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  font-size: 13px;
+}
+.skip-link:focus {
+  left: 8px;
+  top: 8px;
+}
+
+/* Screen-reader-only text (labels for icon-only controls). */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============= RESPONSIVE ============= */
+/* Wide content (tables, code blocks) scrolls inside its own container so the
+   page body never scrolls horizontally. */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Sidebar toggle is desktop-hidden; the drawer only exists below the breakpoint. */
+.sidebar-toggle { display: none; }
+.sidebar-scrim { display: none; }
+
+@media (max-width: 900px) {
+  /* Single column: the sidebar becomes an off-canvas drawer. */
+  .app {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 262px;
+    max-width: 84vw;
+    transform: translateX(-100%);
+    transition: transform 160ms ease;
+    z-index: 40;
+    box-shadow: var(--shadow-2);
+  }
+  .sidebar[data-open="true"] {
+    transform: translateX(0);
+  }
+
+  .sidebar-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: oklch(0 0 0 / 0.5);
+    z-index: 39;
+    border: none;
+  }
+
+  .sidebar-toggle {
+    display: inline-grid;
+    place-items: center;
+    width: 30px; height: 30px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-muted);
+    cursor: pointer;
+    flex: none;
+  }
+  .sidebar-toggle:hover { background: var(--surface-2); color: var(--text); }
+
+  /* Multi-column dashboards stack. */
+  .grid-4, .grid-3, .grid-2, .grid-main {
+    grid-template-columns: 1fr;
+  }
+
+  /* Reclaim the generous desktop gutters. */
+  .toolbar { padding-left: 12px; padding-right: 12px; }
+  .content { padding-left: 12px; padding-right: 12px; }
+
+  /* Tables keep their column widths and scroll rather than squashing. */
+  table { min-width: 640px; }
+
+  /* Side-by-side detail panes stack. */
+  .split, .detail-split { flex-direction: column; }
+
+  /* Page headers put their actions below the title instead of squeezing them
+     into a narrow column, and button labels never break mid-word. */
+  .page-h {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .page-h .actions { justify-content: flex-start; flex-wrap: wrap; }
+  .btn { white-space: nowrap; }
+}
+
+@media (max-width: 560px) {
+  .toolbar { gap: 4px; }
+  .brand-workspace { display: none; }
+  /* Drop the least load-bearing table columns rather than scrolling forever. */
+  .hide-sm { display: none; }
+}

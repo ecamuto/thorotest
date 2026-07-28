@@ -11,8 +11,10 @@ RUN npm run build
 FROM python:3.12-slim
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install from the lock file — the same pinned set CI tests against, so the
+# image is the artifact that was verified rather than a fresh resolve.
+COPY requirements.lock .
+RUN pip install --no-cache-dir -r requirements.lock
 
 COPY backend/ ./backend/
 COPY alembic.ini ./
@@ -20,6 +22,12 @@ COPY migrations/ ./migrations/
 # Version + changelog for the About page (GET /api/about)
 COPY package.json CHANGELOG.md ./
 COPY --from=frontend /app/frontend/dist/ ./frontend/dist/
+
+# Run as an unprivileged user. uploads/ is the only path the app writes to.
+RUN useradd --system --create-home --uid 10001 thorotest \
+    && mkdir -p /app/uploads \
+    && chown -R thorotest:thorotest /app
+USER thorotest
 
 EXPOSE 8000
 

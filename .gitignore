@@ -38,7 +38,9 @@ test-results/
 # OS
 .DS_Store
 
-# Local-only notes (never commit)
+# Local-only notes and scratch scripts (never commit)
 *.local.md
+*.local.sh
+*.local.mjs
 
 *.log

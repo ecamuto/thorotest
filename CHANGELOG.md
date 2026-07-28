@@ -8,6 +8,69 @@ This file is the single source of truth for the in-app About page
 (`GET /api/about` parses it), so keep the structure: one `## [x.y.z] - YYYY-MM-DD`
 heading per release, `### <Group>` subsections, `-` bullets.
 
+## [1.12.0] - 2026-07-28
+
+Pre-launch security and accessibility pass. Two changes are breaking for
+existing deployments — see **Breaking** below before upgrading.
+
+### Breaking
+- `SECRET_KEY` is now required and validated in every environment (previously
+  only under `ENVIRONMENT=production`). The app refuses to start when it is
+  missing, under 32 characters, or still the placeholder that shipped in
+  `.env.example`. Generate one with
+  `python3 -c "import secrets; print(secrets.token_hex(32))"`. For a throwaway
+  local run only, `ALLOW_INSECURE_SECRET_KEY=1` skips the check.
+- Self-registration is off by default. `POST /api/auth/register` returns 403
+  and OAuth signs in existing users without provisioning new ones. Set
+  `ALLOW_OPEN_REGISTRATION=1` to restore the old behaviour; self-registered
+  accounts now get the read-only `viewer` role instead of `tester`.
+- `docker-compose.yml` requires `POSTGRES_PASSWORD` (the weak `thorotest`
+  fallback is gone) and sets `ENVIRONMENT=production`.
+
+### Security
+- Close open self-registration, which granted anyone who could reach an
+  instance a write-capable account with full read access to the workspace.
+- Require a session token on `ws/runs/{run_id}`, which was unauthenticated and
+  streamed live run state to anyone who guessed a run ID; also apply the
+  `token_version` revocation check to `ws/notifications`, which decoded the JWT
+  but skipped it. Token decoding for REST, WebSocket, and GraphQL now shares
+  one implementation so the three cannot drift apart.
+- Enforce API token `scope`: a `read` token is now restricted to safe HTTP
+  methods instead of silently carrying its owner's full write access. Tokens
+  also expire (`API_TOKEN_EXPIRE_DAYS`, 90 by default) and are revoked when
+  their owner logs out everywhere or resets their password. Any role can mint
+  tokens for itself, so a CI credential no longer has to be an admin token.
+- Remove per-user SMTP settings, which let any authenticated user point the
+  server at an arbitrary host:port and stored a relay password in plaintext
+  that `GET /api/notifications/config` echoed back. Notification email now goes
+  through the operator-configured relay (`SMTP_HOST`). Existing stored
+  credentials are cleared by migration `b9e4d7c15a83`.
+- Apply the SSRF egress guard to per-user Slack webhook URLs, which bypassed
+  the check added for outbound webhooks in 1.11.0.
+- Parse imported XML with `defusedxml`: a ~1 KB entity-expansion document
+  inside the 10 MB upload limit could exhaust server memory. Artifact zips are
+  now bounded per member and in total.
+- Fix an uncaught 500 in OAuth account linking for provider-only accounts,
+  which permanently blocked linking a second provider, and throttle the
+  confirm-link endpoint, which accepted unlimited password guesses.
+- Bound the login, AI, and 2FA rate-limit stores. Keys were pruned but never
+  removed, so rotating IP or email grew them without limit.
+- Run the container as a non-root user, build it from `requirements.lock`, and
+  add a `.dockerignore` so `.env` and local databases stay out of the build
+  context.
+
+### Added
+- Responsive layout: below 900px the sidebar becomes an off-canvas drawer with
+  a toggle, multi-column dashboards stack, and wide tables scroll in their own
+  container rather than the page.
+- Keyboard and screen-reader support: a skip link, visible focus rings,
+  `prefers-reduced-motion` handling, and button semantics (focusable,
+  Enter/Space activation, `role="button"`) on interactive rows, chips, and cards.
+
+### Fixed
+- README described password hashing as `sha256_crypt`; it has been argon2id
+  since 1.10.0.
+
 ## [1.11.0] - 2026-07-19
 
 ### Security

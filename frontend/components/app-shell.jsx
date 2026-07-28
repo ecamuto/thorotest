@@ -129,7 +129,7 @@ const NAV_CONFIG = [
   ]},
 ];
 
-function Sidebar({ current, onNav, onOpenTest, density, currentUser, onLogout }) {
+function Sidebar({ current, onNav, onOpenTest, density, currentUser, onLogout, open }) {
   const { t } = useI18n();
   const [favorites, setFavorites] = useState([]);
   const NotifBell = window.NotificationBell;
@@ -158,11 +158,11 @@ function Sidebar({ current, onNav, onOpenTest, density, currentUser, onLogout })
   })).filter(group => group.items.length > 0);
 
   return (
-    <aside className="sidebar">
-      <div className="sidebar-brand" onClick={() => onNav("overview")}>
-        <div className="brand-mark">T</div>
+    <aside className="sidebar" id="app-sidebar" data-open={open ? "true" : "false"}>
+      <button type="button" className="sidebar-brand as-button" onClick={() => onNav("overview")}>
+        <div className="brand-mark" aria-hidden="true">T</div>
         <div className="brand-name">ThoroTest</div>
-      </div>
+      </button>
 
       <div className="sidebar-search">
         <SidebarSearch onOpenTest={onOpenTest} />
@@ -196,11 +196,12 @@ function Sidebar({ current, onNav, onOpenTest, density, currentUser, onLogout })
           <div className="nav-group">
             <div className="nav-label"><span>{t("nav.favorites")}</span></div>
             {favorites.map(fav => (
-              <div key={fav.folder_id} className="nav-item" onClick={() => onNav("library")}>
-                <span style={{width:14, color:"var(--warn)"}}>★</span>
+              <button type="button" key={fav.folder_id} className="nav-item as-button"
+                      onClick={() => onNav("library")}>
+                <span style={{width:14, color:"var(--warn)"}} aria-hidden="true">★</span>
                 <span>{fav.name}</span>
                 <span className="nav-count">{fav.count}</span>
-              </div>
+              </button>
             ))}
           </div>
         )}
@@ -223,9 +224,22 @@ function Sidebar({ current, onNav, onOpenTest, density, currentUser, onLogout })
   );
 }
 
-function Topbar({ crumbs, actions, theme, onToggleTheme }) {
+function Topbar({ crumbs, actions, theme, onToggleTheme, onToggleSidebar, sidebarOpen }) {
+  const { t } = useI18n();
   return (
     <div className="topbar">
+      {onToggleSidebar && (
+        <button
+          type="button"
+          className="sidebar-toggle"
+          onClick={onToggleSidebar}
+          aria-expanded={!!sidebarOpen}
+          aria-controls="app-sidebar"
+          aria-label={t("nav.toggleMenu")}
+        >
+          <Icon name="menu" />
+        </button>
+      )}
       <div className="breadcrumb">
         {crumbs.map((c, i) => {
           const isLast = i === crumbs.length - 1;

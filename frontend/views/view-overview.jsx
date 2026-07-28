@@ -367,7 +367,7 @@ function RequirementCoverageCard({ requirements, onNav }) {
   const coveredPct = Math.round((covered / total) * 100);
 
   return (
-    <div className="card" style={{marginBottom:14, cursor:"pointer"}} onClick={() => onNav && onNav("requirements")}>
+    <div className="card" style={{marginBottom:14, cursor:"pointer"}} {...clickable(() => onNav && onNav("requirements"))}>
       <div className="card-h">
         <div>
           <div className="card-title">Requirement coverage</div>
