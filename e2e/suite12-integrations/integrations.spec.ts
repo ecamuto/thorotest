@@ -168,7 +168,9 @@ test.describe('Suite 12 — Integrations, API Tokens, Webhooks', () => {
     // Fill token form
     await expect(page.locator('text=Generate API token')).toBeVisible({ timeout: 5000 });
     await page.fill('input[placeholder="e.g. ci-runner"]', 'e2e-test-token');
-    await page.fill('input[placeholder*="report:write"]', 'runs:read');
+    // Scope is an enforced enum (read | write), not a free-form label — a
+    // read-scoped token is rejected on any non-GET request.
+    await page.selectOption('#token-scope', 'read');
     await page.locator('button.btn.primary:has-text("Generate")').click();
 
     // Reveal modal shows the token

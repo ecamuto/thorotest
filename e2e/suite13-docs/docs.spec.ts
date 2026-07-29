@@ -24,7 +24,7 @@ test.describe('Suite 13 — Docs & API View', () => {
     await page.goto('/#/docs');
     // Quickstart is default section
     await expect(page.locator('text=Start the server')).toBeVisible({ timeout: 8000 });
-    await expect(page.locator('text=Get a token')).toBeVisible();
+    await expect(page.locator('text=Sign in')).toBeVisible();
     await expect(page.locator('pre.code').first()).toBeVisible();
   });
 

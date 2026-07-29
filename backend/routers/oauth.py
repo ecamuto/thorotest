@@ -10,10 +10,10 @@ Shared logic:
   upsert_oauth_user()  — new-user provisioning / link-required gate / returning-user login
 """
 
+import logging
 import os
 import re
 import secrets
-import sys
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlencode
 
@@ -27,6 +27,13 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from .. import models
 from ..auth_utils import create_access_token, verify_password
+from .auth import (
+    _check_login_rate,
+    _clear_login_failures,
+    _login_key,
+    _record_login_failure,
+    _registration_open,
+)
 from ..audit_utils import (
     log_event,
     EVT_LOGIN_SUCCESS,
@@ -35,6 +42,19 @@ from ..audit_utils import (
 )
 
 router = APIRouter(tags=["oauth"])
+
+logger = logging.getLogger("thorotest.oauth")
+
+# Stored in User.hashed_password for accounts that only ever sign in through a
+# provider. It is deliberately not a valid hash of anything, so local login can
+# never succeed against it — but it must be checked explicitly before being
+# handed to passlib, which raises on an unrecognised hash format.
+OAUTH_ONLY_SENTINEL = "!"
+
+
+def _oauth_error_kind(exc: HTTPException) -> str:
+    """Map an upsert rejection to the code the login screen renders."""
+    return "no_account" if exc.status_code == 403 else "failed"
 
 # ---------------------------------------------------------------------------
 # Config from environment
@@ -195,13 +215,22 @@ def upsert_oauth_user(
         db.commit()
         return {"status": "link_required", "pending_token": pending_token}
 
-    # 5. New user — provision with viewer role
+    # 5. New user — provision with viewer role.
+    # Honours the same ALLOW_OPEN_REGISTRATION gate as local registration: on a
+    # closed instance, OAuth signs existing users in but never creates accounts,
+    # so a public deployment can't be populated by anyone with a GitHub account.
+    if not _registration_open():
+        raise HTTPException(
+            status_code=403,
+            detail="No ThoroTest account is linked to this identity, and self-registration is disabled.",
+        )
+
     now = datetime.now(timezone.utc)
     username = _derive_username(display_name or email.split("@")[0], db)
     user = models.User(
         username=username,
         email=email,
-        hashed_password="!",          # sentinel — OAuth-only accounts cannot use local login
+        hashed_password=OAUTH_ONLY_SENTINEL,   # OAuth-only accounts cannot use local login
         display_name=display_name,
         role="viewer",
     )
@@ -293,7 +322,7 @@ async def github_callback(
         token_data = token_resp.json()
         access_token = token_data.get("access_token")
         if not access_token:
-            print(f"[oauth/github] token exchange failed: {token_data}", file=sys.stderr)
+            logger.warning("github token exchange failed: %s", token_data)
             return RedirectResponse(f"{BASE_URL}/#oauth-error=failed&provider=github")
 
         github_headers = {
@@ -325,7 +354,7 @@ async def github_callback(
         display_name = user_json.get("name") or user_json.get("login")
 
     except Exception as exc:
-        print(f"[oauth/github] network/parse error: {exc}", file=sys.stderr)
+        logger.warning("github network/parse error: %s", exc)
         return RedirectResponse(f"{BASE_URL}/#oauth-error=failed&provider=github")
 
     ip = request.client.host if request and request.client else None
@@ -342,8 +371,8 @@ async def github_callback(
             ip=ip,
         )
     except HTTPException as exc:
-        print(f"[oauth/github] upsert rejected: {exc.detail}", file=sys.stderr)
-        return RedirectResponse(f"{BASE_URL}/#oauth-error=failed&provider=github")
+        logger.warning("github upsert rejected: %s", exc.detail)
+        return RedirectResponse(f"{BASE_URL}/#oauth-error={_oauth_error_kind(exc)}&provider=github")
 
     if result["status"] == "2fa_required":
         return RedirectResponse(f"{BASE_URL}/#oauth-2fa={result['partial_token']}")
@@ -418,7 +447,7 @@ async def google_callback(
         ip = request.client.host if request and request.client else None
 
     except Exception as exc:
-        print(f"[oauth/google] network/parse error: {exc}", file=sys.stderr)
+        logger.warning("google network/parse error: %s", exc)
         return RedirectResponse(f"{BASE_URL}/#oauth-error=failed&provider=google")
 
     # upsert_oauth_user may raise HTTPException for unverified/missing email
@@ -433,8 +462,8 @@ async def google_callback(
             ip=ip,
         )
     except HTTPException as exc:
-        print(f"[oauth/google] upsert rejected: {exc.detail}", file=sys.stderr)
-        return RedirectResponse(f"{BASE_URL}/#oauth-error=failed&provider=google")
+        logger.warning("google upsert rejected: %s", exc.detail)
+        return RedirectResponse(f"{BASE_URL}/#oauth-error={_oauth_error_kind(exc)}&provider=google")
 
     if result["status"] == "2fa_required":
         return RedirectResponse(f"{BASE_URL}/#oauth-2fa={result['partial_token']}")
@@ -477,8 +506,35 @@ def confirm_link(payload: ConfirmLinkPayload, db: Session = Depends(get_db), req
     if not user:
         raise HTTPException(status_code=400, detail="Link session expired. Please try signing in again.")
 
-    if not verify_password(payload.password, user.hashed_password):
+    # OAuth-only accounts carry a sentinel instead of a real hash. passlib raises
+    # UnknownHashError on it rather than returning False, which surfaced as an
+    # uncaught 500 and left the user permanently unable to link a second provider.
+    if user.hashed_password == OAUTH_ONLY_SENTINEL:
+        raise HTTPException(
+            status_code=400,
+            detail="This account signs in with a social provider and has no password. "
+                   "Sign in with your original provider, then link this one from Settings.",
+        )
+
+    # Unlimited guesses against a 20-minute token is a password-brute-force
+    # oracle for a known account; every other password check here is throttled.
+    ip = request.client.host if request and request.client else None
+    rate_key = "oauthlink|" + _login_key(ip, user.email)
+    _check_login_rate(rate_key)
+
+    try:
+        password_ok = verify_password(payload.password, user.hashed_password)
+    except Exception:
+        # Malformed or unrecognised stored hash — treat as a failed attempt
+        # rather than a 500.
+        logger.warning("unusable password hash for user id=%s during OAuth link", user.id)
+        password_ok = False
+
+    if not password_ok:
+        _record_login_failure(rate_key)
         raise HTTPException(status_code=401, detail="Incorrect password.")
+
+    _clear_login_failures(rate_key)
 
     # Create the durable identity link
     link_now = datetime.now(timezone.utc).isoformat()

@@ -844,7 +844,7 @@ function RequirementsTab({ test, currentUser, onCountChange }) {
           {results.length > 0 && (
             <div style={{marginTop:8, display:"flex", flexDirection:"column", gap:4}}>
               {results.map(r => (
-                <div key={r.id} className="nav-item" style={{padding:"6px 8px", cursor:"pointer", display:"flex", gap:8, alignItems:"center"}} onClick={() => link(r.id)}>
+                <div key={r.id} className="nav-item" style={{padding:"6px 8px", cursor:"pointer", display:"flex", gap:8, alignItems:"center"}} {...clickable(() => link(r.id))}>
                   <span className="mono" style={{fontSize:11, color:"var(--text-dim)"}}>{r.id}</span>
                   <span style={{fontSize:12}}>{r.title}</span>
                 </div>

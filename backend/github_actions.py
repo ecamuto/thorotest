@@ -10,6 +10,12 @@ via the shared persist path. The workflow must (a) allow `workflow_dispatch` and
 import io
 import zipfile
 import xml.etree.ElementTree as ET
+# Parse untrusted XML with defusedxml: stdlib ElementTree expands internal
+# entities, so a ~1 KB "billion laughs" document inside the upload limit
+# exhausts memory (SECURITY H-6). ET is still used to *build* trees, which is
+# safe — only the parsing entry point needs replacing.
+from defusedxml.ElementTree import fromstring as _safe_fromstring
+from defusedxml.common import DefusedXmlException
 from datetime import datetime, timezone
 
 import httpx
@@ -73,16 +79,39 @@ class GitHubActionsClient:
 
 # ── Pure helpers (unit-testable without the network) ──────────────
 
+# Caps on artifact zip expansion (SECURITY H-6). A zip is attacker-influenced
+# input — a workflow can upload anything under the artifact name we fetch — and
+# zf.read() decompresses fully into memory, so a small archive can otherwise
+# claim gigabytes.
+MAX_ZIP_ENTRY_BYTES = 32 * 1024 * 1024        # per member
+MAX_ZIP_TOTAL_BYTES = 128 * 1024 * 1024       # across the archive
+
+
 def extract_junit_from_zip(zip_bytes: bytes) -> bytes:
-    """Merge every JUnit *.xml in an artifact zip into one <testsuites> blob."""
+    """Merge every JUnit *.xml in an artifact zip into one <testsuites> blob.
+
+    Oversized members are skipped rather than raising: one bad file in an
+    artifact should not discard the results that parsed fine.
+    """
     root = ET.Element("testsuites")
+    budget = MAX_ZIP_TOTAL_BYTES
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
-        for name in zf.namelist():
+        for info in zf.infolist():
+            name = info.filename
             if not name.lower().endswith(".xml"):
                 continue
+            # Trust the header only as a cheap pre-filter, then bound the actual
+            # read — a crafted header can understate the real size.
+            if info.file_size > MAX_ZIP_ENTRY_BYTES or info.file_size > budget:
+                continue
+            with zf.open(info) as fh:
+                data = fh.read(min(MAX_ZIP_ENTRY_BYTES, budget) + 1)
+            if len(data) > MAX_ZIP_ENTRY_BYTES or len(data) > budget:
+                continue
+            budget -= len(data)
             try:
-                el = ET.fromstring(zf.read(name))
-            except ET.ParseError:
+                el = _safe_fromstring(data)
+            except (ET.ParseError, DefusedXmlException):
                 continue
             if el.tag == "testsuites":
                 for suite in el.findall("testsuite"):

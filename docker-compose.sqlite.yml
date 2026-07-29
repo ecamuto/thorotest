@@ -7,6 +7,8 @@ services:
       - .env
     environment:
       DATABASE_URL: sqlite:///./testhub.db
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ./testhub.db:/app/testhub.db
       - ./uploads:/app/uploads

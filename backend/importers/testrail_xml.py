@@ -1,4 +1,10 @@
 import xml.etree.ElementTree as ET
+# Parse untrusted XML with defusedxml: stdlib ElementTree expands internal
+# entities, so a ~1 KB "billion laughs" document inside the upload limit
+# exhausts memory (SECURITY H-6). ET is still used to *build* trees, which is
+# safe — only the parsing entry point needs replacing.
+from defusedxml.ElementTree import fromstring as _safe_fromstring
+from defusedxml.common import DefusedXmlException
 from .base import ImportResult, TestData
 
 _PRIORITY_MAP = {"1": "low", "2": "med", "3": "high", "4": "critical"}
@@ -36,8 +42,8 @@ def parse_testrail_xml(content: bytes) -> ImportResult:
     warnings: list[str] = []
 
     try:
-        root = ET.fromstring(content.decode("utf-8", errors="replace"))
-    except ET.ParseError as e:
+        root = _safe_fromstring(content.decode("utf-8", errors="replace"))
+    except (ET.ParseError, DefusedXmlException) as e:
         return ImportResult(warnings=[f"XML parse error: {e}"], format_detected="testrail_xml")
 
     # Support both <suite> root and <sections> root

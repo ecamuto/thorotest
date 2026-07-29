@@ -61,7 +61,7 @@ token**. Four sources are checked, highest priority first:
 
 | Priority | Source | URL | Token |
 |---|---|---|---|
-| 1 | command-line flags | `--url https://tt.example.com` | `--token tt_…` |
+| 1 | command-line flags | `--url https://tt.example.com` | `--token th_…` |
 | 2 | environment | `THOROTEST_URL` | `THOROTEST_TOKEN` |
 | 3 | project file `./.thorotest.json` (searched upward to the git root) | `"url"` | `"token"` |
 | 4 | user file `~/.config/thorotest/config.json` (respects `XDG_CONFIG_HOME`) | `"url"` | `"token"` |
@@ -69,7 +69,7 @@ token**. Four sources are checked, highest priority first:
 Config files are plain JSON:
 
 ```json
-{ "url": "https://thorotest.internal.example.com", "token": "tt_…" }
+{ "url": "https://thorotest.internal.example.com", "token": "th_…" }
 ```
 
 Recommended split: put **`url` in the project file** (commit it — it's not a
@@ -78,7 +78,8 @@ token; in CI, inject `THOROTEST_TOKEN` as a masked secret.
 
 Getting a token: web UI → *Settings → API tokens*, or
 [`thorotest token create`](#thorotest-token-create) if you already have one.
-Tokens are minted by **admins** only.
+Any role can mint a token for itself; it inherits that account's role and is
+restricted further by its [scope](#thorotest-token-create).
 
 ---
 
@@ -92,7 +93,7 @@ Consistent across all commands, so pipelines can branch on failure class:
 | `1` | validation failure — lint errors, or the server skipped ≥1 file during sync |
 | `2` | usage error — unknown command, missing argument, missing URL/token config |
 | `3` | server or network error — host unreachable, HTTP 5xx, unexpected 4xx |
-| `4` | authentication/authorization error — HTTP 401 (bad/expired token) or 403 (role too low) |
+| `4` | authentication/authorization error — HTTP 401 (bad, expired, or revoked token) or 403 (role too low, or a `read`-scoped token attempting a write) |
 
 Global flags: `--url`, `--token`, `--json` (machine-readable output on stdout),
 `-h/--help`, `-v/--version`. Human-readable diagnostics go to **stderr**;
@@ -251,22 +252,40 @@ Requires role **tester, manager, or admin** (viewers get exit 4).
 
 ## `thorotest token create`
 
-Mint a long-lived API token — for handing to CI or rotating credentials.
-**Admin only** (same rule as the web UI).
+Mint an API token — for handing to CI or rotating credentials. Any role can
+mint a token for itself; the token authenticates as its creator and inherits
+that account's role.
 
 ```
-$ thorotest token create --name ci-nightly [--scope <scope>]
+$ thorotest token create --name ci-nightly [--scope read|write]
 ✓ token 'ci-nightly' created (id 7)
-tt_3f9a1c…
+th_3f9a1c…
 This token is shown once — store it now (e.g. as a CI secret).
 ```
 
+`--scope` is enforced, not a label:
+
+| Scope | Allows |
+|---|---|
+| `read` | `GET` / `HEAD` / `OPTIONS` only — anything else returns 403 |
+| `write` (default) | The creator's full role |
+
+Give CI the narrowest scope that does its job; a job that only imports results
+still needs `write`, but a job that only reads coverage should use `read`. A
+`viewer` account can only mint `read` tokens.
+
+Tokens **expire** after `API_TOKEN_EXPIRE_DAYS` (90 by default) and are revoked
+automatically when their owner logs out everywhere or resets their password —
+so rotating a compromised account's password also kills its CI credentials.
+
 The token value is printed to **stdout** (pipe-friendly); the reminder goes to
-stderr. `--json` returns `{ "id": 7, "name": "ci-nightly", "scope": "", "token": "tt_…" }`.
+stderr. `--json` returns
+`{ "id": 7, "name": "ci-nightly", "scope": "write", "expires_at": "…", "token": "th_…" }`.
 
 Bootstrap note: creating a token requires an existing credential. Mint the
 first one in the web UI (*Settings → API tokens*); use the CLI for rotation
-and automation after that. Revoke tokens in the web UI.
+and automation after that. You can revoke your own tokens in the web UI;
+admins can revoke anyone's.
 
 ---
 

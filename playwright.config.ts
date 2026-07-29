@@ -35,6 +35,12 @@ export default defineConfig({
     timeout: 60_000,
     env: {
       DATABASE_URL: 'sqlite:///./e2e.db',
+      // Fixed throwaway signing key: the app refuses to boot without one, and a
+      // per-run random key would invalidate tokens between the seed step and the
+      // server. Never reuse this value anywhere real.
+      SECRET_KEY: 'e2e-fixed-key-000000000000000000000000000000',
+      // The suite exercises the self-registration endpoint, which ships closed.
+      ALLOW_OPEN_REGISTRATION: '1',
       LOGIN_RATELIMIT_DISABLED: '1',
       // e2e webhook tests point at a local target; allow private hosts for the
       // SSRF guard in this environment only (never in production).

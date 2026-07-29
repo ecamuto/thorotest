@@ -201,18 +201,18 @@ class TestPrompt:
 
 class TestRateLimit:
     def test_rate_limit_enforced(self, client, monkeypatch):
-        import collections
+        from backend.rate_limit import SlidingWindowLimiter
         return_data = [
             {"title": "Test", "steps": [{"action": "Step 1", "expected_result": "Result"}]}
         ]
         monkeypatch.setattr(ai_module, "_ai_client", make_mock_client(return_data))
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-xxx")
 
-        # Reset rate store to ensure clean state
+        # Fresh limiter so the count starts clean regardless of test ordering.
         monkeypatch.setattr(
             ai_module,
             "_rate_store",
-            collections.defaultdict(collections.deque),
+            SlidingWindowLimiter(ai_module.RATE_LIMIT, ai_module.RATE_WINDOW),
         )
 
         for i in range(20):

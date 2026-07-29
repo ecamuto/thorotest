@@ -218,7 +218,7 @@ def test_2fa_rate_limit(db):
         partial_token = resp.json()["partial_token"]
 
         # Clear any existing rate limit state for this test
-        totp_utils._2fa_rate_store.clear()
+        totp_utils._2fa_rate_store.reset()
 
         # Make 5 failed attempts (fills window)
         for _ in range(5):
@@ -386,7 +386,7 @@ def test_bad_totp_emits_2fa_fail_audit_row(db):
         yield db
 
     app.dependency_overrides[get_db] = override_get_db
-    totp_utils._2fa_rate_store.clear()
+    totp_utils._2fa_rate_store.reset()
     try:
         client = TestClient(app)
         resp = client.post("/api/auth/login", json={"email": "totp@test.com", "password": "pass123"})
@@ -428,7 +428,7 @@ def test_bad_recovery_code_emits_2fa_fail_audit_row(db):
         yield db
 
     app.dependency_overrides[get_db] = override_get_db
-    totp_utils._2fa_rate_store.clear()
+    totp_utils._2fa_rate_store.reset()
     try:
         client = TestClient(app)
         resp = client.post("/api/auth/login", json={"email": "totp@test.com", "password": "pass123"})
@@ -458,7 +458,7 @@ def test_successful_2fa_login_no_2fa_fail_row(db):
         yield db
 
     app.dependency_overrides[get_db] = override_get_db
-    totp_utils._2fa_rate_store.clear()
+    totp_utils._2fa_rate_store.reset()
     try:
         client = TestClient(app)
         resp = client.post("/api/auth/login", json={"email": "totp@test.com", "password": "pass123"})
@@ -503,7 +503,7 @@ def test_regenerate_invalidates_old(auth_client, db):
     old_plain = old_codes[0]
     # Clear rate-limit state so prior test failures don't trigger 429 here
     from backend import totp_utils
-    totp_utils._2fa_rate_store.clear()
+    totp_utils._2fa_rate_store.reset()
 
     # Create a valid partial token for the enrolled user
     partial_token = create_partial_token(user.id)

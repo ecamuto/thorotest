@@ -10,8 +10,6 @@ import base64
 import hashlib
 import io
 import secrets
-import time
-from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 
 import pyotp
@@ -21,6 +19,7 @@ from fastapi import HTTPException
 from jose import JWTError, jwt
 
 from .auth_utils import SECRET_KEY, ALGORITHM, pwd_context
+from .rate_limit import SlidingWindowLimiter
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -28,8 +27,11 @@ from .auth_utils import SECRET_KEY, ALGORITHM, pwd_context
 
 _SAFE_CHARS = "abcdefghjkmnpqrstuvwxyz23456789"  # no 0/O/1/l
 
-# In-memory rate-limit store keyed by user_id: deque of failure timestamps
-_2fa_rate_store: dict = defaultdict(deque)
+# Failed-2FA-attempt counter keyed by user_id. Bounded and per-process — see
+# backend/rate_limit.py. Defaults match the previous inline values.
+_2FA_MAX_ATTEMPTS = 5
+_2FA_WINDOW_SECONDS = 30
+_2fa_rate_store = SlidingWindowLimiter(_2FA_MAX_ATTEMPTS, _2FA_WINDOW_SECONDS)
 
 
 # ---------------------------------------------------------------------------
@@ -165,7 +167,7 @@ def verify_recovery_code(plain: str, rows: list):
 # Rate limiting — failed 2FA attempts
 # ---------------------------------------------------------------------------
 
-def check_2fa_rate(user_id: int, max_attempts: int = 5, window_sec: int = 30) -> tuple[bool, int]:
+def check_2fa_rate(user_id: int) -> tuple[bool, int]:
     """
     Check if the user is within the allowed attempt window.
 
@@ -174,19 +176,12 @@ def check_2fa_rate(user_id: int, max_attempts: int = 5, window_sec: int = 30) ->
 
     Returns: (allowed, retry_after_seconds)
       - allowed=True: request may proceed
-      - allowed=False: rate limit exceeded; retry_after is seconds until oldest entry expires
+      - allowed=False: rate limit exceeded; retry_after is seconds until the
+        oldest entry leaves the window
     """
-    now = time.time()
-    dq = _2fa_rate_store[user_id]
-    # Prune entries outside the window
-    while dq and dq[0] < now - window_sec:
-        dq.popleft()
-    if len(dq) >= max_attempts:
-        retry_after = int(window_sec - (now - dq[0])) + 1
-        return False, retry_after
-    return True, 0
+    return _2fa_rate_store.check(str(user_id))
 
 
 def record_2fa_failure(user_id: int) -> None:
     """Record a failed 2FA attempt timestamp for rate-limit tracking."""
-    _2fa_rate_store[user_id].append(time.time())
+    _2fa_rate_store.record(str(user_id))

@@ -286,12 +286,20 @@ class ApiToken(Base):
     name = Column(String(255), nullable=False)
     token_hash = Column(String(255), nullable=False, index=True)
     token_prefix = Column(String(64), nullable=False)
+    # "read" restricts the token to safe HTTP methods; anything else grants the
+    # owner's full role. Enforced in auth_utils.get_optional_user.
     scope = Column(String(512), default="")
     # The token authenticates as this user (inherits their role). A token with
     # no owner (legacy) can no longer authenticate.
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(String(64), nullable=True)
     last_used_at = Column(String(64), nullable=True)
+    # ISO UTC expiry. NULL means non-expiring (legacy rows only — the API always
+    # sets one now), so a leaked CI token does not stay valid forever.
+    expires_at = Column(String(64), nullable=True)
+    # Snapshot of User.token_version at mint time. "Log out everywhere" and
+    # password reset bump the user's counter, which invalidates tokens too.
+    token_version = Column(Integer, default=0)
 
 
 class Webhook(Base):

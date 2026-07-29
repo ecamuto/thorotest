@@ -74,7 +74,8 @@ class TestInitialAdminPassword:
 
 
 class TestPolicyAtEndpoints:
-    def test_register_rejects_short(self, client):
+    def test_register_rejects_short(self, client, monkeypatch):
+        monkeypatch.setenv("ALLOW_OPEN_REGISTRATION", "1")
         r = client.post("/api/auth/register", json={
             "username": "polly", "email": "polly@test.com", "password": "short1",
         })

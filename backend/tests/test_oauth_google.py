@@ -21,7 +21,7 @@ from backend.routers.oauth import upsert_oauth_user
 # upsert_oauth_user() — Google provider tests
 # ---------------------------------------------------------------------------
 
-def test_google_new_user_provisioned(db):
+def test_google_new_user_provisioned(db, open_registration):
     """A new Google OAuth user gets a viewer-role account and OAuthIdentity with sub as oauth_id."""
     result = upsert_oauth_user(db, "google", "gsub-1", "g@x.com", True, "G User", None)
 
@@ -41,7 +41,7 @@ def test_google_new_user_provisioned(db):
     assert identity.user_id == user.id
 
 
-def test_google_uses_sub_as_oauth_id(db):
+def test_google_uses_sub_as_oauth_id(db, open_registration):
     """OAuthIdentity created for Google user uses the sub claim (not email) as oauth_id."""
     upsert_oauth_user(db, "google", "gsub-1", "g@x.com", True, "G User", None)
 
@@ -131,7 +131,7 @@ def test_google_unverified_blocked(db):
 # Callback-level test — mocks httpx + jose to verify sub->oauth_id mapping
 # ---------------------------------------------------------------------------
 
-def test_google_callback_maps_sub_to_oauth_id(db):
+def test_google_callback_maps_sub_to_oauth_id(db, open_registration):
     """
     Callback-level: mocked httpx exchange + jose decode confirms that
     claims['sub'] becomes the OAuthIdentity.oauth_id.

@@ -223,7 +223,7 @@ function Library({ onNav, onOpenTest, currentUser }) {
           )}
         </div>
         <div className="tree" style={{padding:"8px 8px", overflowY:"auto", flex:1}}>
-          <div className={"tree-row" + (activeFolder === null ? " active" : "")} onClick={() => selectFolder(null)}>
+          <div className={"tree-row" + (activeFolder === null ? " active" : "")} {...clickable(() => selectFolder(null))}>
             <span className="caret"></span>
             <Icon name="grid" />
             <span>All tests</span>
@@ -271,7 +271,7 @@ function Library({ onNav, onOpenTest, currentUser }) {
           />
 
           <div style={{position:"relative"}}>
-            <div className={"chip" + (filterStatus !== "all" ? " active" : "")} onClick={() => { setFilterStatusOpen(o => !o); setFilterTypeOpen(false); }}>
+            <div className={"chip" + (filterStatus !== "all" ? " active" : "")} {...clickable(() => { setFilterStatusOpen(o => !o); setFilterTypeOpen(false); })}>
               <Icon name="filter" />
               Status: <b style={{marginLeft:2, color:"var(--text)"}}>{filterStatus}</b>
             </div>
@@ -291,7 +291,7 @@ function Library({ onNav, onOpenTest, currentUser }) {
           </div>
 
           <div style={{position:"relative"}}>
-            <div className={"chip" + (filterType !== "all" ? " active" : "")} onClick={() => { setFilterTypeOpen(o => !o); setFilterStatusOpen(false); }}>
+            <div className={"chip" + (filterType !== "all" ? " active" : "")} {...clickable(() => { setFilterTypeOpen(o => !o); setFilterStatusOpen(false); })}>
               Type: <b style={{color:"var(--text)", marginLeft:2}}>{filterType}</b>
             </div>
             {filterTypeOpen && (
@@ -310,7 +310,7 @@ function Library({ onNav, onOpenTest, currentUser }) {
           </div>
 
           <div style={{position:"relative"}}>
-            <div className={"chip" + (filterTag !== "all" ? " active" : "")} onClick={() => { setFilterTagOpen(o => !o); setFilterStatusOpen(false); setFilterTypeOpen(false); }}>
+            <div className={"chip" + (filterTag !== "all" ? " active" : "")} {...clickable(() => { setFilterTagOpen(o => !o); setFilterStatusOpen(false); setFilterTypeOpen(false); })}>
               Tag: <b style={{color:"var(--text)", marginLeft:2}}>{filterTag}</b>
             </div>
             {filterTagOpen && (
@@ -465,7 +465,7 @@ function Library({ onNav, onOpenTest, currentUser }) {
           ) : (
             <div style={{padding:14, display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(280px, 1fr))", gap:12}}>
               {filtered.map(t => (
-                <div key={t.id} className="card" style={{padding:14, cursor:"pointer", position:"relative"}} onClick={() => onOpenTest(t.id)}>
+                <div key={t.id} className="card" style={{padding:14, cursor:"pointer", position:"relative"}} {...clickable(() => onOpenTest(t.id))}>
                   <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:8}}>
                     <span className="mono dim" style={{fontSize:10.5}}>{t.id}</span>
                     <div style={{marginLeft:"auto"}} onClick={(e) => e.stopPropagation()}>

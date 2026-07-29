@@ -38,7 +38,19 @@ def _seed_pending_link(db, state_token: str, user: models.User, provider: str, o
 # upsert_oauth_user() tests
 # ---------------------------------------------------------------------------
 
-def test_new_user_provisioned_viewer(db):
+def test_new_user_rejected_when_registration_closed(db):
+    """With self-registration off (the default), OAuth signs existing users in but
+    never provisions a new account — otherwise anyone with a GitHub account could
+    create one on a public instance."""
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc:
+        upsert_oauth_user(db, "github", "99999", "stranger@x.com", True, "Stranger", None)
+    assert exc.value.status_code == 403
+    assert db.query(models.User).filter(models.User.email == "stranger@x.com").first() is None
+
+
+def test_new_user_provisioned_viewer(db, open_registration):
     """A completely new OAuth user gets a viewer-role account and an OAuthIdentity."""
     result = upsert_oauth_user(db, "github", "12345", "new@x.com", True, "New Person", None)
 
@@ -167,6 +179,66 @@ def test_confirm_link_wrong_password_401(client, db):
     assert db.query(models.OAuthIdentity).filter(
         models.OAuthIdentity.oauth_id == "555"
     ).first() is None
+
+
+def test_confirm_link_oauth_only_account_returns_400_not_500(client, db):
+    """An OAuth-only account stores a sentinel instead of a password hash.
+
+    passlib raises UnknownHashError on it rather than returning False, which
+    surfaced as an uncaught 500 and permanently blocked the user from linking a
+    second provider (SECURITY H-4). Reachable normally: sign up with GitHub,
+    then sign in with Google using the same email.
+    """
+    from backend.routers.oauth import OAUTH_ONLY_SENTINEL
+
+    user = models.User(
+        username="oauth_only",
+        email="oauthonly@x.com",
+        hashed_password=OAUTH_ONLY_SENTINEL,
+        display_name="OAuth Only",
+        role="viewer",
+    )
+    db.add(user)
+    db.flush()
+
+    _seed_pending_link(db, "pt_sentinel", user, "google", "g-777")
+
+    resp = client.post("/api/auth/oauth/confirm-link", json={
+        "pending_token": "pt_sentinel",
+        "password": "anything",
+    })
+    assert resp.status_code == 400
+    assert "social provider" in resp.json()["detail"].lower()
+
+
+def test_confirm_link_throttles_password_guessing(client, db, monkeypatch):
+    """The pending token is valid for 20 minutes and accepted unlimited password
+    guesses — a brute-force oracle against a known account (SECURITY H-4)."""
+    monkeypatch.delenv("LOGIN_RATELIMIT_DISABLED", raising=False)
+    from backend.routers import auth as auth_router
+    auth_router._login_failures.reset()
+
+    user = models.User(
+        username="brute_target",
+        email="brute@x.com",
+        hashed_password=hash_password("the-real-password"),
+        display_name="Brute Target",
+        role="tester",
+    )
+    db.add(user)
+    db.flush()
+    _seed_pending_link(db, "pt_brute", user, "github", "brute-1")
+
+    statuses = []
+    for _ in range(auth_router._LOGIN_MAX_FAILURES + 2):
+        r = client.post("/api/auth/oauth/confirm-link", json={
+            "pending_token": "pt_brute", "password": "guess",
+        })
+        statuses.append(r.status_code)
+
+    assert 401 in statuses          # early attempts are ordinary failures
+    assert statuses[-1] == 429      # then the window closes
+    auth_router._login_failures.reset()
 
 
 def test_confirm_link_correct_password_links_and_issues_jwt(client, db):

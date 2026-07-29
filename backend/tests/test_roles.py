@@ -42,17 +42,29 @@ class TestRequireRole:
 
 
 class TestRegisterDefault:
-    """POST /api/auth/register defaults new user to role='tester'."""
+    """POST /api/auth/register is gated, and grants only the read-only role."""
 
-    def test_register_defaults_to_tester(self, client):
+    def test_register_closed_by_default(self, client, monkeypatch):
+        """Self-registration is off unless explicitly enabled — a public instance
+        must not hand write access to anyone who can reach it."""
+        monkeypatch.delenv("ALLOW_OPEN_REGISTRATION", raising=False)
+        resp = client.post("/api/auth/register", json={
+            "username": "newuser",
+            "email": "newuser@test.com",
+            "password": "pass1234-long-enough",
+        })
+        assert resp.status_code == 403
+        assert "disabled" in resp.json()["detail"].lower()
+
+    def test_register_defaults_to_viewer_when_open(self, client, monkeypatch):
+        monkeypatch.setenv("ALLOW_OPEN_REGISTRATION", "1")
         resp = client.post("/api/auth/register", json={
             "username": "newuser",
             "email": "newuser@test.com",
             "password": "pass1234-long-enough",
         })
         assert resp.status_code == 201
-        data = resp.json()
-        assert data["role"] == "tester"
+        assert resp.json()["role"] == "viewer"
 
 
 class TestRoleMigration:

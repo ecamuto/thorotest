@@ -2,13 +2,12 @@ import strawberry
 from strawberry.fastapi import GraphQLRouter
 from typing import List, Optional
 from fastapi import Depends, Request
-from jose import JWTError, jwt
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 from .db import get_db
 from .routers._pagination import MAX_LIMIT
 from . import models
-from .auth_utils import SECRET_KEY, ALGORITHM
+from .auth_utils import user_from_bearer_token
 
 _WRITE_ROLES = {"admin", "manager", "tester"}
 
@@ -308,21 +307,13 @@ class Mutation:
 async def get_context(request: Request, db: Session = Depends(get_db)):
     """Resolve the bearer token (if any) to a User and expose it to resolvers.
 
-    Mirrors auth_utils.get_optional_user, including the token_version revocation
-    check, so GraphQL honours the same auth/revocation rules as the REST API.
+    Shares auth_utils.user_from_bearer_token with the REST and WebSocket paths,
+    including the token_version revocation check, so GraphQL cannot drift into
+    honouring a token the rest of the API rejects.
     """
-    user = None
     auth = request.headers.get("Authorization", "")
-    if auth.startswith("Bearer "):
-        try:
-            payload = jwt.decode(auth[7:], SECRET_KEY, algorithms=[ALGORITHM])
-            uid = int(payload.get("sub"))
-            candidate = db.query(models.User).filter(models.User.id == uid).first()
-            if candidate and int(payload.get("tv", 0)) == int(candidate.token_version or 0):
-                user = candidate
-        except (JWTError, ValueError, TypeError):
-            user = None
-    return {"db": db, "user": user}
+    token = auth[7:] if auth.startswith("Bearer ") else ""
+    return {"db": db, "user": user_from_bearer_token(token, db)}
 
 
 schema = strawberry.Schema(query=Query, mutation=Mutation)

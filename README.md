@@ -2,9 +2,9 @@
 
 > **Self-hosted test management that treats manual and automated tests as one timeline.** Organize, run, and track every test — trace features, stories, and epics to the tests that cover them, and see coverage at a glance.
 
-[![version](https://img.shields.io/badge/version-1.11.0-blue)](package.json)
+[![version](https://img.shields.io/badge/version-1.12.0-blue)](package.json)
 [![license](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-672%20unit%20%2B%2037%20e2e%20suites-brightgreen)](#tests)
+[![tests](https://img.shields.io/badge/tests-705%20unit%20%2B%2037%20e2e%20suites-brightgreen)](#tests)
 [![backend](https://img.shields.io/badge/backend-FastAPI-009688)](#stack)
 [![frontend](https://img.shields.io/badge/frontend-React%2018-61DAFB)](#stack)
 [![docker](https://img.shields.io/badge/deploy-Docker-2496ED)](#quickstart)
@@ -71,7 +71,7 @@ Already on TestRail/Zephyr/Xray? The import pipeline is built for **migrating of
 | Database | PostgreSQL (recommended for production) · SQLite (default, eval/small installs) · MySQL / MariaDB (via `DATABASE_URL`) |
 | Realtime | WebSocket (native FastAPI) |
 | API | REST + GraphQL (Strawberry) |
-| Auth | JWT (python-jose), passlib (sha256_crypt) |
+| Auth | JWT (python-jose), argon2id password hashing (passlib) |
 | AI | Anthropic SDK (BYOK — optional) |
 | Export | PDF (fpdf2), CSV |
 | Tests | pytest, httpx, Playwright |
@@ -86,7 +86,7 @@ Fully self-contained: React, fonts, and all assets are served locally — no CDN
 ### Local (SQLite, no Docker)
 
 ```bash
-bash install.sh  # create venv, install deps, copy .env.example → .env
+bash install.sh  # create venv, install deps, write .env with a generated SECRET_KEY
 make dev         # start server → http://localhost:8000
 make open        # open app in browser
 ```
@@ -94,7 +94,10 @@ make open        # open app in browser
 ### Docker + PostgreSQL
 
 ```bash
-cp .env.example .env   # edit SECRET_KEY before production
+cp .env.example .env
+# Both are required — the app and compose refuse to start without them:
+printf 'SECRET_KEY=%s\n' "$(python3 -c 'import secrets;print(secrets.token_hex(32))')" >> .env
+printf 'POSTGRES_PASSWORD=%s\n' "$(python3 -c 'import secrets;print(secrets.token_urlsafe(24))')" >> .env
 make docker-up         # build image + start app and Postgres
 make open
 ```
@@ -103,12 +106,15 @@ make open
 
 ```bash
 cp .env.example .env
+printf 'SECRET_KEY=%s\n' "$(python3 -c 'import secrets;print(secrets.token_hex(32))')" >> .env
 make docker-up-sqlite
 ```
 
 Database is created automatically on first run. Seed data: 19 test cases across 12 folders, 11 runs, 9 defects. Pipelines are not seeded — the page fills from real CI runs (Configure ▸ Integrations ▸ Run CI).
 
 First login uses the seeded admin — `admin@localhost`, with a random password printed once in the server log on first boot (set `ADMIN_INITIAL_PASSWORD` to choose it yourself; under `DEMO_MODE` it stays `admin`). Change it after signing in.
+
+**Accounts are invite-only by default.** `POST /api/auth/register` returns 403 and OAuth signs in existing users without creating new ones, so an instance reachable from the internet does not hand out access to whoever finds it. Admins create accounts under Configure ▸ Admin. To run an open instance (a public demo, or a trusted network), set `ALLOW_OPEN_REGISTRATION=1` — self-registered accounts get the read-only `viewer` role and an admin promotes from there.
 
 ---
 
@@ -351,7 +357,7 @@ lives in one place (the run), never in the YAML.
 
 ## Tests
 
-**672 backend unit tests** (pytest) + **37 Playwright e2e suites** covering every major flow — CI-gated.
+**705 backend unit tests** (pytest) + **37 Playwright e2e suites** covering every major flow — CI-gated.
 
 ```bash
 make test        # backend unit tests

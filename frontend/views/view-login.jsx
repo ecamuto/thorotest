@@ -92,6 +92,8 @@ function LoginPage({ onLogin, oauthError, onDismissOAuthError }) {
             <span>
               {oauthError.kind === "cancelled"
                 ? `${oauthError.provider ? oauthError.provider.charAt(0).toUpperCase() + oauthError.provider.slice(1) : "OAuth"} sign-in was cancelled.`
+                : oauthError.kind === "no_account"
+                ? "No ThoroTest account is linked to that identity. Ask an administrator to create one for you."
                 : "Sign-in failed, please try again."}
             </span>
             <button

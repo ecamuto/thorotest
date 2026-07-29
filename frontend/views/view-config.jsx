@@ -429,7 +429,9 @@ function EditIntegrationModal({ intg, onClose, onSaved }) {
 
 function CreateTokenModal({ onClose, onCreated }) {
   useEscapeClose(onClose);
-  const [form, setForm] = React.useState({ name: "", scope: "" });
+  // Scope is an enforced enum, not a free-form label: "read" restricts the
+  // token to safe HTTP methods, "write" grants the creator's full role.
+  const [form, setForm] = React.useState({ name: "", scope: "write" });
   const [saving, setSaving] = React.useState(false);
   const [err, setErr] = React.useState(null);
 
@@ -437,7 +439,7 @@ function CreateTokenModal({ onClose, onCreated }) {
     if (!form.name.trim()) { setErr("Name is required"); return; }
     setSaving(true); setErr(null);
     try {
-      const created = await TH_API.createToken({ name: form.name.trim(), scope: form.scope.trim() });
+      const created = await TH_API.createToken({ name: form.name.trim(), scope: form.scope });
       onCreated(created);
     } catch(e) { setErr(e.message); }
     finally { setSaving(false); }
@@ -452,9 +454,15 @@ function CreateTokenModal({ onClose, onCreated }) {
           <input className="login-input" value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} placeholder="e.g. ci-runner" style={{width:"100%"}} />
         </div>
         <div style={{marginBottom:16}}>
-          <label style={{display:"block", fontSize:12, fontWeight:500, color:"var(--text-muted)", marginBottom:6}}>Scopes</label>
-          <input className="login-input" value={form.scope} onChange={e => setForm(f => ({...f, scope: e.target.value}))} placeholder="report:write, runs:read" style={{width:"100%"}} />
-          <div style={{fontSize:11, color:"var(--text-dim)", marginTop:4}}>Comma-separated. Leave empty for read-only.</div>
+          <label style={{display:"block", fontSize:12, fontWeight:500, color:"var(--text-muted)", marginBottom:6}} htmlFor="token-scope">Scope</label>
+          <select id="token-scope" className="login-input" value={form.scope}
+                  onChange={e => setForm(f => ({...f, scope: e.target.value}))} style={{width:"100%"}}>
+            <option value="write">Write — full access for your role</option>
+            <option value="read">Read only — GET requests only</option>
+          </select>
+          <div style={{fontSize:11, color:"var(--text-dim)", marginTop:4}}>
+            The token acts as you, limited by this scope. It expires automatically; revoke it here at any time.
+          </div>
         </div>
         {err && <div style={{fontSize:12, color:"var(--fail)", marginBottom:8}}>{err}</div>}
         <div style={{display:"flex", gap:8}}>
@@ -486,7 +494,8 @@ function TokenRevealModal({ token, onClose }) {
           <button className="btn sm" style={{flexShrink:0}} onClick={copy}>{copied ? "Copied!" : "Copy"}</button>
         </div>
         <div style={{fontSize:12, color:"var(--text-muted)", marginBottom:16}}>
-          <b>{token.name}</b> · scopes: <span className="mono">{token.scope || "read-only"}</span>
+          <b>{token.name}</b> · scope: <span className="mono">{token.scope || "write"}</span>
+          {token.expires_at && <> · expires {String(token.expires_at).slice(0, 10)}</>}
         </div>
         <button className="btn primary" onClick={onClose}>Done</button>
       </div>
@@ -744,7 +753,10 @@ function Integrations() {
                   <div key={t.id} style={{display:"flex", alignItems:"center", gap:10, padding:"10px 12px", border:"1px solid var(--border)", borderRadius:"var(--radius)", background:"var(--bg-2)"}}>
                     <div style={{flex:1, minWidth:0}}>
                       <div style={{fontSize:12, fontWeight:500}}>{t.name}</div>
-                      <div className="mono dim" style={{fontSize:10.5}}>{t.token_prefix}… · {t.scope || "read-only"}</div>
+                      <div className="mono dim" style={{fontSize:10.5}}>
+                        {t.token_prefix}… · {t.scope || "write"}
+                        {t.expires_at && <> · expires {String(t.expires_at).slice(0, 10)}</>}
+                      </div>
                     </div>
                     {t.last_used_at && <span className="mono dim" style={{fontSize:10.5, flexShrink:0}}>used {t.last_used_at}</span>}
                     <button className="btn ghost icon sm" title="Revoke" onClick={() => handleRevokeToken(t)} style={{color:"var(--fail)"}}>✕</button>

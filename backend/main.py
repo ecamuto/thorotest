@@ -10,7 +10,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import func, inspect, text
 from sqlalchemy.orm import Session
-from jose import JWTError, jwt as jose_jwt
 
 # Application logging. Uvicorn configures its own access/error loggers; this
 # covers the app's "thorotest.*" loggers. LOG_LEVEL env overrides (DEBUG,
@@ -36,7 +35,7 @@ def _set_sqlite_pragmas(dbapi_conn, connection_record):
 from .seed import init_db, seed_db
 from .ws_manager import manager
 from .notifications import notif_manager
-from .auth_utils import SECRET_KEY, ALGORITHM, get_current_user
+from .auth_utils import get_current_user, user_from_bearer_token
 from .gql_schema import graphql_router
 from .routers import folders, tests, runs, plans, pipelines, activity, auth, projects, categories, defects, requirements, integrations, tokens, webhooks, favorites, import_, attachments, admin, ai, notifications, audit_log, oauth, totp, ci, history, sync, about, custom_fields
 
@@ -615,9 +614,17 @@ async def initial_data(db: Session = Depends(get_db), _: models.User = Depends(g
     }
 
 
-# WebSocket for live run updates
+# WebSocket for live run updates.
+# Authenticated: run state is workspace data, and an unauthenticated socket is
+# also an unbounded resource (connections are only reclaimed on clean disconnect).
+# The token arrives as a query parameter because a browser cannot set headers on
+# a WebSocket handshake — same approach as /ws/notifications below.
 @app.websocket("/ws/runs/{run_id}")
-async def run_ws(run_id: str, websocket: WebSocket, db: Session = Depends(get_db)):
+async def run_ws(run_id: str, websocket: WebSocket, token: str = "", db: Session = Depends(get_db)):
+    user = user_from_bearer_token(token, db)
+    if user is None:
+        await websocket.close(code=1008)
+        return
     await manager.connect(run_id, websocket)
     try:
         run = db.query(models.Run).filter(models.Run.id == run_id).first()
@@ -643,16 +650,10 @@ async def run_ws(run_id: str, websocket: WebSocket, db: Session = Depends(get_db
 
 
 @app.websocket("/ws/notifications")
-async def notifications_ws(websocket: WebSocket, token: str, db: Session = Depends(get_db)):
+async def notifications_ws(websocket: WebSocket, token: str = "", db: Session = Depends(get_db)):
     """Per-user notification push channel. Token passed as query param (WS cannot set headers)."""
-    try:
-        payload = jose_jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id = int(payload.get("sub"))
-        user = db.query(models.User).filter(models.User.id == user_id).first()
-        if not user:
-            await websocket.close(code=1008)
-            return
-    except (JWTError, Exception):
+    user = user_from_bearer_token(token, db)
+    if user is None:
         await websocket.close(code=1008)
         return
     await notif_manager.connect(user.id, websocket)

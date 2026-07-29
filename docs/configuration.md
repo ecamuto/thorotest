@@ -36,11 +36,15 @@ cp .env.example .env
 | Variable | Default | Description |
 |---|---|---|
 | `DATABASE_URL` | `sqlite:///./testhub.db` | Database connection string |
-| `SECRET_KEY` | `thorotest-dev-secret-...` | JWT signing key — **change in production** |
+| `SECRET_KEY` | **required** | Signs session JWTs and encrypts stored TOTP secrets. No default — the app refuses to start without one of at least 32 characters. `install.sh` generates it; set it yourself for Docker |
+| `ALLOW_INSECURE_SECRET_KEY` | _(unset)_ | Skips the `SECRET_KEY` check for a throwaway local run. **Never set this on a deployment** |
+| `ALLOW_OPEN_REGISTRATION` | _(unset)_ | Allows self-registration (`POST /api/auth/register`) and OAuth first-login provisioning. Off by default; new accounts get the read-only `viewer` role |
 | `TESTHUB_BASE_URL` | `http://localhost:8000` | Public base URL (OAuth callbacks, default CORS origin) |
 | `ALLOWED_ORIGINS` | = `TESTHUB_BASE_URL` | CORS origins — comma-separated list, or `*` for any (dev only) |
 | `LOG_LEVEL` | `INFO` | Application log level (`DEBUG`, `INFO`, `WARNING`, …) |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | _(unset)_ | Outbound email for password resets. No-op if `SMTP_HOST` absent |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | _(unset)_ | Outbound email — password resets **and** notification email. No-op if `SMTP_HOST` absent |
+| `API_TOKEN_EXPIRE_DAYS` | `90` | Lifetime of newly minted `th_…` API tokens |
+| `LOGIN_MAX_FAILURES` / `LOGIN_WINDOW_SECONDS` | `10` / `300` | Failed-login throttle. Counts failures only; a success clears the counter |
 | `UPLOAD_DIR` / `MAX_UPLOAD_MB` | `./uploads` / `50` | Attachment storage directory and per-file size limit |
 | `DEMO_MODE` | _(unset)_ | Live-run demo simulation with fabricated results (demos only — **never in production**) |
 | `ANTHROPIC_API_KEY` | _(unset)_ | Enables AI assistant (BYOK). No-op if absent |
@@ -72,11 +76,30 @@ DATABASE_URL=sqlite:///./testhub.db
 DATABASE_URL=mysql+pymysql://user:pass@localhost:3306/thorotest
 ```
 
-Generate a secure `SECRET_KEY`:
+### SECRET_KEY
+
+`SECRET_KEY` signs every session token and derives the key that encrypts TOTP
+secrets at rest. A shared or guessable value means anyone can forge an admin
+session and decrypt stored 2FA secrets, so there is no default and no
+placeholder — the app raises on startup if it is missing, shorter than 32
+characters, or still set to the placeholder that older `.env.example` files
+shipped. Generate one:
 
 ```bash
 python3 -c "import secrets; print(secrets.token_hex(32))"
 ```
+
+`install.sh` writes a fresh key into a newly created `.env` (and replaces an
+empty or placeholder one). For Docker, set it in `.env` yourself.
+
+### Rate limiting
+
+Login throttling, the AI request quota, and 2FA attempt limits are enforced
+**per process**. Running multiple uvicorn workers or replicas multiplies each
+effective limit by the number of processes, because each keeps its own
+counters — this matters most for the AI quota, which spends real API credit.
+Shared limits require Redis (roadmap item S-1). Until then, run a single worker
+or enforce limits at a proxy in front of the app.
 
 **Backups:** all state lives in the database plus the `uploads/` directory — see
 [BACKUP.md](../BACKUP.md) for backup/restore procedures per database and for Docker deployments.

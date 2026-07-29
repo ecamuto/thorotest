@@ -1,3 +1,9 @@
+import os
+
+# Must be set before backend.auth_utils is imported: it refuses to load without a
+# real signing key. setdefault so an explicit value from the environment wins.
+os.environ.setdefault("SECRET_KEY", "pytest-fixed-key-" + "0" * 32)
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -83,6 +89,16 @@ def auth_client(db):
 
     yield _make
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def open_registration(monkeypatch):
+    """Enable self-registration.
+
+    It ships closed (ALLOW_OPEN_REGISTRATION unset), so any test that exercises
+    account provisioning — local register or OAuth first-login — must opt in.
+    """
+    monkeypatch.setenv("ALLOW_OPEN_REGISTRATION", "1")
 
 
 @pytest.fixture

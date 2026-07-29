@@ -16,6 +16,7 @@ window.TH_LOCALES.fr = {
     newTest: "Nouveau test",
   },
   nav: {
+    toggleMenu: "Afficher ou masquer le menu de navigation",
     workspace: "Espace de travail",
     configure: "Configurer",
     favorites: "Favoris",

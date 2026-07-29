@@ -1,0 +1,44 @@
+# Keep secrets, local databases, and build scratch out of the build context.
+# Nothing here is COPYed by the Dockerfile today; this stops a future `COPY . .`
+# (or a leaked build context) from baking any of it into a published layer.
+
+.git
+.github
+.githooks
+
+# Secrets / local config
+.env
+.env.*
+!.env.example
+
+# Local databases and runtime data
+*.db
+*.db-shm
+*.db-wal
+*.db.bak*
+uploads/
+
+# Dependencies (reinstalled inside the image)
+node_modules
+venv
+.venv
+__pycache__
+*.pyc
+
+# Test / build artifacts
+.pytest_cache
+.coverage
+playwright-report
+test-results
+scratch-junit
+frontend/dist
+
+# Local-only notes and scratch scripts
+*.local.md
+*.local.sh
+*.log
+
+# Docs and screenshots (3 MB of images the runtime image never serves)
+docs/screenshots
+
+.DS_Store
