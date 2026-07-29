@@ -225,6 +225,8 @@ function RunDetail({ runId, onBack, currentUser }) {
   const [users, setUsers] = React.useState([]);
   const [retesting, setRetesting] = React.useState(false);
   const [exportOpen, setExportOpen] = React.useState(false);
+  // Escape closes the menu; the backdrop below only handles the mouse.
+  useEscapeKey(exportOpen, () => setExportOpen(false));
   const [exporting, setExporting] = React.useState(false);
   const [caseNote, setCaseNote] = React.useState("");
   const [marking, setMarking] = React.useState(false);
@@ -513,6 +515,7 @@ function RunDetail({ runId, onBack, currentUser }) {
             {exportOpen && (
               <>
                 <div
+                  aria-hidden="true"
                   style={{position:"fixed", inset:0, zIndex:99}}
                   onClick={() => setExportOpen(false)}
                 />
@@ -1177,6 +1180,7 @@ function NewRunModal({ onClose, onCreated }) {
 }
 
 function RunDefectModal({ runId, onClose, onCreated }) {
+  const modal = useModal(onClose);
   const [form, setForm] = useState({ title: "", severity: "med", description: "" });
   const [saving, setSaving] = useState(false);
 
@@ -1196,8 +1200,8 @@ function RunDefectModal({ runId, onClose, onCreated }) {
   };
 
   return (
-    <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} onClick={onClose}>
-      <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:440}} onClick={e => e.stopPropagation()}>
+    <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} {...modal.overlayProps}>
+      <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:440}} {...modal.dialogProps}>
         <h2 style={{fontSize:15, fontWeight:600, margin:"0 0 16px"}}>File defect for {runId}</h2>
         <div style={{display:"flex", flexDirection:"column", gap:10}}>
           <div>

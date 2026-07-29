@@ -74,6 +74,14 @@ function Library({ onNav, onOpenTest, currentUser }) {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
   const [bulkFolderOpen, setBulkFolderOpen] = useState(false);
+
+  // Escape closes any open dropdown — the click-catching backdrop below only
+  // dismisses on a mouse click.
+  useEscapeKey(filterStatusOpen, () => setFilterStatusOpen(false));
+  useEscapeKey(filterTypeOpen, () => setFilterTypeOpen(false));
+  useEscapeKey(filterTagOpen, () => setFilterTagOpen(false));
+  useEscapeKey(bulkStatusOpen, () => setBulkStatusOpen(false));
+  useEscapeKey(bulkFolderOpen, () => setBulkFolderOpen(false));
   const [exportingCSV, setExportingCSV] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
 
@@ -277,7 +285,7 @@ function Library({ onNav, onOpenTest, currentUser }) {
             </div>
             {filterStatusOpen && (
               <>
-                <div style={{position:"fixed", inset:0, zIndex:99}} onClick={() => setFilterStatusOpen(false)} />
+                <div aria-hidden="true" style={{position:"fixed", inset:0, zIndex:99}} onClick={() => setFilterStatusOpen(false)} />
                 <div style={{position:"absolute", top:"100%", right:0, zIndex:100, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:"var(--radius)", minWidth:130, marginTop:4, boxShadow:"0 4px 12px rgba(0,0,0,0.3)", overflow:"hidden"}}>
                   {["all","pass","fail","warn","skip","pending"].map(st => (
                     <div key={st} style={{padding:"7px 12px", cursor:"pointer", background: st === filterStatus ? "var(--accent-soft)" : "transparent", fontSize:12}}
@@ -296,7 +304,7 @@ function Library({ onNav, onOpenTest, currentUser }) {
             </div>
             {filterTypeOpen && (
               <>
-                <div style={{position:"fixed", inset:0, zIndex:99}} onClick={() => setFilterTypeOpen(false)} />
+                <div aria-hidden="true" style={{position:"fixed", inset:0, zIndex:99}} onClick={() => setFilterTypeOpen(false)} />
                 <div style={{position:"absolute", top:"100%", right:0, zIndex:100, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:"var(--radius)", minWidth:130, marginTop:4, boxShadow:"0 4px 12px rgba(0,0,0,0.3)", overflow:"hidden"}}>
                   {[["all","All types"],["manual","Manual"],["automated","Automated"]].map(([v,label]) => (
                     <div key={v} style={{padding:"7px 12px", cursor:"pointer", background: v === filterType ? "var(--accent-soft)" : "transparent", fontSize:12}}
@@ -315,7 +323,7 @@ function Library({ onNav, onOpenTest, currentUser }) {
             </div>
             {filterTagOpen && (
               <>
-                <div style={{position:"fixed", inset:0, zIndex:99}} onClick={() => setFilterTagOpen(false)} />
+                <div aria-hidden="true" style={{position:"fixed", inset:0, zIndex:99}} onClick={() => setFilterTagOpen(false)} />
                 <div style={{position:"absolute", top:"100%", right:0, zIndex:100, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:"var(--radius)", minWidth:130, maxHeight:280, overflowY:"auto", marginTop:4, boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
                   {["all", ...allTags].map(tg => (
                     <div key={tg} style={{padding:"7px 12px", cursor:"pointer", background: tg === filterTag ? "var(--accent-soft)" : "transparent", fontSize:12}}
@@ -367,7 +375,7 @@ function Library({ onNav, onOpenTest, currentUser }) {
                 <button className="btn sm" onClick={() => { setBulkFolderOpen(o => !o); setBulkStatusOpen(false); }}>Move to folder</button>
                 {bulkFolderOpen && (
                   <>
-                    <div style={{position:"fixed", inset:0, zIndex:99}} onClick={() => setBulkFolderOpen(false)} />
+                    <div aria-hidden="true" style={{position:"fixed", inset:0, zIndex:99}} onClick={() => setBulkFolderOpen(false)} />
                     <div style={{position:"absolute", top:"100%", left:0, zIndex:100, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:"var(--radius)", minWidth:180, marginTop:4, boxShadow:"0 4px 12px rgba(0,0,0,0.3)", overflow:"hidden"}}>
                       {allFoldersList.map(f => (
                         <div key={f.id} style={{padding:"8px 14px", cursor:"pointer", fontSize:12}} onClick={() => handleBulkFolder(f.id)}>{f.name}</div>
@@ -383,7 +391,7 @@ function Library({ onNav, onOpenTest, currentUser }) {
                 <button className="btn sm" onClick={() => { setBulkStatusOpen(o => !o); setBulkFolderOpen(false); }}>Set status</button>
                 {bulkStatusOpen && (
                   <>
-                    <div style={{position:"fixed", inset:0, zIndex:99}} onClick={() => setBulkStatusOpen(false)} />
+                    <div aria-hidden="true" style={{position:"fixed", inset:0, zIndex:99}} onClick={() => setBulkStatusOpen(false)} />
                     <div style={{position:"absolute", top:"100%", left:0, zIndex:100, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:"var(--radius)", minWidth:120, marginTop:4, boxShadow:"0 4px 12px rgba(0,0,0,0.3)", overflow:"hidden"}}>
                       {["pass","fail","warn","skip","pending"].map(st => (
                         <div key={st} style={{padding:"7px 12px", cursor:"pointer"}} onClick={() => handleBulkStatus(st)}>
@@ -550,6 +558,7 @@ function NewTestModal({ folders, defaultFolderId, onClose, onCreate }) {
   const [cfDefs] = useCustomFieldDefs("test");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState(null);
+  const modal = useModal(onClose, { labelledBy: "new-test-title" });
 
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -588,11 +597,11 @@ function NewTestModal({ folders, defaultFolderId, onClose, onCreate }) {
   };
 
   return (
-    <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} onClick={onClose}>
-      <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:480, maxHeight:"80vh", overflowY:"auto"}} onClick={e => e.stopPropagation()}>
+    <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} {...modal.overlayProps}>
+      <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:480, maxHeight:"80vh", overflowY:"auto"}} {...modal.dialogProps}>
         <div style={{display:"flex", alignItems:"center", marginBottom:20}}>
-          <h2 style={{fontSize:15, fontWeight:600, margin:0}}>New test case</h2>
-          <button className="btn ghost icon sm" style={{marginLeft:"auto"}} onClick={onClose}><Icon name="x" /></button>
+          <h2 id="new-test-title" style={{fontSize:15, fontWeight:600, margin:0}}>New test case</h2>
+          <button className="btn ghost icon sm" style={{marginLeft:"auto"}} onClick={onClose} aria-label="Close"><Icon name="x" /></button>
         </div>
 
         <div style={{display:"flex", flexDirection:"column", gap:14}}>
@@ -658,9 +667,10 @@ function FormField({ label, hint, children }) {
 }
 
 function ConfirmDialog({ title, body, onConfirm, onCancel }) {
+  const modal = useModal(onCancel);
   return (
-    <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} onClick={onCancel}>
-      <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:400}} onClick={e => e.stopPropagation()}>
+    <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} {...modal.overlayProps}>
+      <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:400}} {...modal.dialogProps}>
         <h2 style={{fontSize:15, fontWeight:600, margin:"0 0 10px"}}>{title}</h2>
         <p style={{fontSize:12.5, color:"var(--text-muted)", margin:"0 0 20px", lineHeight:1.5}}>{body}</p>
         <div style={{display:"flex", gap:8, justifyContent:"flex-end"}}>

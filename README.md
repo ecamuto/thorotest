@@ -2,9 +2,9 @@
 
 > **Self-hosted test management that treats manual and automated tests as one timeline.** Organize, run, and track every test — trace features, stories, and epics to the tests that cover them, and see coverage at a glance.
 
-[![version](https://img.shields.io/badge/version-1.12.0-blue)](package.json)
+[![version](https://img.shields.io/badge/version-1.13.0-blue)](package.json)
 [![license](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-705%20unit%20%2B%2037%20e2e%20suites-brightgreen)](#tests)
+[![tests](https://img.shields.io/badge/tests-705%20unit%20%2B%2038%20e2e%20suites-brightgreen)](#tests)
 [![backend](https://img.shields.io/badge/backend-FastAPI-009688)](#stack)
 [![frontend](https://img.shields.io/badge/frontend-React%2018-61DAFB)](#stack)
 [![docker](https://img.shields.io/badge/deploy-Docker-2496ED)](#quickstart)
@@ -23,7 +23,7 @@
 
 ## Contents
 
-[Why](#why-thorotest) · [Features](#features) · [Stack](#stack) · [Quickstart](#quickstart) · [Quick example](#quick-example) · [Tests as Code](#tests-as-code-github--gitlab-sync) · [Jira](#jira-integration) · [Requirements](#requirements--coverage) · [Import](#test-import) · [CI](#ci-run-pipelines-and-import-results) · [Docs](#documentation) · [Roadmap](#roadmap) · [License](#license)
+[Why](#why-thorotest) · [Features](#features) · [Stack](#stack) · [Quickstart](#quickstart) · [Quick example](#quick-example) · [Tests as Code](#tests-as-code-github--gitlab-sync) · [Jira](#jira-integration) · [Requirements](#requirements--coverage) · [Import](#test-import) · [CI](#ci-run-pipelines-and-import-results) · [Docs](#documentation) · [Roadmap](#roadmap) · [Contributing](#contributing--security) · [License](#license)
 
 ---
 
@@ -357,7 +357,7 @@ lives in one place (the run), never in the YAML.
 
 ## Tests
 
-**705 backend unit tests** (pytest) + **37 Playwright e2e suites** covering every major flow — CI-gated.
+**705 backend unit tests** (pytest) + **38 Playwright e2e suites** covering every major flow — CI-gated.
 
 ```bash
 make test        # backend unit tests
@@ -390,6 +390,19 @@ All 7 production-readiness items are **done** (v1.0), and post-v1 features shipp
 - ⏳ SSO / SAML / SCIM.
 
 Have a request? [Open an issue](https://github.com/ecamuto/thorotest/issues).
+
+---
+
+## Contributing & security
+
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — setup, the review bar, and the
+  conventions that aren't obvious from the code (migrations, the bundler-less
+  frontend, i18n, accessibility).
+- **[SECURITY.md](SECURITY.md)** — how to report a vulnerability privately,
+  what's in scope, and the known limitations of the current design.
+- **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** — Contributor Covenant 2.1.
+
+Please report security issues privately rather than opening an issue.
 
 ---
 

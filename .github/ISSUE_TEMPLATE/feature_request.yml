@@ -1,0 +1,45 @@
+name: Feature request
+description: Suggest a capability or an improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please describe the **problem** before the solution — it often changes
+        what the right solution is.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you hitting
+      description: >
+        The workflow that is painful today, and what you currently do instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like to happen
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Including whether an existing feature nearly covers it.
+
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you be willing to implement this?
+      description: >
+        Not a commitment. It helps to know whether to scope this as a
+        maintainer task or a collaboration.
+      options:
+        - "Yes, with guidance on the approach"
+        - "Yes, I can take it end to end"
+        - "No, just proposing"
+    validations:
+      required: true

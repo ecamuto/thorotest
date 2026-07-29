@@ -1,0 +1,82 @@
+name: Bug report
+description: Something behaves differently than documented or expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not report security vulnerabilities here.** Use
+        [private reporting](https://github.com/ecamuto/thorotest/security/advisories/new)
+        instead — see [SECURITY.md](https://github.com/ecamuto/thorotest/blob/main/SECURITY.md).
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: >
+        Numbered steps, or a `curl` command. A reproduction against a fresh
+        `make demo` database is the fastest route to a fix.
+      placeholder: |
+        1. Sign in as an admin
+        2. Go to Library ▸ New test
+        3. …
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: From the About page, `GET /api/about`, or `package.json`.
+      placeholder: "1.12.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: How is it deployed
+      options:
+        - Local (make dev)
+        - Docker + PostgreSQL
+        - Docker + SQLite
+        - Bare metal / other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: database
+    attributes:
+      label: Database
+      options:
+        - SQLite
+        - PostgreSQL
+        - MySQL / MariaDB
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and console output
+      description: >
+        Server log around the failure, and the browser console for UI issues.
+        Redact tokens and credentials before pasting.
+      render: shell
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant configuration
+      description: >
+        Any non-default environment variables — for example
+        `ALLOW_OPEN_REGISTRATION`, `DEMO_MODE`, `AI_PROVIDER`. **Never paste
+        `SECRET_KEY`, API keys, or integration tokens.**
