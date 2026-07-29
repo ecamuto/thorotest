@@ -58,6 +58,7 @@ Already on TestRail/Zephyr/Xray? The import pipeline is built for **migrating of
 - **Full auth stack** — JWT, RBAC, TOTP 2FA, GitHub/Google OAuth, audit log, API tokens, HMAC webhooks.
 - **Self-contained** — React, fonts, all assets served locally; zero external requests, works airgapped.
 - **BYOK AI assistant** — edge-case generation etc. via Claude or any OpenAI-compatible / local LLM. Off unless a key is set.
+- **Works on a phone, and without a mouse** — responsive layout with a collapsing nav drawer; dialogs and menus are keyboard-operable (focus management, focus trap, Escape) and covered by a dedicated e2e suite.
 - **i18n** — en / it / de / es / fr.
 
 ---
@@ -362,7 +363,12 @@ lives in one place (the run), never in the YAML.
 ```bash
 make test        # backend unit tests
 make test-e2e    # Playwright e2e (needs `make dev` running)
+make test-all    # the full CI gate, locally
 ```
+
+Suites worth knowing about: `suite9-security` (auth and authorization boundaries)
+and `suite20-a11y` (keyboard access, focus management, dialog semantics) — both
+cover behaviour that is invisible in a screenshot and easy to regress silently.
 
 Full test layout and the live GitLab integration test → [docs/api.md#tests](docs/api.md#tests).
 
