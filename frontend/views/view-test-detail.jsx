@@ -7,6 +7,7 @@ function TestDetail({ testId, onBack, currentUser }) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const deleteModal = useModal(() => setDeleteConfirm(false), { open: deleteConfirm });
   const [saving, setSaving] = useState(false);
   const [defectCount, setDefectCount] = useState(null);
   const [reqCount, setReqCount] = useState(null);
@@ -153,8 +154,8 @@ function TestDetail({ testId, onBack, currentUser }) {
       </div>
 
       {deleteConfirm && (
-        <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} onClick={() => setDeleteConfirm(false)}>
-          <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:400}} onClick={e => e.stopPropagation()}>
+        <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} {...deleteModal.overlayProps}>
+          <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:400}} {...deleteModal.dialogProps}>
             <h2 style={{fontSize:15, fontWeight:600, margin:"0 0 10px"}}>Delete {test.id}?</h2>
             <p style={{fontSize:12.5, color:"var(--text-muted)", margin:"0 0 20px", lineHeight:1.5}}>"{test.title}" will be permanently deleted.</p>
             <div style={{display:"flex", gap:8, justifyContent:"flex-end"}}>
@@ -606,6 +607,8 @@ function DefectsTab({ test, currentUser }) {
   const [saving, setSaving] = useState(false);
   const [runs, setRuns] = useState([]);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const createDefectModal = useModal(() => setShowCreate(false), { open: showCreate });
+  const deleteDefectModal = useModal(() => setDeleteConfirmId(null), { open: !!deleteConfirmId });
 
   useEffect(() => {
     setLoading(true);
@@ -720,8 +723,8 @@ function DefectsTab({ test, currentUser }) {
       )}
 
       {showCreate && (
-        <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} onClick={() => setShowCreate(false)}>
-          <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:480}} onClick={e => e.stopPropagation()}>
+        <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} {...createDefectModal.overlayProps}>
+          <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:480}} {...createDefectModal.dialogProps}>
             <h2 style={{fontSize:15, fontWeight:600, margin:"0 0 16px"}}>Create defect</h2>
             <div style={{display:"flex", flexDirection:"column", gap:10}}>
               <div>
@@ -762,8 +765,8 @@ function DefectsTab({ test, currentUser }) {
       )}
 
       {deleteConfirmId && (
-        <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} onClick={() => setDeleteConfirmId(null)}>
-          <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:360}} onClick={e => e.stopPropagation()}>
+        <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} {...deleteDefectModal.overlayProps}>
+          <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:360}} {...deleteDefectModal.dialogProps}>
             <h2 style={{fontSize:15, fontWeight:600, margin:"0 0 10px"}}>Delete {deleteConfirmId}?</h2>
             <p style={{fontSize:12.5, color:"var(--text-muted)", margin:"0 0 20px"}}>This action is permanent.</p>
             <div style={{display:"flex", gap:8, justifyContent:"flex-end"}}>

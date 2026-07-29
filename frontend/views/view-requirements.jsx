@@ -29,6 +29,7 @@ function Requirements({ currentUser }) {
   const [filterCovered, setFilterCovered] = useState("all");
   const [editing, setEditing] = useState(null); // requirement object or {} for new
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const deleteModal = useModal(() => setDeleteConfirmId(null), { open: !!deleteConfirmId });
 
   const canWrite = !currentUser || ["admin", "manager", "tester"].includes(currentUser.role);
   const canDelete = !currentUser || currentUser.role === "admin";
@@ -195,8 +196,8 @@ function Requirements({ currentUser }) {
       )}
 
       {deleteConfirmId && (
-        <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} onClick={() => setDeleteConfirmId(null)}>
-          <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:360}} onClick={e => e.stopPropagation()}>
+        <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} {...deleteModal.overlayProps}>
+          <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:360}} {...deleteModal.dialogProps}>
             <h2 style={{fontSize:15, fontWeight:600, margin:"0 0 10px"}}>Delete {deleteConfirmId}?</h2>
             <p style={{fontSize:12.5, color:"var(--text-muted)", margin:"0 0 20px"}}>This unlinks it from all tests. Permanent.</p>
             <div style={{display:"flex", gap:8, justifyContent:"flex-end"}}>
@@ -262,6 +263,7 @@ function TestPicker({ selected, onChange }) {
 }
 
 function RequirementModal({ requirement, onClose, onSaved }) {
+  const modal = useModal(onClose);
   const isNew = !requirement;
   const [form, setForm] = useState({
     title: requirement?.title || "",
@@ -303,8 +305,8 @@ function RequirementModal({ requirement, onClose, onSaved }) {
   const L = { fontSize:11, color:"var(--text-dim)", textTransform:"uppercase", letterSpacing:"0.06em", display:"block", marginBottom:4 };
 
   return (
-    <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} onClick={onClose}>
-      <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:520, maxHeight:"85vh", overflowY:"auto"}} onClick={e => e.stopPropagation()}>
+    <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} {...modal.overlayProps}>
+      <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:520, maxHeight:"85vh", overflowY:"auto"}} {...modal.dialogProps}>
         <h2 style={{fontSize:15, fontWeight:600, margin:"0 0 16px"}}>{isNew ? "New requirement" : `Edit ${requirement.id}`}</h2>
         <div style={{display:"flex", flexDirection:"column", gap:10}}>
           <div>

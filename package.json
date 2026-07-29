@@ -1,6 +1,6 @@
 {
   "name": "thorotest",
-  "version": "1.12.0",
+  "version": "1.13.0",
   "description": "Source-available test management platform. Organize, run, and track tests across manual and automated suites \u2014 one timeline for both.",
   "main": "index.js",
   "scripts": {

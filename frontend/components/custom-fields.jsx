@@ -187,6 +187,7 @@ function CustomFieldsAdmin() {
 }
 
 function CustomFieldDefModal({ def, entityType, onClose, onSaved }) {
+  const modal = useModal(onClose);
   const isNew = !def;
   const [form, setForm] = useState({
     label: def?.label || "",
@@ -216,8 +217,8 @@ function CustomFieldDefModal({ def, entityType, onClose, onSaved }) {
   const L = { fontSize:11, color:"var(--text-dim)", textTransform:"uppercase", letterSpacing:"0.06em", display:"block", marginBottom:4 };
 
   return (
-    <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} onClick={onClose}>
-      <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:440}} onClick={e => e.stopPropagation()}>
+    <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} {...modal.overlayProps}>
+      <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:440}} {...modal.dialogProps}>
         <h2 style={{fontSize:15, fontWeight:600, margin:"0 0 16px"}}>
           {isNew ? `New ${entityType} field` : `Edit "${def.label}"`}
         </h2>

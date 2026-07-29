@@ -1,0 +1,12 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/ecamuto/thorotest/security/advisories/new
+    about: >
+      Please report privately, never as a public issue. See SECURITY.md for
+      what to include and what to expect.
+  - name: Question or usage help
+    url: https://github.com/ecamuto/thorotest/discussions
+    about: >
+      For "how do I…" questions. Check docs/ first — configuration, API, CLI,
+      and CI setup are documented there.

@@ -175,8 +175,10 @@ test.describe('Suite 13 — Docs & API View', () => {
     // Version card
     await expect(page.locator('text=About ThoroTest')).toBeVisible({ timeout: 8000 });
     await expect(page.locator('text=/^v\\d+\\.\\d+\\.\\d+$/').first()).toBeVisible();
-    // Current release is badged and expanded by default (its group badges are visible)
-    await expect(page.locator('text=current')).toBeVisible();
+    // Current release is badged and expanded by default (its group badges are visible).
+    // Scope to the badge element: a bare `text=current` also matches any changelog
+    // bullet containing the word, which is a strict-mode violation.
+    await expect(page.locator('span', { hasText: /^current$/ }).first()).toBeVisible();
     await expect(page.locator('text=Added').first()).toBeVisible();
     // Oldest release is listed
     await expect(page.locator('button:has-text("v1.0.0")')).toBeVisible();

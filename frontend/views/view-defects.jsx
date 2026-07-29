@@ -9,7 +9,9 @@ function Defects({ focusId }) {
   const [showCreate, setShowCreate] = useState(false);
   const [editingDefect, setEditingDefect] = useState(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const deleteModal = useModal(() => setDeleteConfirmId(null), { open: !!deleteConfirmId });
   const [historyId, setHistoryId] = useState(null);
+  const historyModal = useModal(() => setHistoryId(null), { open: !!historyId });
   const [runs, setRuns] = useState([]);
   const [cfDefs] = useCustomFieldDefs("defect");
 
@@ -251,8 +253,8 @@ function Defects({ focusId }) {
       )}
 
       {historyId && (
-        <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} onClick={() => setHistoryId(null)}>
-          <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, width:520, maxHeight:"85vh", overflowY:"auto"}} onClick={e => e.stopPropagation()}>
+        <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} {...historyModal.overlayProps}>
+          <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, width:520, maxHeight:"85vh", overflowY:"auto"}} {...historyModal.dialogProps}>
             <div style={{display:"flex", alignItems:"center", padding:"18px 22px 0"}}>
               <h2 style={{fontSize:15, fontWeight:600, margin:0}}>Change history — {historyId}</h2>
               <div className="spacer" style={{flex:1}} />
@@ -264,8 +266,8 @@ function Defects({ focusId }) {
       )}
 
       {deleteConfirmId && (
-        <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} onClick={() => setDeleteConfirmId(null)}>
-          <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:360}} onClick={e => e.stopPropagation()}>
+        <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} {...deleteModal.overlayProps}>
+          <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:360}} {...deleteModal.dialogProps}>
             <h2 style={{fontSize:15, fontWeight:600, margin:"0 0 10px"}}>Delete {deleteConfirmId}?</h2>
             <p style={{fontSize:12.5, color:"var(--text-muted)", margin:"0 0 20px"}}>This action is permanent.</p>
             <div style={{display:"flex", gap:8, justifyContent:"flex-end"}}>
@@ -280,6 +282,7 @@ function Defects({ focusId }) {
 }
 
 function CreateDefectModal({ runs, onClose, onCreated }) {
+  const modal = useModal(onClose);
   const [form, setForm] = useState({ title: "", severity: "med", run_id: "", test_id: "", description: "" });
   const [customFields, setCustomFields] = useState({});
   const [cfDefs] = useCustomFieldDefs("defect");
@@ -305,8 +308,8 @@ function CreateDefectModal({ runs, onClose, onCreated }) {
   };
 
   return (
-    <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} onClick={onClose}>
-      <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:500}} onClick={e => e.stopPropagation()}>
+    <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} {...modal.overlayProps}>
+      <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:500}} {...modal.dialogProps}>
         <h2 style={{fontSize:15, fontWeight:600, margin:"0 0 16px"}}>New defect</h2>
         <div style={{display:"flex", flexDirection:"column", gap:10}}>
           <div>
@@ -354,6 +357,7 @@ function CreateDefectModal({ runs, onClose, onCreated }) {
 }
 
 function EditDefectModal({ defect, onClose, onSaved }) {
+  const modal = useModal(onClose);
   const [form, setForm] = useState({
     title: defect.title || "",
     severity: defect.severity || "med",
@@ -385,8 +389,8 @@ function EditDefectModal({ defect, onClose, onSaved }) {
   const L = { fontSize:11, color:"var(--text-dim)", textTransform:"uppercase", letterSpacing:"0.06em", display:"block", marginBottom:4 };
 
   return (
-    <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} onClick={onClose}>
-      <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:500, maxHeight:"85vh", overflowY:"auto"}} onClick={e => e.stopPropagation()}>
+    <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center"}} {...modal.overlayProps}>
+      <div style={{background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, padding:24, width:500, maxHeight:"85vh", overflowY:"auto"}} {...modal.dialogProps}>
         <h2 style={{fontSize:15, fontWeight:600, margin:"0 0 16px"}}>Edit {defect.id}</h2>
         <div style={{display:"flex", flexDirection:"column", gap:10}}>
           <div>

@@ -8,6 +8,25 @@ This file is the single source of truth for the in-app About page
 (`GET /api/about` parses it), so keep the structure: one `## [x.y.z] - YYYY-MM-DD`
 heading per release, `### <Group>` subsections, `-` bullets.
 
+## [1.13.0] - 2026-07-29
+
+### Added
+- Keyboard and assistive-technology support for dialogs and dropdowns. All 15
+  modals now expose `role="dialog"` with `aria-modal`, move focus into the
+  dialog on open and back to the trigger on close, trap Tab inside, and close
+  on Escape. Filter and export dropdowns close on Escape; their click-catching
+  backdrops are marked `aria-hidden` and stay out of the tab order.
+- `useModal()` and `useDismissable()` in `frontend/components/hooks.jsx`, so
+  dialogs stop being hand-rolled per view. `useModal` also fixes a
+  long-standing annoyance: selecting text inside a dialog and releasing the
+  mouse over the backdrop no longer closes it.
+- E2E suite `suite20-a11y` (9 tests) covering dialog semantics, focus movement
+  and restoration, the focus trap, Escape dismissal, and skip-link behaviour —
+  none of which is visible in a screenshot, so it is easy to regress silently.
+- `SECURITY.md` (private reporting, scope, response targets, and the known
+  limitations of the current design), `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
+  issue forms, and a pull-request template.
+
 ## [1.12.0] - 2026-07-28
 
 Pre-launch security and accessibility pass. Two changes are breaking for
