@@ -10,7 +10,16 @@ from ..db import get_db
 from ..rate_limit import SlidingWindowLimiter
 from .. import models
 from ..schemas import UserCreate, UserLogin, UserOut, UserListItem, UserUpdate, PasswordChange, ForgotPasswordIn, ResetPasswordIn
-from ..auth_utils import hash_password, verify_password, verify_and_update, create_access_token, get_current_user, validate_password
+from ..auth_utils import (
+    WS_TICKET_EXPIRE_SECONDS,
+    create_access_token,
+    create_websocket_ticket,
+    get_current_user,
+    hash_password,
+    validate_password,
+    verify_and_update,
+    verify_password,
+)
 from ..totp_utils import create_partial_token
 from ..audit_utils import (
     log_event,
@@ -165,6 +174,26 @@ def logout(request: Request, db: Session = Depends(get_db), current_user: models
         description=f"{current_user.email} logged out",
         ip_address=ip,
     )
+
+
+@router.post("/auth/ws-ticket")
+def websocket_ticket(
+    request: Request,
+    current_user: models.User = Depends(get_current_user),
+):
+    """Mint a one-minute, WebSocket-only ticket from a browser session.
+
+    API tokens remain intended for CI/scripts and cannot be exchanged for a
+    browser push-channel credential.
+    """
+    auth = request.headers.get("Authorization", "")
+    raw = auth[7:] if auth.startswith("Bearer ") else ""
+    if raw.startswith("th_"):
+        raise HTTPException(status_code=403, detail="API tokens cannot open WebSockets")
+    return {
+        "ticket": create_websocket_ticket(current_user.id, current_user.token_version),
+        "expires_in": WS_TICKET_EXPIRE_SECONDS,
+    }
 
 
 @router.get("/me", response_model=UserOut)

@@ -13,6 +13,15 @@
     return h;
   }
 
+  async function getWebSocketTicket() {
+    const res = await fetch(BASE + "/api/auth/ws-ticket", {
+      method: "POST",
+      headers: authHeaders(),
+    });
+    if (!res.ok) throw new Error("WebSocket authentication failed");
+    return (await res.json()).ticket;
+  }
+
   async function loadInitialData() {
     const res = await fetch(BASE + "/api/initial-data", { headers: authHeaders() });
     if (!res.ok) throw new Error("API unavailable");
@@ -273,13 +282,14 @@
       return res.json();
     },
 
-    connectRunWS(runId) {
+    async connectRunWS(runId) {
       const proto = location.protocol === "https:" ? "wss" : "ws";
-      // Token goes in the query string: a browser cannot set an Authorization
-      // header on a WebSocket handshake. The server closes with 1008 without it.
-      const token = getToken() || "";
+      // Browsers cannot attach Authorization headers to WS handshakes. Exchange
+      // the session for a one-minute, WS-only ticket so the long-lived JWT never
+      // appears in access logs or proxy request URLs.
+      const ticket = await getWebSocketTicket();
       return new WebSocket(
-        `${proto}://${location.host}/ws/runs/${runId}?token=${encodeURIComponent(token)}`
+        `${proto}://${location.host}/ws/runs/${runId}?ticket=${encodeURIComponent(ticket)}`
       );
     },
 
@@ -1005,9 +1015,10 @@
       return res.json();
     },
 
-    connectNotifWS(token) {
+    async connectNotifWS() {
       const proto = location.protocol === "https:" ? "wss" : "ws";
-      return new WebSocket(`${proto}://${location.host}/ws/notifications?token=${encodeURIComponent(token)}`);
+      const ticket = await getWebSocketTicket();
+      return new WebSocket(`${proto}://${location.host}/ws/notifications?ticket=${encodeURIComponent(ticket)}`);
     },
 
     // Custom field definitions (admin-managed; values live on each record)

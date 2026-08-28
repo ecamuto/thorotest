@@ -22,22 +22,26 @@ function NotificationBell({ currentUser }) {
   // WebSocket connection for real-time push
   React.useEffect(() => {
     if (!currentUser) return;
-    const token = localStorage.getItem("th_token");
-    if (!token) return;
-    const ws = window.TH_API.connectNotifWS(token);
-    wsRef.current = ws;
-    ws.onmessage = (e) => {
-      try {
-        const notif = JSON.parse(e.data);
-        setNotifications(prev => {
-          const updated = [notif, ...prev];
-          return updated.slice(0, 20); // cap at 20
-        });
-      } catch {}
-    };
-    ws.onerror = () => {};
+    let ws;
+    let cancelled = false;
+    window.TH_API.connectNotifWS().then(socket => {
+      if (cancelled) { socket.close(); return; }
+      ws = socket;
+      wsRef.current = ws;
+      ws.onmessage = (e) => {
+        try {
+          const notif = JSON.parse(e.data);
+          setNotifications(prev => {
+            const updated = [notif, ...prev];
+            return updated.slice(0, 20); // cap at 20
+          });
+        } catch {}
+      };
+      ws.onerror = () => {};
+    }).catch(() => {});
     return () => {
-      ws.close();
+      cancelled = true;
+      if (ws) ws.close();
       wsRef.current = null;
     };
   }, [currentUser]);

@@ -9,6 +9,7 @@ Proves WBHK-01/02/03 are satisfied:
 
 import asyncio
 import json
+import socket
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
 from sqlalchemy.orm import sessionmaker
@@ -16,6 +17,19 @@ from sqlalchemy.orm import sessionmaker
 from backend import models
 from backend.webhook_utils import sign_payload
 from backend.notifications import _fire_webhooks
+
+
+@pytest.fixture(autouse=True)
+def _resolve_example_com_without_network(monkeypatch):
+    """Keep webhook unit tests deterministic in offline/restricted runners."""
+    original = socket.getaddrinfo
+
+    def resolve(host, port, *args, **kwargs):
+        if host == "example.com":
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", port))]
+        return original(host, port, *args, **kwargs)
+
+    monkeypatch.setattr(socket, "getaddrinfo", resolve)
 
 
 # ---------------------------------------------------------------------------

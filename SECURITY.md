@@ -49,8 +49,8 @@ and follows this policy.
 
 | Version | Supported |
 |---|---|
-| 1.12.x | ✅ |
-| < 1.12 | ❌ — upgrade to the latest minor |
+| 1.13.x | ✅ |
+| < 1.13 | ❌ — upgrade to the latest minor |
 
 Only the latest minor receives security fixes. There are no long-term support
 branches.
@@ -98,8 +98,8 @@ The application assumes the operator provides:
 
 - A strong `SECRET_KEY` (it refuses to start otherwise) — it signs sessions and
   encrypts TOTP secrets, so treat it as a master key and rotate it if exposed.
-- TLS termination. Nothing in the app requires HTTPS, but tokens travel in
-  `Authorization` headers and in the WebSocket query string.
+- TLS termination. Session tokens travel in `Authorization` headers. WebSocket
+  URLs carry only a one-minute, WebSocket-scoped ticket minted from the session.
 - Network placement appropriate to `ALLOW_OPEN_REGISTRATION`. With it off (the
   default), accounts are created only by an admin.
 

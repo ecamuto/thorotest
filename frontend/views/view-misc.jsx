@@ -1,8 +1,9 @@
 // Pipelines, Insights, Integrations, Landing — remaining views
 
-function Pipelines() {
+function Pipelines({ currentUser }) {
   const { data: D, loading, error } = useInitialData();
   const [rows, setRows] = React.useState(null);
+  const canManage = window.can && window.can(currentUser, "manage");
 
   // Seed the table from initial-data on first load.
   React.useEffect(() => { if (D?.pipelines) setRows(D.pipelines); }, [D]);
@@ -11,7 +12,7 @@ function Pipelines() {
   // (a "Run CI" writes a running row that finishes a bit later).
   const anyRunning = (rows || []).some(p => p.status === "running");
   React.useEffect(() => {
-    if (!anyRunning) return;
+    if (!anyRunning || !canManage) return;
     let inFlight = false;   // reconcile hits the CI provider — don't stack calls
     const id = setInterval(async () => {
       if (inFlight) return;
@@ -24,7 +25,7 @@ function Pipelines() {
       finally { inFlight = false; }
     }, 5000);
     return () => clearInterval(id);
-  }, [anyRunning]);
+  }, [anyRunning, canManage]);
 
   async function del(id, name, e) {
     e.stopPropagation();   // don't also open the run URL

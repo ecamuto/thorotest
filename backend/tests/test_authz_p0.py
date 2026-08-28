@@ -121,6 +121,10 @@ def test_create_webhook_rejects_unsafe_url(client, monkeypatch, bad_url):
 
 def test_create_webhook_allows_public_url(client, monkeypatch):
     monkeypatch.delenv("WEBHOOK_ALLOW_PRIVATE_HOSTS", raising=False)
+    monkeypatch.setattr(
+        "backend.net_guard.socket.getaddrinfo",
+        lambda *args, **kwargs: [(2, 1, 6, "", ("93.184.216.34", 443))],
+    )
     r = client.post("/api/webhooks", json={"url": "https://example.com/hook", "events": []})
     assert r.status_code == 201, r.text
 

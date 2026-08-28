@@ -4,7 +4,8 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -17,6 +18,7 @@ logger = logging.getLogger("thorotest.auth")
 
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_DAYS = 7
+WS_TICKET_EXPIRE_SECONDS = 60
 
 # Historic placeholder that shipped in .env.example. Still rejected by name so an
 # existing .env carried forward from an older checkout fails loudly rather than
@@ -130,7 +132,25 @@ def verify_and_update(plain: str, hashed: str) -> Tuple[bool, Optional[str]]:
 
 def create_access_token(user_id: int, token_version: int = 0) -> str:
     expire = datetime.now(timezone.utc) + timedelta(days=TOKEN_EXPIRE_DAYS)
-    payload = {"sub": str(user_id), "exp": expire, "tv": int(token_version or 0)}
+    payload = {
+        "sub": str(user_id), "scope": "session", "exp": expire,
+        "tv": int(token_version or 0),
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_websocket_ticket(user_id: int, token_version: int = 0) -> str:
+    """Issue a narrowly scoped, short-lived credential for a WS handshake.
+
+    Browsers cannot attach an Authorization header to WebSocket handshakes. A
+    ticket may therefore appear in a query string, but unlike the seven-day
+    session JWT it expires in one minute and cannot authenticate REST/GraphQL.
+    """
+    expire = datetime.now(timezone.utc) + timedelta(seconds=WS_TICKET_EXPIRE_SECONDS)
+    payload = {
+        "sub": str(user_id), "scope": "websocket", "exp": expire,
+        "tv": int(token_version or 0),
+    }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -192,8 +212,12 @@ def get_optional_user(
         return _user_from_api_token(credentials.credentials, db, request.method)
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        # Legacy session JWTs had no scope. Continue accepting those until their
+        # natural seven-day expiry, but never promote 2FA-pending or WS tickets.
+        if payload.get("scope") not in (None, "session"):
+            return None
         user_id = int(payload.get("sub"))
-    except (JWTError, ValueError, TypeError):
+    except (PyJWTError, ValueError, TypeError):
         return None
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if user is None:
@@ -209,21 +233,40 @@ def get_optional_user(
 def user_from_bearer_token(token: str, db: Session) -> Optional[models.User]:
     """Resolve a raw bearer token string to a User, or None.
 
-    The transport-independent core of get_optional_user, for callers that cannot
-    use FastAPI dependencies — WebSocket handlers (which take the token as a
-    query parameter, since browsers cannot set headers on a WS handshake) and the
-    GraphQL context builder. Applies the same token_version revocation check, so
-    a revoked token cannot open a socket that a REST call would reject.
+    The transport-independent core of get_optional_user for the GraphQL context
+    builder. Applies the same scope and token_version checks as REST so GraphQL
+    cannot accept a partial or revoked session.
 
-    API tokens are deliberately NOT accepted here: they are for CI and scripts,
-    which have no reason to open a browser push channel.
+    API tokens are deliberately not accepted here; REST resolves those through
+    the database-backed API-token path instead.
     """
     if not token:
         return None
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("scope") not in (None, "session"):
+            return None
         user_id = int(payload.get("sub"))
-    except (JWTError, ValueError, TypeError):
+    except (PyJWTError, ValueError, TypeError):
+        return None
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if user is None:
+        return None
+    if int(payload.get("tv", 0)) != int(user.token_version or 0):
+        return None
+    return user
+
+
+def user_from_websocket_ticket(ticket: str, db: Session) -> Optional[models.User]:
+    """Resolve only a scope=websocket ticket; session/API/2FA tokens fail."""
+    if not ticket:
+        return None
+    try:
+        payload = jwt.decode(ticket, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("scope") != "websocket":
+            return None
+        user_id = int(payload.get("sub"))
+    except (PyJWTError, ValueError, TypeError):
         return None
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if user is None:
