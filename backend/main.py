@@ -35,7 +35,7 @@ def _set_sqlite_pragmas(dbapi_conn, connection_record):
 from .seed import init_db, seed_db
 from .ws_manager import manager
 from .notifications import notif_manager
-from .auth_utils import get_current_user, user_from_bearer_token
+from .auth_utils import get_current_user, user_from_websocket_ticket
 from .gql_schema import graphql_router
 from .routers import folders, tests, runs, plans, pipelines, activity, auth, projects, categories, defects, requirements, integrations, tokens, webhooks, favorites, import_, attachments, admin, ai, notifications, audit_log, oauth, totp, ci, history, sync, about, custom_fields
 
@@ -617,11 +617,11 @@ async def initial_data(db: Session = Depends(get_db), _: models.User = Depends(g
 # WebSocket for live run updates.
 # Authenticated: run state is workspace data, and an unauthenticated socket is
 # also an unbounded resource (connections are only reclaimed on clean disconnect).
-# The token arrives as a query parameter because a browser cannot set headers on
-# a WebSocket handshake — same approach as /ws/notifications below.
+# A one-minute, WS-only ticket arrives in the query string because a browser
+# cannot set headers on a WebSocket handshake. Session JWTs are never accepted.
 @app.websocket("/ws/runs/{run_id}")
-async def run_ws(run_id: str, websocket: WebSocket, token: str = "", db: Session = Depends(get_db)):
-    user = user_from_bearer_token(token, db)
+async def run_ws(run_id: str, websocket: WebSocket, ticket: str = "", db: Session = Depends(get_db)):
+    user = user_from_websocket_ticket(ticket, db)
     if user is None:
         await websocket.close(code=1008)
         return
@@ -650,9 +650,9 @@ async def run_ws(run_id: str, websocket: WebSocket, token: str = "", db: Session
 
 
 @app.websocket("/ws/notifications")
-async def notifications_ws(websocket: WebSocket, token: str = "", db: Session = Depends(get_db)):
-    """Per-user notification push channel. Token passed as query param (WS cannot set headers)."""
-    user = user_from_bearer_token(token, db)
+async def notifications_ws(websocket: WebSocket, ticket: str = "", db: Session = Depends(get_db)):
+    """Per-user notification push channel authenticated by a short WS ticket."""
+    user = user_from_websocket_ticket(ticket, db)
     if user is None:
         await websocket.close(code=1008)
         return

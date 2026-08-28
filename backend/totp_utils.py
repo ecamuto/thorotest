@@ -16,7 +16,8 @@ import pyotp
 import qrcode
 from cryptography.fernet import Fernet
 from fastapi import HTTPException
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError
 
 from .auth_utils import SECRET_KEY, ALGORITHM, pwd_context
 from .rate_limit import SlidingWindowLimiter
@@ -81,7 +82,7 @@ def decode_partial_token(token: str) -> int:
         if payload.get("scope") != "2fa_pending":
             raise HTTPException(status_code=401, detail="Invalid token scope")
         return int(payload["sub"])
-    except JWTError:
+    except PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 

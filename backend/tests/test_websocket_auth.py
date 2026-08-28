@@ -7,7 +7,8 @@ each open socket was an unreclaimed resource.
 import pytest
 
 from backend import models
-from backend.auth_utils import create_access_token, hash_password
+from backend.auth_utils import create_access_token, create_websocket_ticket, hash_password
+from backend.totp_utils import create_partial_token
 
 
 @pytest.fixture
@@ -36,37 +37,69 @@ def _connect(client, url):
 
 
 @pytest.mark.parametrize("url", [
-    "/ws/runs/R-WS",                  # no token at all
-    "/ws/runs/R-WS?token=",           # empty token
-    "/ws/runs/R-WS?token=garbage",    # unparseable token
+    "/ws/runs/R-WS",                    # no ticket at all
+    "/ws/runs/R-WS?ticket=",            # empty ticket
+    "/ws/runs/R-WS?ticket=garbage",     # unparseable ticket
 ])
 def test_run_ws_rejects_unauthenticated(client, ws_user, url):
     assert _connect(client, url) is False
 
 
-def test_run_ws_accepts_valid_token(client, ws_user):
+def test_run_ws_accepts_valid_ticket(client, ws_user):
+    ticket = create_websocket_ticket(ws_user.id, ws_user.token_version)
+    assert _connect(client, f"/ws/runs/R-WS?ticket={ticket}") is True
+
+
+def test_ws_ticket_endpoint_returns_narrow_credential(client, db, ws_user):
+    response = client.post("/api/auth/ws-ticket")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["expires_in"] == 60
+    assert _connect(client, f"/ws/runs/R-WS?ticket={data['ticket']}") is True
+    # A WS ticket must never be promoted into a REST session.
+    assert client.get(
+        "/api/me", headers={"Authorization": f"Bearer {data['ticket']}"}
+    ).status_code == 401
+
+
+def test_run_ws_rejects_full_session_token(client, ws_user):
     token = create_access_token(ws_user.id, ws_user.token_version)
-    assert _connect(client, f"/ws/runs/R-WS?token={token}") is True
+    assert _connect(client, f"/ws/runs/R-WS?ticket={token}") is False
+
+
+def test_partial_2fa_token_is_not_a_session_or_ws_ticket(client, ws_user):
+    partial = create_partial_token(ws_user.id)
+    assert client.get(
+        "/api/me", headers={"Authorization": f"Bearer {partial}"}
+    ).status_code == 401
+    gql = client.post(
+        "/graphql",
+        headers={"Authorization": f"Bearer {partial}"},
+        json={"query": "{ tests { id } }"},
+    ).json()
+    assert gql.get("data") is None
+    assert gql.get("errors")
+    assert _connect(client, f"/ws/runs/R-WS?ticket={partial}") is False
 
 
 def test_run_ws_rejects_revoked_token(client, db, ws_user):
     """A token invalidated by logout / password reset must not open a socket
     that a REST call with the same token would reject."""
-    token = create_access_token(ws_user.id, ws_user.token_version)
+    ticket = create_websocket_ticket(ws_user.id, ws_user.token_version)
     ws_user.token_version = (ws_user.token_version or 0) + 1
     db.commit()
-    assert _connect(client, f"/ws/runs/R-WS?token={token}") is False
+    assert _connect(client, f"/ws/runs/R-WS?ticket={ticket}") is False
 
 
 def test_notifications_ws_rejects_revoked_token(client, db, ws_user):
     """The notifications socket decoded the JWT but skipped the token_version
     check that every other entry point performs."""
-    token = create_access_token(ws_user.id, ws_user.token_version)
+    ticket = create_websocket_ticket(ws_user.id, ws_user.token_version)
     ws_user.token_version = (ws_user.token_version or 0) + 1
     db.commit()
     from starlette.websockets import WebSocketDisconnect
     try:
-        with client.websocket_connect(f"/ws/notifications?token={token}") as ws:
+        with client.websocket_connect(f"/ws/notifications?ticket={ticket}") as ws:
             ws.send_text("ping")
         opened = True
     except WebSocketDisconnect:
@@ -78,4 +111,7 @@ def test_api_token_cannot_open_websocket(client, ws_user):
     """API tokens are for CI and scripts — they have no reason to open a browser
     push channel, and accepting them would widen the blast radius of a leak."""
     raw = client.post("/api/tokens", json={"name": "ci", "scope": "write"}).json()["token"]
-    assert _connect(client, f"/ws/runs/R-WS?token={raw}") is False
+    assert _connect(client, f"/ws/runs/R-WS?ticket={raw}") is False
+    assert client.post(
+        "/api/auth/ws-ticket", headers={"Authorization": f"Bearer {raw}"}
+    ).status_code == 403

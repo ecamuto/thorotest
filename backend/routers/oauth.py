@@ -20,7 +20,7 @@ from urllib.parse import urlencode
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
-from jose import jwt as jose_jwt
+import jwt as jose_jwt
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 

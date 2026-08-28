@@ -299,8 +299,10 @@ function RunDetail({ runId, onBack, currentUser }) {
   React.useEffect(() => {
     if (!liveRun || liveRun.status !== "running" || !window.TH_API) return;
     let ws;
-    try {
-      ws = window.TH_API.connectRunWS(liveRun.id);
+    let cancelled = false;
+    window.TH_API.connectRunWS(liveRun.id).then(socket => {
+      if (cancelled) { socket.close(); return; }
+      ws = socket;
       ws.onmessage = (e) => {
         const msg = JSON.parse(e.data);
         if (msg.event === "step") {
@@ -321,8 +323,8 @@ function RunDetail({ runId, onBack, currentUser }) {
           setLiveRun(prev => ({ ...prev, ...msg }));
         }
       };
-    } catch (_) {}
-    return () => { if (ws) ws.close(); };
+    }).catch(() => {});
+    return () => { cancelled = true; if (ws) ws.close(); };
   }, [liveRun?.id, liveRun?.status]);
 
   // Recompute run counters/status/progress locally from the case list, so the
