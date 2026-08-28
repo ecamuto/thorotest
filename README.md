@@ -4,7 +4,7 @@
 
 [![version](https://img.shields.io/badge/version-1.13.0-blue)](package.json)
 [![license](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-705%20unit%20%2B%2038%20e2e%20suites-brightgreen)](#tests)
+[![tests](https://img.shields.io/badge/tests-712%20unit%20%2B%2038%20e2e%20suites-brightgreen)](#tests)
 [![backend](https://img.shields.io/badge/backend-FastAPI-009688)](#stack)
 [![frontend](https://img.shields.io/badge/frontend-React%2018-61DAFB)](#stack)
 [![docker](https://img.shields.io/badge/deploy-Docker-2496ED)](#quickstart)
@@ -72,7 +72,7 @@ Already on TestRail/Zephyr/Xray? The import pipeline is built for **migrating of
 | Database | PostgreSQL (recommended for production) · SQLite (default, eval/small installs) · MySQL / MariaDB (via `DATABASE_URL`) |
 | Realtime | WebSocket (native FastAPI) |
 | API | REST + GraphQL (Strawberry) |
-| Auth | JWT (python-jose), argon2id password hashing (passlib) |
+| Auth | JWT (PyJWT), argon2id password hashing (passlib) |
 | AI | Anthropic SDK (BYOK — optional) |
 | Export | PDF (fpdf2), CSV |
 | Tests | pytest, httpx, Playwright |
@@ -358,7 +358,7 @@ lives in one place (the run), never in the YAML.
 
 ## Tests
 
-**705 backend unit tests** (pytest) + **38 Playwright e2e suites** covering every major flow — CI-gated.
+**712 backend unit tests** (pytest) + **38 Playwright e2e suites** covering every major flow — CI-gated.
 
 ```bash
 make test        # backend unit tests

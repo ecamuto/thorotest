@@ -8,6 +8,24 @@ This file is the single source of truth for the in-app About page
 (`GET /api/about` parses it), so keep the structure: one `## [x.y.z] - YYYY-MM-DD`
 heading per release, `### <Group>` subsections, `-` bullets.
 
+## [Unreleased]
+
+### Security
+- Reject `2fa_pending` and WebSocket-scoped JWTs at every REST and GraphQL
+  session-authentication path. A user who had passed the password step but not
+  TOTP could previously present the partial token as a full bearer session.
+- Exchange browser sessions for one-minute, WebSocket-only tickets instead of
+  placing seven-day session JWTs in WebSocket query strings and access logs.
+- Restrict category mutations and provider-backed pipeline reconciliation to
+  managers and administrators; self-registered read-only viewers could
+  previously invoke both, and testers could change shared categories.
+- Replace `python-jose` and its unfixed `ecdsa` advisory with PyJWT backed by
+  `cryptography`; dependency auditing now blocks CI and has no ignored finding.
+
+### Tests
+- Stub public DNS resolution in webhook unit tests so restricted/offline test
+  runners exercise SSRF decisions deterministically.
+
 ## [1.13.0] - 2026-07-29
 
 ### Added

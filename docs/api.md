@@ -57,12 +57,19 @@ row count in the `X-Total-Count` response header.
 
 ### WebSocket
 
-Both sockets require a valid session token, passed as a `token` query parameter
-because a browser cannot set headers on a WebSocket handshake. Connections
-without one are closed with code 1008. API tokens are not accepted here.
+Both sockets require a short-lived WebSocket ticket. Exchange the browser
+session with `POST /api/auth/ws-ticket`, then pass the returned `ticket` in the
+query string because a browser cannot set headers on a WebSocket handshake.
+The ticket expires after 60 seconds, works only for WebSocket handshakes, and
+cannot authenticate REST or GraphQL. Session JWTs and API tokens are rejected
+by the socket endpoints.
 
-- `ws://localhost:8000/ws/runs/{run_id}?token=<jwt>` — emits `state`, `step`, `complete` events during a live run.
-- `ws://localhost:8000/ws/notifications?token=<jwt>` — per-user notification push channel.
+- `ws://localhost:8000/ws/runs/{run_id}?ticket=<ticket>` — emits `state`, `step`, `complete` events during a live run.
+- `ws://localhost:8000/ws/notifications?ticket=<ticket>` — per-user notification push channel.
+
+Category mutations and pipeline reconciliation are shared-configuration
+operations and require the `admin` or `manager` role. Viewers and testers can
+still list categories and pipelines.
 
 ## Tests
 
