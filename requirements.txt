@@ -1,8 +1,8 @@
-fastapi>=0.139.2
+fastapi>=0.140.13
 uvicorn[standard]>=0.51.0
 sqlalchemy>=2.0.51
 alembic>=1.18.5
-strawberry-graphql[fastapi]>=0.322.0
+strawberry-graphql[fastapi]>=0.323.2
 python-multipart>=0.0.32
 aiofiles>=25.1.0
 pytest>=9.1.1
@@ -11,8 +11,8 @@ python-jose[cryptography]>=3.5.0
 passlib>=1.7.4
 argon2-cffi>=25.1.0        # argon2id password hashing backend for passlib
 python-dotenv>=1.2.2
-anthropic>=0.117.0
-openai>=2.46.0             # only used when AI_PROVIDER=openai (OpenAI-compatible / local LLMs)
+anthropic>=0.120.2
+openai>=2.50.0             # only used when AI_PROVIDER=openai (OpenAI-compatible / local LLMs)
 fpdf2>=2.8.7
 pyotp>=2.10.0
 qrcode[pil]>=8.2
