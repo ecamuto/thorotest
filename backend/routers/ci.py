@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from ..db import get_db, SessionLocal
 from .. import models
-from ..auth_utils import require_role, get_current_user
+from ..auth_utils import require_role
 from ..github_actions import (
     GitHubActionsClient, ci_config, pick_dispatched_run, collect_run_results,
 )
@@ -374,7 +374,7 @@ def reconcile_running_pipelines(db) -> int:
 
 
 @router.post("/pipelines/reconcile")
-def pipelines_reconcile(db: Session = Depends(get_db), _: models.User = Depends(get_current_user)):
+def pipelines_reconcile(db: Session = Depends(get_db), _: models.User = WRITE_ROLES):
     """Poll the provider for any stuck 'running' pipelines and finalize them.
     Called by the pipelines page's live poll so rows self-heal. Returns the
     fresh pipeline list so the client can refresh in one round-trip."""

@@ -252,4 +252,22 @@ test.describe('Suite P2 — RBAC (Roles & Permissions)', () => {
     expect(status).toBe(403);
   });
 
+  // RBAC-10 · Shared configuration and provider reconciliation [P0]
+  test('RBAC-10: viewer cannot manage categories or reconcile pipelines', async ({ page }) => {
+    if (!viewerUserId) test.skip(true, 'viewer user not created in beforeAll');
+
+    await loginAs(page, VIEWER_EMAIL, VIEWER_PASS);
+    await page.click('a.nav-item[href="#/settings"]');
+    await page.waitForURL('**/#/settings', { timeout: 5000 });
+    await page.getByRole('button', { name: 'Categories' }).click();
+    await expect(page.getByText('Color-coded labels you can apply to tests.')).toBeVisible({ timeout: 5000 });
+    expect(await page.getByRole('button', { name: 'New category' }).count()).toBe(0);
+
+    const category = await apiJSON(page, 'POST', '/api/categories', {
+      id: 'viewer-forbidden', name: 'Forbidden', color: '#000000',
+    });
+    expect(category.status).toBe(403);
+    expect((await apiJSON(page, 'POST', '/api/pipelines/reconcile')).status).toBe(403);
+  });
+
 });

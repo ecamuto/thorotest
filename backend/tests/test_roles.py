@@ -180,3 +180,32 @@ class TestEndpointRoleGuards:
         resp = c.post("/api/tests/bulk", json={"action": "delete", "ids": []})
         # 200 with empty ids is acceptable (no-op delete)
         assert resp.status_code == 200
+
+    @pytest.mark.parametrize("role", ["viewer", "tester"])
+    @pytest.mark.parametrize("method,path,payload", [
+        ("post", "/api/categories", {"id": "rbac-cat", "name": "RBAC", "color": "#000000"}),
+        ("patch", "/api/categories/missing", {"name": "RBAC"}),
+        ("delete", "/api/categories/missing", None),
+    ])
+    def test_non_managers_cannot_mutate_categories(
+        self, auth_client, role, method, path, payload
+    ):
+        """Shared category configuration is manager/admin-only."""
+        client = auth_client(role)
+        kwargs = {"json": payload} if payload is not None else {}
+        assert getattr(client, method)(path, **kwargs).status_code == 403
+
+    def test_manager_can_create_category(self, auth_client):
+        response = auth_client("manager").post("/api/categories", json={
+            "id": "manager-cat", "name": "Managed", "color": "#000000",
+        })
+        assert response.status_code == 201
+
+    @pytest.mark.parametrize("role", ["viewer", "tester"])
+    def test_non_managers_cannot_reconcile_pipelines(self, auth_client, role):
+        assert auth_client(role).post("/api/pipelines/reconcile").status_code == 403
+
+    def test_manager_can_reconcile_pipelines(self, auth_client):
+        response = auth_client("manager").post("/api/pipelines/reconcile")
+        assert response.status_code == 200
+        assert response.json() == {"updated": 0, "pipelines": []}

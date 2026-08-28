@@ -41,7 +41,7 @@ function Settings({ currentUser, onProfileUpdate }) {
         {tab === "profile"    && <ProfileTab currentUser={currentUser} onProfileUpdate={onProfileUpdate} />}
         {tab === "password"   && <PasswordTab />}
         {tab === "projects"   && <ProjectsTab />}
-        {tab === "categories" && <CategoriesTab />}
+        {tab === "categories" && <CategoriesTab currentUser={currentUser} />}
         {tab === "folders"       && <FoldersTab />}
         {tab === "notifications" && <NotificationsTab currentUser={currentUser} />}
         {tab === "security"      && <SecurityTab currentUser={currentUser} />}
@@ -296,8 +296,9 @@ function ProjectsTab() {
 
 const DEFAULT_COLORS = ["#6366f1", "#0ea5e9", "#22c55e", "#f59e0b", "#ef4444", "#ec4899", "#8b5cf6", "#14b8a6"];
 
-function CategoriesTab() {
+function CategoriesTab({ currentUser }) {
   const { t } = useI18n();
+  const canManage = window.can && window.can(currentUser, "manage");
   const [categories, setCategories] = useState([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState(null);
@@ -349,7 +350,7 @@ function CategoriesTab() {
   return (
     <SettingSection title={t("settings.categoriesSection.title")} sub={t("settings.categoriesSection.sub")}>
       <div style={{ marginBottom: 12 }}>
-        <button className="btn" onClick={openCreate}><Icon name="plus" /> {t("settings.categoriesSection.newBtn")}</button>
+        {canManage && <button className="btn" onClick={openCreate}><Icon name="plus" /> {t("settings.categoriesSection.newBtn")}</button>}
       </div>
 
       {(creating || editing) && (
@@ -396,8 +397,8 @@ function CategoriesTab() {
               <span style={{ width: 12, height: 12, borderRadius: "50%", background: c.color, flexShrink: 0, display: "inline-block" }} />
               <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{c.name}</div>
               <span className="mono dim" style={{ fontSize: 11 }}>{c.color}</span>
-              <button className="btn ghost" style={{ fontSize: 11 }} onClick={() => openEdit(c)}>{t("common.edit")}</button>
-              <button className="btn ghost" style={{ fontSize: 11, color: "var(--fail)" }} onClick={() => remove(c.id)}>{t("common.delete")}</button>
+              {canManage && <button className="btn ghost" style={{ fontSize: 11 }} onClick={() => openEdit(c)}>{t("common.edit")}</button>}
+              {canManage && <button className="btn ghost" style={{ fontSize: 11, color: "var(--fail)" }} onClick={() => remove(c.id)}>{t("common.delete")}</button>}
             </div>
           ))}
         </div>
