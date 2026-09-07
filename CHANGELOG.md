@@ -10,6 +10,13 @@ heading per release, `### <Group>` subsections, `-` bullets.
 
 ## [Unreleased]
 
+### Added
+- Add the v1.14 shared-runtime foundation: one lifecycle-managed Redis client,
+  validated and secret-safe configuration, a traffic-readiness probe, and an
+  internal persistent Redis service in the production Compose topology.
+- Exercise Redis connectivity in CI while preserving Redis-free,
+  single-process local development.
+
 ### Security
 - Reject `2fa_pending` and WebSocket-scoped JWTs at every REST and GraphQL
   session-authentication path. A user who had passed the password step but not
@@ -25,6 +32,10 @@ heading per release, `### <Group>` subsections, `-` bullets.
 ### Tests
 - Stub public DNS resolution in webhook unit tests so restricted/offline test
   runners exercise SSRF decisions deterministically.
+
+### Fixed
+- Preserve application loggers when Alembic configures migration logging, so
+  runtime and readiness failures remain visible after schema startup.
 
 ## [1.13.0] - 2026-07-29
 

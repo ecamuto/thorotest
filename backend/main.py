@@ -35,6 +35,7 @@ def _set_sqlite_pragmas(dbapi_conn, connection_record):
 from .seed import init_db, seed_db
 from .ws_manager import manager
 from .notifications import notif_manager
+from .runtime_state import runtime_state
 from .auth_utils import get_current_user, user_from_websocket_ticket
 from .gql_schema import graphql_router
 from .routers import folders, tests, runs, plans, pipelines, activity, auth, projects, categories, defects, requirements, integrations, tokens, webhooks, favorites, import_, attachments, admin, ai, notifications, audit_log, oauth, totp, ci, history, sync, about, custom_fields
@@ -197,20 +198,23 @@ async def lifespan(app: FastAPI):
 
     _ensure_schema()
     init_db()
+    await runtime_state.start()
 
     task = None
     minutes = int(os.getenv("JIRA_AUTOSYNC_MINUTES", "0") or "0")
     if minutes > 0:
         task = asyncio.create_task(_jira_autosync_loop(minutes * 60))
 
-    yield
-
-    if task:
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+    try:
+        yield
+    finally:
+        if task:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        await runtime_state.close()
 
 
 app = FastAPI(title="ThoroTest API", lifespan=lifespan)
@@ -313,6 +317,39 @@ async def health():
         "uptime_seconds": int(time.monotonic() - _STARTED_AT),
     }
     return JSONResponse(body, status_code=200 if db_ok else 503)
+
+
+@app.get("/ready")
+async def readiness():
+    """Traffic-readiness probe for the database and shared runtime state.
+
+    Redis is healthy when connected or explicitly disabled for a single-process
+    deployment. A configured-but-unreachable Redis, or REDIS_REQUIRED without a
+    URL, returns 503. No connection details are exposed.
+    """
+    def _ping_db():
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+
+    try:
+        await asyncio.to_thread(_ping_db)
+        db_ok = True
+    except Exception:
+        logging.getLogger("thorotest.health").exception("Readiness DB ping failed")
+        db_ok = False
+
+    # start() logs an initial connection failure. Avoid repeating the same
+    # warning on every orchestrator probe while still allowing recovery.
+    redis_status = await runtime_state.probe()
+    redis_ok = redis_status in {"ok", "disabled"}
+    ready = db_ok and redis_ok
+    body = {
+        "status": "ready" if ready else "not_ready",
+        "database": "ok" if db_ok else "unreachable",
+        "redis": redis_status,
+        "uptime_seconds": int(time.monotonic() - _STARTED_AT),
+    }
+    return JSONResponse(body, status_code=200 if ready else 503)
 
 # REST
 app.include_router(folders.router, prefix="/api")

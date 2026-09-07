@@ -13,7 +13,10 @@ from backend import models  # noqa: E402
 
 config = context.config
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # Alembic runs inside application startup for existing releases. Preserve
+    # already-created thorotest.* loggers (including runtime/readiness logs)
+    # instead of disabling every logger not named in alembic.ini.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = models.Base.metadata
 

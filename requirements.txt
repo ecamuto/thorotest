@@ -19,6 +19,7 @@ qrcode[pil]>=8.2
 pyyaml>=6.0.3
 defusedxml>=0.7.1          # entity-expansion-safe XML parsing for untrusted imports
 openpyxl>=3.1.5            # .xlsx test-case imports
+redis>=5.2.1               # shared runtime state and cross-worker coordination
 # Optional DB drivers — install the one matching your DATABASE_URL
 psycopg2-binary>=2.9.12   # PostgreSQL
 pymysql>=1.2.0            # MySQL / MariaDB

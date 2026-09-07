@@ -9,18 +9,24 @@ services:
       # Both variables are required — compose fails fast with the message after
       # `?` rather than silently starting with a guessable credential.
       DATABASE_URL: postgresql://thorotest:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/thorotest
+      # Shared runtime coordination is required in the production topology.
+      # Redis is internal to the Compose network and is not published to host.
+      REDIS_URL: redis://redis:6379/0
+      REDIS_REQUIRED: "1"
       # Turns on production-only refusals (DEMO_MODE off, SQLite warning). The
       # SECRET_KEY check does not depend on this — it runs in every environment.
       ENVIRONMENT: production
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - uploads_data:/app/uploads
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status == 200 else 1)"]
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/ready', timeout=3).status == 200 else 1)"]
       interval: 30s
       timeout: 5s
       start_period: 15s
@@ -42,6 +48,19 @@ services:
       retries: 10
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   uploads_data:
+  redis_data:
