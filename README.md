@@ -4,7 +4,7 @@
 
 [![version](https://img.shields.io/badge/version-1.13.0-blue)](package.json)
 [![license](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-712%20unit%20%2B%2038%20e2e%20suites-brightgreen)](#tests)
+[![tests](https://img.shields.io/badge/tests-725%20unit%20%2B%2038%20e2e%20suites-brightgreen)](#tests)
 [![backend](https://img.shields.io/badge/backend-FastAPI-009688)](#stack)
 [![frontend](https://img.shields.io/badge/frontend-React%2018-61DAFB)](#stack)
 [![docker](https://img.shields.io/badge/deploy-Docker-2496ED)](#quickstart)
@@ -99,7 +99,7 @@ cp .env.example .env
 # Both are required — the app and compose refuse to start without them:
 printf 'SECRET_KEY=%s\n' "$(python3 -c 'import secrets;print(secrets.token_hex(32))')" >> .env
 printf 'POSTGRES_PASSWORD=%s\n' "$(python3 -c 'import secrets;print(secrets.token_urlsafe(24))')" >> .env
-make docker-up         # build image + start app and Postgres
+make docker-up         # build image + start app, Postgres, and internal Redis
 make open
 ```
 
@@ -111,7 +111,11 @@ printf 'SECRET_KEY=%s\n' "$(python3 -c 'import secrets;print(secrets.token_hex(3
 make docker-up-sqlite
 ```
 
-Database is created automatically on first run. Seed data: 19 test cases across 12 folders, 11 runs, 9 defects. Pipelines are not seeded — the page fills from real CI runs (Configure ▸ Integrations ▸ Run CI).
+Database is created automatically on first run. The production Compose topology
+also starts an internal Redis service used by the v1.14 shared-runtime
+foundation; Redis remains optional for single-process local development. Seed
+data: 19 test cases across 12 folders, 11 runs, 9 defects. Pipelines are not
+seeded — the page fills from real CI runs (Configure ▸ Integrations ▸ Run CI).
 
 First login uses the seeded admin — `admin@localhost`, with a random password printed once in the server log on first boot (set `ADMIN_INITIAL_PASSWORD` to choose it yourself; under `DEMO_MODE` it stays `admin`). Change it after signing in.
 
@@ -358,7 +362,7 @@ lives in one place (the run), never in the YAML.
 
 ## Tests
 
-**712 backend unit tests** (pytest) + **38 Playwright e2e suites** covering every major flow — CI-gated.
+**725 backend unit tests** (pytest) + **38 Playwright e2e suites** covering every major flow — CI-gated.
 
 ```bash
 make test        # backend unit tests

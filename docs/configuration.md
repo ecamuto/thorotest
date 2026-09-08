@@ -36,6 +36,11 @@ cp .env.example .env
 | Variable | Default | Description |
 |---|---|---|
 | `DATABASE_URL` | `sqlite:///./testhub.db` | Database connection string |
+| `REDIS_URL` | _(unset)_ | Shared runtime Redis URL. Optional only for single-process development; production Compose configures it automatically |
+| `REDIS_REQUIRED` | `0` | When `1`, missing or unreachable Redis makes `/ready` return 503; use on multi-worker/replica deployments |
+| `REDIS_KEY_PREFIX` | `thorotest` | Namespace for every Redis key/channel; change it when installations share one Redis database |
+| `REDIS_CONNECT_TIMEOUT_SECONDS` / `REDIS_SOCKET_TIMEOUT_SECONDS` | `2` / `2` | Positive Redis connection and operation timeouts |
+| `REDIS_JOB_TTL_SECONDS` | `86400` | TTL contract for ephemeral CI job state (60–2592000 seconds; consumed in V14-2) |
 | `SECRET_KEY` | **required** | Signs session JWTs and encrypts stored TOTP secrets. No default — the app refuses to start without one of at least 32 characters. `install.sh` generates it; set it yourself for Docker |
 | `ALLOW_INSECURE_SECRET_KEY` | _(unset)_ | Skips the `SECRET_KEY` check for a throwaway local run. **Never set this on a deployment** |
 | `ALLOW_OPEN_REGISTRATION` | _(unset)_ | Allows self-registration (`POST /api/auth/register`) and OAuth first-login provisioning. Off by default; new accounts get the read-only `viewer` role |
@@ -98,8 +103,22 @@ Login throttling, the AI request quota, and 2FA attempt limits are enforced
 **per process**. Running multiple uvicorn workers or replicas multiplies each
 effective limit by the number of processes, because each keeps its own
 counters — this matters most for the AI quota, which spends real API credit.
-Shared limits require Redis (roadmap item S-1). Until then, run a single worker
-or enforce limits at a proxy in front of the app.
+The v1.14 runtime foundation opens and health-checks one shared Redis pool;
+moving these counters to it is milestone V14-1. Until V14-1 lands, run a single
+worker or enforce limits at a proxy in front of the app.
+
+### Redis and readiness
+
+`/health` retains the existing database-health contract for compatibility.
+`/ready` is the traffic-readiness probe: it checks the database and Redis when
+configured. Redis reports `disabled` for an intentional single-process setup,
+`missing` when `REDIS_REQUIRED=1` has no URL, and `unreachable` when a configured
+server cannot be contacted. Responses never contain connection URLs or secrets.
+
+The production Compose stack includes an internal, persistent Redis service and
+sets `REDIS_REQUIRED=1`; Redis is not exposed on a host port. A custom multi-node
+deployment should supply a managed `redis://` or TLS `rediss://` URL and use a
+different `REDIS_KEY_PREFIX` for each ThoroTest installation sharing a database.
 
 **Backups:** all state lives in the database plus the `uploads/` directory — see
 [BACKUP.md](../BACKUP.md) for backup/restore procedures per database and for Docker deployments.

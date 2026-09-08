@@ -1,4 +1,5 @@
 """Alembic schema bootstrap (_ensure_schema): fresh, legacy, and managed DBs."""
+import logging
 import sqlite3
 
 import pytest
@@ -57,3 +58,12 @@ def test_legacy_db_gets_stamped(tmp_engine, tmp_path):
         "SELECT version_num FROM alembic_version"
     ).fetchone()
     assert row and row[0]
+
+
+def test_migration_preserves_application_loggers(tmp_engine):
+    from backend.main import _ensure_schema
+
+    runtime_logger = logging.getLogger("thorotest.runtime")
+    runtime_logger.disabled = False
+    _ensure_schema()
+    assert runtime_logger.disabled is False
