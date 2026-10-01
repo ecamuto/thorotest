@@ -1,25 +1,25 @@
 fastapi>=0.141.1
-uvicorn[standard]>=0.52.4
-sqlalchemy>=2.0.52
-alembic>=1.19.1
-strawberry-graphql[fastapi]>=0.324.2
+uvicorn[standard]>=0.54.0
+sqlalchemy>=2.1.1
+alembic>=1.20.0
+strawberry-graphql[fastapi]>=0.327.7
 python-multipart>=0.0.32
 aiofiles>=25.1.0
 pytest>=9.1.1
 httpx>=0.28.1
-PyJWT[crypto]>=2.13.0
+PyJWT[crypto]>=2.15.0
 passlib>=1.7.4
 argon2-cffi>=25.1.0        # argon2id password hashing backend for passlib
 python-dotenv>=1.2.3
-anthropic>=1.2.0
-openai>=3.6.0             # only used when AI_PROVIDER=openai (OpenAI-compatible / local LLMs)
+anthropic>=1.8.0
+openai>=3.19.2             # only used when AI_PROVIDER=openai (OpenAI-compatible / local LLMs)
 fpdf2>=2.8.8
 pyotp>=2.10.0
 qrcode[pil]>=8.2
 pyyaml>=6.0.3
 defusedxml>=0.7.1          # entity-expansion-safe XML parsing for untrusted imports
 openpyxl>=3.1.5            # .xlsx test-case imports
-redis>=5.2.1               # shared runtime state and cross-worker coordination
+redis>=8.1.0               # shared runtime state and cross-worker coordination
 # Optional DB drivers — install the one matching your DATABASE_URL
-psycopg2-binary>=2.9.12   # PostgreSQL
-pymysql>=1.2.0            # MySQL / MariaDB
+psycopg2-binary>=2.9.13   # PostgreSQL
+pymysql>=1.2.3            # MySQL / MariaDB
