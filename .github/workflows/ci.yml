@@ -62,6 +62,20 @@ jobs:
       - name: pip-audit against the lock
         run: pipx run pip-audit -r requirements.lock
 
+  container:
+    name: Production container build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate Compose topologies
+        env:
+          POSTGRES_PASSWORD: ci-validation-only
+        run: |
+          docker compose config --quiet
+          docker compose -f docker-compose.sqlite.yml config --quiet
+      - name: Build production image
+        run: docker build --tag thorotest:ci .
+
   cli:
     name: CLI tests (node:test)
     runs-on: ubuntu-latest
