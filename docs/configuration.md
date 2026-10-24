@@ -6,9 +6,10 @@
 |---|---|
 | `make setup` | Full setup: venv + deps + Playwright |
 | `make install` | Re-install deps into existing venv |
-| `make dev` | Build frontend + start backend dev server on `http://localhost:8000` (hot-reload) |
+| `make dev` | Build frontend, bootstrap the DB, and start the backend on `http://localhost:8000` (hot-reload) |
 | `make frontend-build` | Build frontend to `frontend/dist/` (transpile + minify + vendor assets) |
 | `make frontend-watch` | Rebuild frontend on change (run beside `make dev` when editing UI) |
+| `make db-bootstrap` | Apply migrations and create the first admin (safe/idempotent deployment step) |
 | `make db-reset` | Delete `testhub.db` — re-seeded on next `make dev` |
 | `make db-revision m="…"` | Create Alembic migration from model changes (autogenerate) |
 | `make db-upgrade` | Apply pending Alembic migrations |
@@ -40,13 +41,17 @@ cp .env.example .env
 | `REDIS_REQUIRED` | `0` | When `1`, missing or unreachable Redis makes `/ready` return 503; use on multi-worker/replica deployments |
 | `REDIS_KEY_PREFIX` | `thorotest` | Namespace for every Redis key/channel; change it when installations share one Redis database |
 | `REDIS_CONNECT_TIMEOUT_SECONDS` / `REDIS_SOCKET_TIMEOUT_SECONDS` | `2` / `2` | Positive Redis connection and operation timeouts |
-| `REDIS_JOB_TTL_SECONDS` | `86400` | TTL contract for ephemeral CI job state (60–2592000 seconds; consumed in V14-2) |
+| `REDIS_JOB_TTL_SECONDS` | `86400` | Retention of terminal durable CI-job rows (60–2592000 seconds) |
+| `AUTO_BOOTSTRAP` | _(unset)_ | One-release direct-install compatibility switch. Never enable with multiple workers; normal workers verify schema only |
+| `CI_WORKER_ENABLED` | `1` | Let this process claim durable provider jobs. Set `0` only when a separate worker deployment handles them |
 | `SECRET_KEY` | **required** | Signs session JWTs and encrypts stored TOTP secrets. No default — the app refuses to start without one of at least 32 characters. `install.sh` generates it; set it yourself for Docker |
 | `ALLOW_INSECURE_SECRET_KEY` | _(unset)_ | Skips the `SECRET_KEY` check for a throwaway local run. **Never set this on a deployment** |
 | `ALLOW_OPEN_REGISTRATION` | _(unset)_ | Allows self-registration (`POST /api/auth/register`) and OAuth first-login provisioning. Off by default; new accounts get the read-only `viewer` role |
 | `TESTHUB_BASE_URL` | `http://localhost:8000` | Public base URL (OAuth callbacks, default CORS origin) |
 | `ALLOWED_ORIGINS` | = `TESTHUB_BASE_URL` | CORS origins — comma-separated list, or `*` for any (dev only) |
 | `LOG_LEVEL` | `INFO` | Application log level (`DEBUG`, `INFO`, `WARNING`, …) |
+| `LOG_FORMAT` | `text` | Set `json` for structured production logs with request correlation and redaction |
+| `METRICS_ENABLED` | `1` | Expose Prometheus metrics at `/metrics`; restrict that route at the ingress |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | _(unset)_ | Outbound email — password resets **and** notification email. No-op if `SMTP_HOST` absent |
 | `API_TOKEN_EXPIRE_DAYS` | `90` | Lifetime of newly minted `th_…` API tokens |
 | `LOGIN_MAX_FAILURES` / `LOGIN_WINDOW_SECONDS` | `10` / `300` | Failed-login throttle. Counts failures only; a success clears the counter |
@@ -67,8 +72,8 @@ cp .env.example .env
 out-of-the-box default for evaluation and small single-team installs: it
 allows one writer at a time, so live runs, imports, and provider sync
 contend under load. `make docker-up` already provisions Postgres; for a
-bare-metal install, point `DATABASE_URL` at your server and the schema is
-created on first boot.
+bare-metal install, point `DATABASE_URL` at your server and run
+`python -m backend.bootstrap` before starting application workers.
 
 ```bash
 # PostgreSQL — recommended for production
@@ -99,26 +104,52 @@ empty or placeholder one). For Docker, set it in `.env` yourself.
 
 ### Rate limiting
 
-Login throttling, the AI request quota, and 2FA attempt limits are enforced
-**per process**. Running multiple uvicorn workers or replicas multiplies each
-effective limit by the number of processes, because each keeps its own
-counters — this matters most for the AI quota, which spends real API credit.
-The v1.14 runtime foundation opens and health-checks one shared Redis pool;
-moving these counters to it is milestone V14-1. Until V14-1 lands, run a single
-worker or enforce limits at a proxy in front of the app.
+Login throttling, password-reset throttling, the AI request quota, and 2FA
+attempt limits use an atomic Redis sliding window when `REDIS_URL` is set, so
+one quota is enforced across all uvicorn workers and replicas. Caller
+identifiers (including IP and email combinations) are SHA-256 hashed before
+they become Redis keys.
+
+When Redis is intentionally unconfigured, the same limits use a bounded
+in-process store for single-process development. When Redis is configured or
+`REDIS_REQUIRED=1`, an unavailable backend fails closed: rate-limited
+endpoints return HTTP 503 with `Retry-After` instead of silently weakening the
+global limit.
 
 ### Redis and readiness
 
 `/health` retains the existing database-health contract for compatibility.
-`/ready` is the traffic-readiness probe: it checks the database and Redis when
-configured. Redis reports `disabled` for an intentional single-process setup,
-`missing` when `REDIS_REQUIRED=1` has no URL, and `unreachable` when a configured
-server cannot be contacted. Responses never contain connection URLs or secrets.
+`/ready` is the traffic-readiness probe: it checks the database, Redis, and that
+the cross-worker Pub/Sub subscriber is active when Redis is configured. Redis
+reports `disabled` for an intentional single-process setup, `missing` when
+`REDIS_REQUIRED=1` has no URL, and `unreachable` when a configured server cannot
+be contacted; `event_bus` reports `starting` until subscription succeeds.
+Responses never contain connection URLs or secrets.
 
 The production Compose stack includes an internal, persistent Redis service and
 sets `REDIS_REQUIRED=1`; Redis is not exposed on a host port. A custom multi-node
 deployment should supply a managed `redis://` or TLS `rediss://` URL and use a
 different `REDIS_KEY_PREFIX` for each ThoroTest installation sharing a database.
+
+Realtime run/notification events use Redis Pub/Sub so a producer on one worker
+reaches sockets on every worker. Delivery is best-effort: clients refresh
+authoritative database state after reconnect. CI orchestration status and
+leases are stored in the database, survive process/Redis restarts, and can be
+claimed by another worker after a stale lease expires.
+
+### Bootstrap and observability
+
+Production workers never execute schema DDL. Run `python -m backend.bootstrap`
+once per deploy, then start replicas; an outdated worker exits with the expected
+Alembic revision and the exact recovery command. Compose models this as its
+one-shot `bootstrap` service. `AUTO_BOOTSTRAP=1` exists only to ease direct
+single-worker upgrades during v1.14.
+
+Every response carries `X-Request-ID`. Set `LOG_FORMAT=json` to emit
+line-delimited structured logs and scrape `/metrics` for request latency/count,
+in-flight requests, WebSockets, Redis failures/reconnects, and CI outcomes. See
+[the production runbook](production-runbook.md) for dashboards, alerts, deploy,
+rollback, and failure drills.
 
 **Backups:** all state lives in the database plus the `uploads/` directory — see
 [BACKUP.md](../BACKUP.md) for backup/restore procedures per database and for Docker deployments.

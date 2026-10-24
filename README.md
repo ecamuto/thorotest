@@ -4,7 +4,7 @@
 
 [![version](https://img.shields.io/badge/version-1.13.0-blue)](package.json)
 [![license](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-725%20unit%20%2B%2038%20e2e%20suites-brightgreen)](#tests)
+[![tests](https://img.shields.io/badge/tests-756%20unit%20%2B%2038%20e2e%20suites-brightgreen)](#tests)
 [![backend](https://img.shields.io/badge/backend-FastAPI-009688)](#stack)
 [![frontend](https://img.shields.io/badge/frontend-React%2018-61DAFB)](#stack)
 [![docker](https://img.shields.io/badge/deploy-Docker-2496ED)](#quickstart)
@@ -70,7 +70,7 @@ Already on TestRail/Zephyr/Xray? The import pipeline is built for **migrating of
 | Frontend | React 18 (vendored production UMD), JSX transpiled + minified by esbuild at build time |
 | Backend | FastAPI, SQLAlchemy |
 | Database | PostgreSQL (recommended for production) · SQLite (default, eval/small installs) · MySQL / MariaDB (via `DATABASE_URL`) |
-| Realtime | WebSocket (native FastAPI) |
+| Realtime | WebSocket + Redis Pub/Sub across workers |
 | API | REST + GraphQL (Strawberry) |
 | Auth | JWT (PyJWT), argon2id password hashing (passlib) |
 | AI | Anthropic SDK (BYOK — optional) |
@@ -111,11 +111,14 @@ printf 'SECRET_KEY=%s\n' "$(python3 -c 'import secrets;print(secrets.token_hex(3
 make docker-up-sqlite
 ```
 
-Database is created automatically on first run. The production Compose topology
-also starts an internal Redis service used by the v1.14 shared-runtime
-foundation; Redis remains optional for single-process local development. Seed
-data: 19 test cases across 12 folders, 11 runs, 9 defects. Pipelines are not
-seeded — the page fills from real CI runs (Configure ▸ Integrations ▸ Run CI).
+`make dev` and Compose run an explicit, idempotent database bootstrap before
+workers start. The production topology also starts an internal Redis service
+used for global rate limits and cross-worker realtime delivery; Redis remains
+optional for single-process local development. CI orchestration jobs are
+durable database records and recover after worker restarts. Seed data: 19 test
+cases across 12 folders, 11 runs, 9
+defects. Pipelines are not seeded — the page fills from real CI runs
+(Configure ▸ Integrations ▸ Run CI).
 
 First login uses the seeded admin — `admin@localhost`, with a random password printed once in the server log on first boot (set `ADMIN_INITIAL_PASSWORD` to choose it yourself; under `DEMO_MODE` it stays `admin`). Change it after signing in.
 
@@ -170,6 +173,7 @@ curl -s localhost:8000/graphql -H "Authorization: Bearer $TOKEN" \
 - **All `make` targets** — [docs/configuration.md](docs/configuration.md#make-commands).
 - **Environment variables** (`.env`: database URLs, secrets, SMTP, OAuth, AI provider) — [docs/configuration.md](docs/configuration.md#environment-variables).
 - **Backups** — [BACKUP.md](BACKUP.md).
+- **Production deploy/rollback/alerts** — [docs/production-runbook.md](docs/production-runbook.md).
 
 ---
 
@@ -362,7 +366,7 @@ lives in one place (the run), never in the YAML.
 
 ## Tests
 
-**725 backend unit tests** (pytest) + **38 Playwright e2e suites** covering every major flow — CI-gated.
+**756 backend unit tests** (pytest) + **38 Playwright e2e suites** covering every major flow — CI-gated.
 
 ```bash
 make test        # backend unit tests
@@ -395,8 +399,11 @@ All 7 production-readiness items are **done** (v1.0), and post-v1 features shipp
 
 - 🚧 `thorotest` CLI (beta, in-repo — [docs/cli.md](docs/cli.md)): `status`, `lint`, `sync`, `token create`. Next: `run` (trigger + wait), npm publish.
 - ⏳ UI pagination controls ("showing N of M") using `X-Total-Count`.
-- ⏳ S3 attachment storage; Prometheus metrics endpoint.
-- ⏳ Redis-backed rate limiter / WS state (multi-worker).
+- ⏳ S3 attachment storage.
+- ✅ v1.14 shared runtime: global Redis rate limits, cross-worker realtime,
+  durable recoverable CI jobs, explicit bootstrap, structured logs, metrics,
+  and an automated attested/signed release-image pipeline. PostgreSQL scale,
+  Redis failover, failed-migration, and backup-upgrade gates are verified.
 - ⏳ SSO / SAML / SCIM.
 
 Have a request? [Open an issue](https://github.com/ecamuto/thorotest/issues).
