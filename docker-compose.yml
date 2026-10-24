@@ -1,4 +1,17 @@
 services:
+  bootstrap:
+    build: .
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://thorotest:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/thorotest
+      ENVIRONMENT: production
+    command: ["python", "-m", "backend.bootstrap"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   app:
     build: .
     ports:
@@ -17,6 +30,8 @@ services:
       # SECRET_KEY check does not depend on this — it runs in every environment.
       ENVIRONMENT: production
     depends_on:
+      bootstrap:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
       redis:

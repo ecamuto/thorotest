@@ -7,18 +7,13 @@ from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
-from sqlalchemy import func, inspect, text
+from fastapi.responses import FileResponse, JSONResponse, Response
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
-# Application logging. Uvicorn configures its own access/error loggers; this
-# covers the app's "thorotest.*" loggers. LOG_LEVEL env overrides (DEBUG,
-# INFO, WARNING, ...). basicConfig is a no-op if the root logger is already
-# configured (e.g. under pytest), so this never fights the test runner.
-logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO").upper(),
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-)
+from .observability import configure_logging
+
+configure_logging()
 
 from sqlalchemy import event as sa_event
 from .db import engine, get_db, _is_sqlite
@@ -32,10 +27,14 @@ def _set_sqlite_pragmas(dbapi_conn, connection_record):
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA busy_timeout=5000")
         cursor.close()
-from .seed import init_db, seed_db
+from .seed import seed_db
+from .bootstrap import bootstrap_database, verify_schema
 from .ws_manager import manager
 from .notifications import notif_manager
 from .runtime_state import runtime_state
+from .event_bus import runtime_event_bus
+from .ci_worker import ci_job_worker
+from .observability import metrics_payload, observe_http_request
 from .auth_utils import get_current_user, user_from_websocket_ticket
 from .gql_schema import graphql_router
 from .routers import folders, tests, runs, plans, pipelines, activity, auth, projects, categories, defects, requirements, integrations, tokens, webhooks, favorites, import_, attachments, admin, ai, notifications, audit_log, oauth, totp, ci, history, sync, about, custom_fields
@@ -52,118 +51,6 @@ if FRONTEND_DIR == _FRONTEND_SRC:
         "frontend/dist not found — serving unbuilt frontend sources. "
         "The UI will not render; run `npm run build` first."
     )
-
-
-def _run_migrations():
-    """Add new columns to existing tables without dropping data.
-
-    Portable across SQLite / PostgreSQL / MySQL: every added column is a
-    VARCHAR(255) with a dialect-neutral default, and backfills that need
-    randomness are done in Python rather than with SQLite-only SQL.
-    The totp_recovery_codes table is created by Base.metadata.create_all()
-    (run before this function), so no manual CREATE TABLE is needed here.
-    """
-    import secrets
-
-    inspector = inspect(engine)
-    tables = inspector.get_table_names()
-
-    def _add_column(table: str, col: str, ddl_type: str = "VARCHAR(255)", default: str | None = None):
-        """Add a column if missing. `default` is raw SQL (already quoted/literal)."""
-        cols = [c["name"] for c in inspector.get_columns(table)]
-        if col in cols:
-            return
-        ddl = f"ALTER TABLE {table} ADD COLUMN {col} {ddl_type}"
-        if default is not None:
-            ddl += f" DEFAULT {default}"
-        conn.execute(text(ddl))
-        conn.commit()
-
-    with engine.connect() as conn:
-        if "folders" in tables:
-            _add_column("folders", "project_id")
-        if "tests" in tables:
-            _add_column("tests", "project_id")
-        if "defects" in tables:
-            for col in ("description", "created_at", "created_by"):
-                _add_column("defects", col)
-            # Phase 1 (v1.1): external tracker link fields (Jira in Phase 2).
-            # The requirements + requirement_tests tables are created by
-            # create_all() in the legacy path, so no manual CREATE TABLE needed.
-            _add_column("defects", "external_provider", ddl_type="VARCHAR(64)")
-            _add_column("defects", "external_key", ddl_type="VARCHAR(128)")
-            _add_column("defects", "external_url", ddl_type="VARCHAR(512)")
-        if "users" in tables:
-            _add_column("users", "language", default="'en'")
-            # Phase 2: migrate legacy "member" role to "tester"
-            conn.execute(text("UPDATE users SET role = 'tester' WHERE role = 'member'"))
-            conn.commit()
-        if "run_cases" in tables:
-            _add_column("run_cases", "actual_result")
-            _add_column("run_cases", "assigned_to")
-        if "runs" in tables:
-            _add_column("runs", "source_run_id")
-
-        # Tests-as-Code: git source tracking on tests + integration config blob
-        if "tests" in tables:
-            _add_column("tests", "repo_url", ddl_type="VARCHAR(512)")
-            _add_column("tests", "source_path", ddl_type="VARCHAR(512)")
-            _add_column("tests", "source_ref")
-            _add_column("tests", "source_body", ddl_type="TEXT")
-            _add_column("tests", "source_synced_at", ddl_type="VARCHAR(64)")
-        if "integrations" in tables:
-            _add_column("integrations", "config", ddl_type="TEXT")
-
-        # v1.1 Enterprise Auth columns
-        if "users" in tables:
-            _add_column("users", "totp_secret")
-            _add_column("users", "totp_enabled", ddl_type="BOOLEAN", default="FALSE")
-            _add_column("users", "token_version", ddl_type="INTEGER", default="0")
-
-        if "webhooks" in tables:
-            _add_column("webhooks", "hmac_secret")
-            # Backfill missing HMAC secrets in Python (portable across dialects)
-            rows = conn.execute(text("SELECT id FROM webhooks WHERE hmac_secret IS NULL")).fetchall()
-            for (wid,) in rows:
-                conn.execute(
-                    text("UPDATE webhooks SET hmac_secret = :s WHERE id = :id"),
-                    {"s": secrets.token_hex(32), "id": wid},
-                )
-            conn.commit()
-
-
-def _ensure_schema():
-    """Bring the database schema to the current Alembic revision.
-
-    Three cases:
-    - Fresh database (no tables): `alembic upgrade head` builds the schema.
-    - Pre-Alembic install (tables, no alembic_version): run the legacy
-      in-place upgrades once, then stamp the baseline revision.
-    - Alembic-managed: `alembic upgrade head` applies pending revisions.
-
-    Schema changes must ship as Alembic revisions from now on — see
-    "Database migrations" in README.md.
-    """
-    from alembic import command
-    from alembic.config import Config
-    from .db import DATABASE_URL
-
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    cfg = Config(os.path.join(root, "alembic.ini"))
-    cfg.set_main_option("script_location", os.path.join(root, "migrations"))
-    # % must be escaped for configparser interpolation
-    cfg.set_main_option("sqlalchemy.url", DATABASE_URL.replace("%", "%%"))
-
-    tables = inspect(engine).get_table_names()
-    if "alembic_version" in tables or not tables:
-        command.upgrade(cfg, "head")
-    else:
-        # Legacy pre-Alembic database: create missing tables and columns the
-        # old way, then mark the DB as being at the current revision.
-        logging.getLogger("thorotest").info("Pre-Alembic database detected — stamping baseline")
-        models.Base.metadata.create_all(bind=engine)
-        _run_migrations()
-        command.stamp(cfg, "head")
 
 
 async def _jira_autosync_loop(interval_seconds: int):
@@ -196,9 +83,17 @@ async def _jira_autosync_loop(interval_seconds: int):
 async def lifespan(app: FastAPI):
     import asyncio
 
-    _ensure_schema()
-    init_db()
+    if os.getenv("AUTO_BOOTSTRAP", "").strip().lower() in ("1", "true", "yes"):
+        logging.getLogger("thorotest.bootstrap").warning(
+            "AUTO_BOOTSTRAP is enabled; run `python -m backend.bootstrap` as a "
+            "separate deployment step before using multiple workers"
+        )
+        bootstrap_database()
+    else:
+        verify_schema()
     await runtime_state.start()
+    await runtime_event_bus.start()
+    await ci_job_worker.start()
 
     task = None
     minutes = int(os.getenv("JIRA_AUTOSYNC_MINUTES", "0") or "0")
@@ -214,10 +109,17 @@ async def lifespan(app: FastAPI):
                 await task
             except asyncio.CancelledError:
                 pass
+        await ci_job_worker.close()
+        await runtime_event_bus.close()
         await runtime_state.close()
 
 
 app = FastAPI(title="ThoroTest API", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def request_observability(request, call_next):
+    return await observe_http_request(request, call_next)
 
 # CORS origins are configurable. Default to the public base URL (same-origin
 # deploys need no cross-origin access). Set ALLOWED_ORIGINS to a comma-separated
@@ -341,15 +243,29 @@ async def readiness():
     # start() logs an initial connection failure. Avoid repeating the same
     # warning on every orchestrator probe while still allowing recovery.
     redis_status = await runtime_state.probe()
-    redis_ok = redis_status in {"ok", "disabled"}
+    event_bus_status = (
+        "disabled"
+        if not runtime_event_bus.enabled
+        else "ok" if runtime_event_bus.ready else "starting"
+    )
+    redis_ok = redis_status in {"ok", "disabled"} and runtime_event_bus.ready
     ready = db_ok and redis_ok
     body = {
         "status": "ready" if ready else "not_ready",
         "database": "ok" if db_ok else "unreachable",
         "redis": redis_status,
+        "event_bus": event_bus_status,
         "uptime_seconds": int(time.monotonic() - _STARTED_AT),
     }
     return JSONResponse(body, status_code=200 if ready else 503)
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics():
+    if os.getenv("METRICS_ENABLED", "1").strip().lower() not in ("1", "true", "yes"):
+        return JSONResponse({"detail": "Not found"}, status_code=404)
+    payload, content_type = metrics_payload()
+    return Response(payload, media_type=content_type)
 
 # REST
 app.include_router(folders.router, prefix="/api")

@@ -5,7 +5,25 @@ from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./testhub.db")
+
+def normalize_database_url(url: str) -> str:
+    """Keep documented PostgreSQL URLs on the installed psycopg2 driver.
+
+    SQLAlchemy 2.1 changed the default ``postgresql://`` driver to Psycopg 3.
+    ThoroTest intentionally ships ``psycopg2-binary`` for this release, so an
+    explicit driver keeps existing environment variables and Compose installs
+    working across the SQLAlchemy upgrade.
+    """
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg2://" + url.removeprefix("postgresql://")
+    if url.startswith("postgres://"):
+        return "postgresql+psycopg2://" + url.removeprefix("postgres://")
+    return url
+
+
+DATABASE_URL = normalize_database_url(
+    os.getenv("DATABASE_URL", "sqlite:///./testhub.db")
+)
 
 _is_sqlite = DATABASE_URL.startswith("sqlite")
 

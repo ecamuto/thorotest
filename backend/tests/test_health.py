@@ -4,10 +4,12 @@ Note: /health pings the real engine (backend.db.engine), not the per-test
 in-memory session — a health check must observe the actual database.
 """
 from unittest.mock import AsyncMock
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
 from backend.main import app
+import backend.main as main_module
 from backend.runtime_state import runtime_state
 
 
@@ -63,3 +65,20 @@ def test_readiness_rejects_missing_required_redis(monkeypatch):
         r = c.get("/ready")
     assert r.status_code == 503
     assert r.json()["redis"] == "missing"
+
+
+def test_readiness_waits_for_cross_worker_subscription(monkeypatch):
+    async def connected(**kwargs):
+        return "ok"
+
+    monkeypatch.setattr(runtime_state, "probe", connected)
+    with TestClient(app) as c:
+        with monkeypatch.context() as bus_patch:
+            bus_patch.setattr(
+                main_module,
+                "runtime_event_bus",
+                SimpleNamespace(enabled=True, ready=False),
+            )
+            r = c.get("/ready")
+    assert r.status_code == 503
+    assert r.json()["event_bus"] == "starting"

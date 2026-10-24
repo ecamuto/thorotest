@@ -75,12 +75,29 @@ def init_db():
 def seed_db():
     db = SessionLocal()
     try:
-        if db.query(models.User).count() == 0:
-            db.add_all([
-                models.User(username="marco", email="marco@acme.com", hashed_password=hash_password("demo123"), display_name="Marco Rossi", role="admin"),
-                models.User(username="lisa", email="lisa@acme.com", hashed_password=hash_password("demo123"), display_name="Lisa Park", role="tester"),
-                models.User(username="alex", email="alex@acme.com", hashed_password=hash_password("demo123"), display_name="Alex Rivera", role="tester"),
-            ])
+        # Explicit bootstrap creates the minimal admin first. Seed each demo
+        # identity independently so that first step does not suppress all demo
+        # accounts, and repeated seed runs remain idempotent.
+        demo_users = [
+            ("marco", "marco@acme.com", "Marco Rossi", "admin"),
+            ("lisa", "lisa@acme.com", "Lisa Park", "tester"),
+            ("alex", "alex@acme.com", "Alex Rivera", "tester"),
+        ]
+        existing_emails = {
+            email for (email,) in db.query(models.User.email).filter(
+                models.User.email.in_([item[1] for item in demo_users])
+            ).all()
+        }
+        for username, email, display_name, role in demo_users:
+            if email not in existing_emails:
+                db.add(models.User(
+                    username=username,
+                    email=email,
+                    hashed_password=hash_password("demo123"),
+                    display_name=display_name,
+                    role=role,
+                ))
+        if len(existing_emails) != len(demo_users):
             db.commit()
 
         if db.query(models.Folder).count() > 0:
@@ -268,8 +285,8 @@ def seed_db():
 
 
 if __name__ == "__main__":
-    # Same schema bootstrap as the app (Alembic-aware), then demo data.
-    from backend.main import _ensure_schema
-    _ensure_schema()
+    # Explicit schema bootstrap, then demo data.
+    from backend.bootstrap import bootstrap_database
+    bootstrap_database()
     seed_db()
     print("Demo data loaded.")

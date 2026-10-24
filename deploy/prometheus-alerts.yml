@@ -1,0 +1,42 @@
+groups:
+  - name: thorotest
+    rules:
+      - alert: ThoroTestElevated5xx
+        expr: |
+          sum(rate(thorotest_http_requests_total{status_class="5xx"}[5m]))
+          /
+          clamp_min(sum(rate(thorotest_http_requests_total[5m])), 0.001)
+          > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ThoroTest 5xx ratio is above 5%"
+
+      - alert: ThoroTestRedisFailures
+        expr: increase(thorotest_redis_failures_total[10m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ThoroTest is failing Redis operations"
+
+      - alert: ThoroTestCIJobFailureRate
+        expr: |
+          sum(rate(thorotest_ci_jobs_total{outcome="error"}[15m]))
+          /
+          clamp_min(sum(rate(thorotest_ci_jobs_total[15m])), 0.001)
+          > 0.20
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 20% of ThoroTest CI jobs are failing"
+
+      - alert: ThoroTestTargetDown
+        expr: up{job="thorotest"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ThoroTest metrics/readiness target is down"
