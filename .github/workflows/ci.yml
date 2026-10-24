@@ -71,6 +71,7 @@ jobs:
         env:
           POSTGRES_PASSWORD: ci-validation-only
         run: |
+          cp .env.example .env
           docker compose config --quiet
           docker compose -f docker-compose.sqlite.yml config --quiet
       - name: Build production image
