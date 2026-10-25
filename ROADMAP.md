@@ -1,7 +1,7 @@
 # ThoroTest — Master Improvement Roadmap
 
 **Audit date:** 2026-07-16 · **Version:** 1.9.0
-**Last reconciled:** 2026-08-28 · **Current target:** v1.14
+**Last reconciled:** 2026-10-25 · **Current target:** v1.15
 
 Horizon: 12 months. Priorities are P0 (blocker) → P3 (nice-to-have). Effort in engineer-days is rough. "ROI" weighs business+technical impact against effort.
 
@@ -23,6 +23,7 @@ traceability.
 | S-5 | 🟡 Partial | CSP, forced attachment downloads, and unsafe renderable-MIME neutralization exist; a strict upload allow-list and object-level access policy remain. |
 | S-8 | 🟡 Partial | The shared URL guard covers webhooks, notifications, integrations, GitLab, and Jira; configurable AI and any remaining outbound clients still need one explicit policy. |
 | v1.14 / S-1, S-4, S-6, S-7 | ✅ Done | Shared runtime, explicit bootstrap, observability, durable CI orchestration, release automation, PostgreSQL scale/failure drills, and backup upgrade are verified. |
+| v1.15 experience foundation / M-3, L-6 | ✅ Done | Route-level view delivery, resilient/accessible SPA navigation, automated WCAG gates, and CLI `run` are verified. The later full ESM migration and npm publication remain separate follow-ons. |
 | Other S-*, M-*, L-* | ⏳ Open | Prioritize the remaining S-2 provider-sync scope, enterprise, and long-term work. |
 
 ## v1.14 execution plan — shared runtime and observability
@@ -211,6 +212,45 @@ Each PR must keep CI green and be independently reviewable:
   S-5/S-8 before beginning M-1 tenancy.
 - M-1 must precede a hosted multi-customer offering and should be designed before
   M-2 SSO/SCIM so tenant identity and provisioning boundaries are explicit.
+
+## v1.15 execution plan — experience and CI control
+
+### Outcome and scope
+
+v1.15 closes the two scorecard dimensions left below 9/10 after the production
+foundation: UX and Innovation. It improves first-load behaviour and SPA
+resilience without forcing a high-risk full frontend rewrite, makes WCAG checks
+an executable release gate, and exposes ThoroTest's durable provider
+orchestration through the CLI.
+
+### Delivered
+
+- Load only login and overview views at startup; fetch all other views once on
+  first navigation with the production asset hash preserved. This defers about
+  266 KB of minified view JavaScript and reduces initial view code by 89%.
+- Add route loading/error states, retry, a top-level render error boundary,
+  per-route document titles, focus transfer, screen-reader announcements, and
+  accessible toast/status semantics.
+- Correct theme contrast tokens and control names/labels, including keyboard
+  operation for status selection.
+- Gate overview, library, and runs against axe WCAG 2 A/AA and 2.1 A/AA rules;
+  validate both dark and light themes.
+- Add `thorotest run <integration-id>` with GitHub/GitLab overrides, durable
+  polling, machine-readable output, no-wait mode, imported-result summary, and
+  provider-aware exit codes.
+- Extend the CI job response with provider-neutral external-run fields and the
+  final pipeline status while retaining the existing `gh_*` compatibility keys.
+
+### Acceptance
+
+- Direct links and browser navigation load ordered route dependencies once,
+  preserve cache busting, and retain the existing application behaviour.
+- Route load/render failures produce an actionable recovery UI rather than a
+  blank application.
+- Core flows have no serious or critical axe violations in either theme.
+- CLI success, provider failure, orchestration error, JSON, no-wait, and input
+  validation paths are covered by the Node test suite.
+- The complete backend, CLI, frontend build, and Playwright gates remain green.
 
 ---
 

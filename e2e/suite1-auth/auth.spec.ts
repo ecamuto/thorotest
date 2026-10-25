@@ -80,7 +80,21 @@ test.describe('Suite 1 — Autenticazione', () => {
 
   // E2E-AUTH-04 · Logout [P0]
   test('AUTH-04: logout', async ({ page }) => {
-    await loginAs(page, 'marco@acme.com');
+    // Logout deliberately revokes every active token for the account. Use a
+    // disposable user so this test cannot invalidate another worker's session.
+    const suffix = `${Date.now().toString(36)}-${test.info().workerIndex}`;
+    const email = `logout-${suffix}@example.test`;
+    const password = 'Temporary-pass-42!';
+    const created = await page.request.post(`${BASE}/api/auth/register`, {
+      data: {
+        username: `logout-${suffix}`,
+        email,
+        password,
+        display_name: 'Logout Test',
+      },
+    });
+    expect(created.status()).toBe(201);
+    await loginAs(page, email, password);
 
     // Click logout button in sidebar footer
     await page.click('.sidebar-footer button[title="Sign out"]');

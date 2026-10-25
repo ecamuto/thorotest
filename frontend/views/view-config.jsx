@@ -1110,7 +1110,7 @@ function AIAssistant({ currentUser, currentFolderId }) {
                 <div style={{display:"flex", gap:8, marginTop:12}}>
                   <button
                     className="btn"
-                    style={{background:"var(--purple)", color:"oklch(0.16 0 0)", borderColor:"var(--purple)"}}
+                    style={{background:"var(--purple-action)", color:"var(--on-purple)", borderColor:"var(--purple-action)"}}
                     onClick={handleSaveSelected}
                     disabled={!anySelected || genSaving}
                   >
@@ -1177,7 +1177,7 @@ function AIAssistant({ currentUser, currentFolderId }) {
                       )}
                       <button
                         className="btn sm"
-                        style={{background:"var(--purple)", color:"oklch(0.16 0 0)", borderColor:"var(--purple)"}}
+                        style={{background:"var(--purple-action)", color:"var(--on-purple)", borderColor:"var(--purple-action)"}}
                         onClick={() => {
                           setGenDesc(s.title);
                           if (ecFolderId) setGenFolderId(ecFolderId);

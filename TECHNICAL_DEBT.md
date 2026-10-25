@@ -5,6 +5,11 @@
 
 Overall debt level: **LOW–MODERATE**. This is an unusually clean codebase for its feature breadth. The debt that exists is concentrated in (a) the dual migration system, (b) horizontal-scaling assumptions baked into module-level state, and (c) frontend architecture choices (window globals, no code-splitting). None of it is the "big ball of mud" variety; most is addressable incrementally.
 
+> **2026-10-25 update:** the production bootstrap and shared runtime parts of
+> D-2/D-3 are complete. D-5 is reduced: v1.15 loads views by route and defers
+> 89% of minified view code, while the remaining `window.X` → ESM migration is
+> a maintainability improvement rather than a first-load blocker.
+
 ---
 
 ## Debt scorecard
@@ -37,7 +42,7 @@ Overall debt level: **LOW–MODERATE**. This is an unusually clean codebase for 
 Nearly every model stores `created_at`/`updated_at`/`when` as `String(64)` ISO text (`models.py` throughout). The code relies on lexicographic comparison for date ranges (`main.py:405`, comment "lexicographic >= works"). This works only because everything is UTC ISO-8601, but it forfeits DB date functions, timezone correctness guarantees, and index-friendly range scans, and it's fragile if any writer ever deviates from the format. **Fix (large, low-urgency):** migrate to `DateTime` columns; medium effort due to breadth.
 
 ### D-5 — Frontend uses `window.X` globals instead of modules (Moderate, FE architectural)
-Per project memory and `frontend/react-globals.js`, the frontend wires React and shared state through `window` globals rather than ES module imports, built by a bespoke esbuild script. It works and keeps the "no build tooling in the browser" property, but it's non-idiomatic, complicates testing, and blocks tree-shaking/code-splitting. **Fix:** migrate to standard ESM + a conventional bundler entry; medium effort.
+Per project memory and `frontend/react-globals.js`, the frontend wires React and shared state through `window` globals rather than ES module imports, built by a bespoke esbuild script. v1.15 adds route-level delivery on top of this contract, so views no longer block first paint, but the globals remain non-idiomatic and still block tree-shaking. **Fix:** migrate to standard ESM + a conventional bundler entry opportunistically; medium effort.
 
 ### D-6 — Large view components (Low)
 `view-test-detail.jsx` (1099 lines), `view-settings.jsx` (1032), `view-library.jsx` are big single-file views mixing data-fetching, state, and presentation. Not broken, but they'll resist change. **Fix:** extract hooks and subcomponents opportunistically.

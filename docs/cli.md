@@ -10,9 +10,8 @@ API as the web UI, authenticated with an API token, and is built for two jobs:
    from a working tree, including fully airgapped installs where the
    GitHub/GitLab repo sync can't reach anything.
 
-**Status: beta (v0.1).** Shipped commands: `status`, `lint`, `sync`,
-`token create`. Planned: `run` (trigger a run and wait for the result),
-`new test` / `new run` wizards, `--filter`.
+**Status: beta (v0.2).** Shipped commands: `status`, `lint`, `sync`, `run`,
+`token create`. Planned: `new test` / `new run` wizards and `--filter`.
 
 - Zero runtime dependencies. Requires **Node 18+** (uses the built-in `fetch`).
 - Server requirement: ThoroTest **v1.9+** (the `POST /api/sync/yaml` endpoint).
@@ -23,7 +22,7 @@ API as the web UI, authenticated with an API token, and is built for two jobs:
 
 [Install](#install) · [Configuration](#configuration) · [Exit codes](#exit-codes) ·
 [`status`](#thorotest-status) · [`lint`](#thorotest-lint) · [`sync`](#thorotest-sync) ·
-[`token create`](#thorotest-token-create) · [YAML schema](#yaml-test-file-schema) ·
+[`run`](#thorotest-run) · [`token create`](#thorotest-token-create) · [YAML schema](#yaml-test-file-schema) ·
 [Sync semantics](#sync-semantics) · [CI recipes](#ci-recipes) ·
 [Troubleshooting](#troubleshooting) · [Limitations](#limitations)
 
@@ -90,7 +89,7 @@ Consistent across all commands, so pipelines can branch on failure class:
 | Code | Meaning |
 |---|---|
 | `0` | success |
-| `1` | validation failure — lint errors, or the server skipped ≥1 file during sync |
+| `1` | validation/provider failure — lint errors, skipped sync files, or a completed CI pipeline with a failing conclusion |
 | `2` | usage error — unknown command, missing argument, missing URL/token config |
 | `3` | server or network error — host unreachable, HTTP 5xx, unexpected 4xx |
 | `4` | authentication/authorization error — HTTP 401 (bad, expired, or revoked token) or 403 (role too low, or a `read`-scoped token attempting a write) |
@@ -247,6 +246,49 @@ Behaviour:
 ```
 
 Requires role **tester, manager, or admin** (viewers get exit 4).
+
+---
+
+## `thorotest run`
+
+Dispatch the configured GitHub Actions workflow or GitLab pipeline, wait for
+the durable server-side job, import its JUnit results, and return the provider
+conclusion as the process exit code:
+
+```bash
+thorotest run int-github --ref main --name "Release checks"
+```
+
+The positional argument is the integration ID shown in *Settings →
+Integrations*. The command follows the job across `queued`, `finding run`,
+`running`, and `collecting`; progress goes to stderr so `--json` remains a
+single parseable stdout document.
+
+| Option | Meaning |
+|---|---|
+| `--ref <ref>` | override the integration's branch/ref |
+| `--workflow <file>` | override the GitHub workflow filename |
+| `--artifact <name>` | override the expected JUnit artifact name |
+| `--name <label>` | name assigned to the imported ThoroTest run |
+| `--timeout <seconds>` | client wait limit; default 2100 (35 minutes) |
+| `--interval <seconds>` | polling interval; default 5 |
+| `--no-wait` | return immediately after dispatch with the durable job ID |
+| `--json` | emit the final job, provider URL/status, and import counts as JSON |
+
+Exit `0` means the provider pipeline passed and results were imported. Exit
+`1` means it completed with a failing conclusion (results are still imported).
+Dispatch, collection, timeout, server, or network failures exit `3`;
+authentication/authorization failures exit `4`.
+
+`run` requires a server containing the v1.15 provider-neutral CI job response.
+The integration must be active and the API-token owner must be a manager or
+administrator.
+
+For fire-and-follow-from-another-process workflows:
+
+```bash
+thorotest run int-gitlab --ref release/2.0 --no-wait --json
+```
 
 ---
 
@@ -415,8 +457,8 @@ thorotest sync tests/ --dry-run
 
 On GitHub Actions / GitLab CI you can use either the CLI or the built-in
 integrations ([github-actions-ci.md](github-actions-ci.md),
-[gitlab-ci.md](gitlab-ci.md)); the integrations additionally support pipeline
-dispatch and JUnit result import, which the CLI will gain with `thorotest run`.
+[gitlab-ci.md](gitlab-ci.md)). `thorotest run` exposes the same durable
+dispatch, wait, and JUnit-import workflow to terminal and CI users.
 
 ---
 
@@ -446,8 +488,8 @@ dispatch and JUnit result import, which the CLI will gain with `thorotest run`.
   authoritative validator. Stricter-than-server is safe: lint can false-fail an
   exotic-but-valid file, never false-pass a broken one — except duplicate keys,
   which PyYAML silently resolves last-wins while lint correctly flags them.
-- **No local execution.** `thorotest run` (trigger + wait) is the next planned
-  command; today, runs are driven from the UI or the REST/GraphQL API.
+- **Provider execution is remote.** `thorotest run` dispatches an existing
+  GitHub/GitLab integration; it does not execute a local test command.
 - **No pagination in `status`.** Run stats read up to the server's page cap
   (1000 runs); totals come from `X-Total-Count` and stay exact.
 - **Not yet on npm.** Install from the repo (`npm link`); publishing is planned

@@ -4,7 +4,7 @@
 
 [![version](https://img.shields.io/badge/version-1.13.0-blue)](package.json)
 [![license](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-756%20unit%20%2B%2038%20e2e%20suites-brightgreen)](#tests)
+[![tests](https://img.shields.io/badge/tests-757%20unit%20%2B%2039%20e2e%20suites-brightgreen)](#tests)
 [![backend](https://img.shields.io/badge/backend-FastAPI-009688)](#stack)
 [![frontend](https://img.shields.io/badge/frontend-React%2018-61DAFB)](#stack)
 [![docker](https://img.shields.io/badge/deploy-Docker-2496ED)](#quickstart)
@@ -366,7 +366,7 @@ lives in one place (the run), never in the YAML.
 
 ## Tests
 
-**756 backend unit tests** (pytest) + **38 Playwright e2e suites** covering every major flow — CI-gated.
+**757 backend unit tests** (pytest) + **39 Playwright e2e suites** covering every major flow — CI-gated.
 
 ```bash
 make test        # backend unit tests
@@ -397,13 +397,16 @@ All 7 production-readiness items are **done** (v1.0), and post-v1 features shipp
 
 ### Planned
 
-- 🚧 `thorotest` CLI (beta, in-repo — [docs/cli.md](docs/cli.md)): `status`, `lint`, `sync`, `token create`. Next: `run` (trigger + wait), npm publish.
+- 🚧 `thorotest` CLI (beta, in-repo — [docs/cli.md](docs/cli.md)): `status`, `lint`, `sync`, `run` (durable trigger + wait + JUnit import), `token create`. Next: npm publish.
 - ⏳ UI pagination controls ("showing N of M") using `X-Total-Count`.
 - ⏳ S3 attachment storage.
 - ✅ v1.14 shared runtime: global Redis rate limits, cross-worker realtime,
   durable recoverable CI jobs, explicit bootstrap, structured logs, metrics,
   and an automated attested/signed release-image pipeline. PostgreSQL scale,
   Redis failover, failed-migration, and backup-upgrade gates are verified.
+- 🚧 v1.15 experience foundation: route-level view loading, resilient SPA
+  fallbacks, navigation announcements/focus, automated WCAG A/AA gates in both
+  themes, and the provider-neutral `thorotest run` workflow.
 - ⏳ SSO / SAML / SCIM.
 
 Have a request? [Open an issue](https://github.com/ecamuto/thorotest/issues).

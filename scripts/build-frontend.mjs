@@ -1,8 +1,9 @@
 // ThoroTest frontend production build.
 //
 // The frontend is intentionally bundler-free at the module level: files are
-// classic scripts sharing top-level globals, loaded in the order declared in
-// index.html. This build keeps that architecture and only does what
+// classic scripts sharing top-level globals. The shell scripts are loaded in
+// index.html order and route-loader.js fetches view scripts on demand. This
+// build keeps that architecture and only does what
 // production serving needs:
 //
 //   1. Transpile every .jsx to plain .js (esbuild, React.createElement) and
@@ -41,6 +42,7 @@ const jsEntries = [
   path.join(srcDir, "api.js"),
   path.join(srcDir, "data.js"),
   path.join(srcDir, "i18n.js"),
+  path.join(srcDir, "route-loader.js"),
   ...listFiles(path.join(srcDir, "locales"), ".js"),
 ];
 

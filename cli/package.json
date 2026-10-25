@@ -1,6 +1,6 @@
 {
   "name": "@thorotest/cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Command-line client for ThoroTest — lint, sync, and inspect tests from the terminal or CI.",
   "bin": {
     "thorotest": "bin/thorotest.js"
