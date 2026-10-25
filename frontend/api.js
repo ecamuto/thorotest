@@ -646,7 +646,15 @@
     async syncIntegration(id) {
       const res = await fetch(BASE + `/api/integrations/${id}/sync`, { method: "POST", headers: authHeaders() });
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "Sync failed"); }
-      return res.json();
+      const queued = await res.json();
+      const started = Date.now();
+      while (Date.now() - started < 10 * 60 * 1000) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const job = await this.ciJobStatus(id, queued.job_id);
+        if (job.queue_status === "done") return job.result || {};
+        if (job.queue_status === "error") throw new Error(job.error || "Sync failed");
+      }
+      throw new Error("Sync timed out; the durable job may still be running");
     },
 
     // Trigger the integration's GitHub Actions workflow; returns { job_id, … }.

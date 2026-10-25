@@ -3,13 +3,14 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 from backend.main import app
+from backend import models
 
 
 def make_file(content=b"hello test file", filename="test.txt", content_type="text/plain"):
     return ("file", (filename, io.BytesIO(content), content_type))
 
 
-def test_upload_attachment(client, tmp_path, monkeypatch):
+def test_upload_attachment(client, db, tmp_path, monkeypatch):
     monkeypatch.setenv("UPLOAD_DIR", str(tmp_path))
     # Reload env in router
     import backend.routers.attachments as att_module
@@ -25,6 +26,7 @@ def test_upload_attachment(client, tmp_path, monkeypatch):
     assert data["entity_type"] == "test"
     assert data["entity_id"] == "TC-001"
     assert "id" in data
+    assert db.query(models.Attachment).filter_by(id=data["id"]).one().uploaded_by is not None
 
 
 def test_list_attachments(client, tmp_path, monkeypatch):
@@ -186,15 +188,34 @@ class TestUploadTypeAllowlist:
         assert "attachment" in r.headers.get("content-disposition", "")
         assert r.headers.get("x-content-type-options") == "nosniff"
 
-    def test_download_neuters_spoofed_html_mime(self, client, tmp_path, monkeypatch):
-        # A .txt upload whose declared content_type claims text/html must not
-        # be served back as text/html.
+    def test_rejects_mime_extension_mismatch(self, client, tmp_path, monkeypatch):
+        # A .txt upload whose declared content_type claims HTML is rejected.
         import backend.routers.attachments as att_module
         monkeypatch.setattr(att_module, "UPLOAD_DIR", str(tmp_path))
         up = self._upload(client, "sneaky.txt", "text/html")
-        att_id = up.json()["id"]
-        r = client.get(f"/api/attachments/{att_id}")
-        assert r.headers["content-type"].startswith("application/octet-stream")
+        assert up.status_code == 422
+        assert "not allowed for .txt" in up.json()["detail"]
+
+    def test_rejects_missing_mime(self, client, tmp_path, monkeypatch):
+        import backend.routers.attachments as att_module
+        monkeypatch.setattr(att_module, "UPLOAD_DIR", str(tmp_path))
+        r = self._upload(client, "report.pdf", "")
+        assert r.status_code == 422
+
+    def test_delete_refuses_legacy_path_outside_upload_root(self, client, db, tmp_path, monkeypatch):
+        import backend.routers.attachments as att_module
+        monkeypatch.setattr(att_module, "UPLOAD_DIR", str(tmp_path))
+        outside = tmp_path.parent / "must-not-delete.txt"
+        outside.write_text("keep")
+        att = models.Attachment(
+            entity_type="test", entity_id="TC-X", filename="x.txt",
+            mime_type="text/plain", storage_path="../must-not-delete.txt",
+        )
+        db.add(att)
+        db.commit()
+        r = client.delete(f"/api/attachments/{att.id}")
+        assert r.status_code == 404
+        assert outside.read_text() == "keep"
 
 
 class TestSecurityHeaders:

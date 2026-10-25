@@ -1,4 +1,4 @@
-.PHONY: help setup install lock dev frontend-build frontend-watch db-bootstrap db-reset db-revision db-upgrade db-seed demo test test-e2e test-e2e-auth test-e2e-import test-all test-report hooks-install open clean clean-data docker-up docker-up-sqlite docker-down docker-logs
+.PHONY: help setup install lock dev frontend-build frontend-watch db-bootstrap db-reset db-revision db-upgrade db-seed demo preflight test test-e2e test-e2e-auth test-e2e-import test-all test-report hooks-install open clean clean-data docker-up docker-up-sqlite docker-down docker-logs
 
 PYTHON  := python3
 VENV    := venv
@@ -59,6 +59,9 @@ db-seed: ## Populate DB with demo data (deletes existing DB first)
 	@echo "Done. For live-run simulation in demos, start the server with DEMO_MODE=1."
 
 demo: db-seed ## Alias: reset DB and load demo data
+
+preflight: ## Validate the commercial production profile (warnings block)
+	$(VENV)/bin/python -m backend.preflight --strict
 
 test: ## Run backend unit tests (pytest)
 	$(PYTEST) backend/tests/ -v

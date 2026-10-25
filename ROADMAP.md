@@ -1,7 +1,7 @@
 # ThoroTest — Master Improvement Roadmap
 
 **Audit date:** 2026-07-16 · **Version:** 1.9.0
-**Last reconciled:** 2026-10-25 · **Current target:** v1.15
+**Last reconciled:** 2026-10-25 · **Current target:** v1.16
 
 Horizon: 12 months. Priorities are P0 (blocker) → P3 (nice-to-have). Effort in engineer-days is rough. "ROI" weighs business+technical impact against effort.
 
@@ -20,11 +20,13 @@ traceability.
 | Q-4… Q-8 | ✅ Done | Password/admin bootstrap, hygiene, dependency lock/audit, and badge checks merged in PR #25. |
 | v1.13 audit addendum | ✅ Done | JWT scope enforcement, WebSocket tickets, RBAC, PyJWT migration, blocking CVE audit, and deterministic webhook tests merged in PR #47. |
 | S-3 | ✅ Done | PostgreSQL is the documented production default; SQLite remains supported for evaluation and small installs. |
-| S-5 | 🟡 Partial | CSP, forced attachment downloads, and unsafe renderable-MIME neutralization exist; a strict upload allow-list and object-level access policy remain. |
-| S-8 | 🟡 Partial | The shared URL guard covers webhooks, notifications, integrations, GitLab, and Jira; configurable AI and any remaining outbound clients still need one explicit policy. |
+| S-2 | ✅ Done | Manual GitHub/GitLab/Jira sync and scheduled Jira sync enqueue recoverable leased provider jobs outside the request path. |
+| S-5 | ✅ Done | Attachments enforce extension/MIME agreement, path confinement, forced download, `nosniff`, CSP, and paired explicit custom-type overrides. Object-level tenancy remains M-1 rather than attachment-specific work. |
+| S-8 | ✅ Done | The shared URL guard covers webhooks, notifications, integrations, GitLab, Jira, and configurable AI; private AI endpoints use a narrow separate opt-in. |
 | v1.14 / S-1, S-4, S-6, S-7 | ✅ Done | Shared runtime, explicit bootstrap, observability, durable CI orchestration, release automation, PostgreSQL scale/failure drills, and backup upgrade are verified. |
 | v1.15 experience foundation / M-3, L-6 | ✅ Done | Route-level view delivery, resilient/accessible SPA navigation, automated WCAG gates, and CLI `run` are verified. The later full ESM migration and npm publication remain separate follow-ons. |
-| Other S-*, M-*, L-* | ⏳ Open | Prioritize the remaining S-2 provider-sync scope, enterprise, and long-term work. |
+| v1.16 commercial self-host / S-2, S-5, S-8 | ✅ Done | Durable provider sync, strict attachment and AI egress policies, executable production preflight, commercial/support boundaries, full local tests, clean dependency audit, and production-image bootstrap are verified. |
+| Other M-*, L-* | ⏳ Open | Prioritize enterprise identity/tenancy and long-term product work after the commercial self-host gate. |
 
 ## v1.14 execution plan — shared runtime and observability
 
@@ -251,6 +253,44 @@ orchestration through the CLI.
 - CLI success, provider failure, orchestration error, JSON, no-wait, and input
   validation paths are covered by the Node test suite.
 - The complete backend, CLI, frontend build, and Playwright gates remain green.
+
+---
+
+## v1.16 execution plan — commercial self-host readiness
+
+### Outcome and scope
+
+v1.16 is the first commercial-launch phase. The launch target is a dedicated,
+self-hosted installation for one customer organization. Hosted multi-customer
+SaaS, project-level tenancy, SAML, and SCIM remain a later enterprise track;
+they do not block this deployment model.
+
+### Delivery tracks
+
+- Run GitHub, GitLab, and Jira synchronization on the database-backed leased
+  provider queue, outside the HTTP request path, with crash recovery, status
+  polling, bounded retention, error redaction, and UI progress handling.
+- Enforce an attachment extension/MIME matrix, forced downloads, `nosniff`,
+  path confinement on upload/download/delete, and explicit paired overrides.
+- Apply the outbound URL guard to configurable AI endpoints. A local/private
+  model requires `AI_ALLOW_PRIVATE_BASE_URL=1`; the broad webhook/integration
+  development bypass cannot authorize it implicitly.
+- Add `python -m backend.preflight --strict` / `make preflight` as a secret-safe
+  production configuration gate covering PostgreSQL, Redis, HTTPS/CORS,
+  migration mode, demo mode, uploads, logging, metrics, SMTP, and workers.
+- Publish the supported commercial topology, operator handoff checklist,
+  licensing position, support boundary, and explicit SaaS/enterprise deferrals.
+
+### Acceptance
+
+- Provider sync returns `202` promptly and reaches `done` or redacted `error`
+  through a durable job that another worker can recover after lease expiry.
+- Unsafe or mismatched attachment types are rejected; no stored path can make
+  download or deletion escape `UPLOAD_DIR`.
+- Private AI targets are blocked unless their dedicated opt-in is present.
+- A complete reference production environment passes strict preflight; common
+  insecure profiles fail without revealing any configured secret.
+- Backend, CLI, frontend build, migration, and complete Playwright gates pass.
 
 ---
 

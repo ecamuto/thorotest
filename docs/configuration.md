@@ -56,12 +56,15 @@ cp .env.example .env
 | `API_TOKEN_EXPIRE_DAYS` | `90` | Lifetime of newly minted `th_…` API tokens |
 | `LOGIN_MAX_FAILURES` / `LOGIN_WINDOW_SECONDS` | `10` / `300` | Failed-login throttle. Counts failures only; a success clears the counter |
 | `UPLOAD_DIR` / `MAX_UPLOAD_MB` | `./uploads` / `50` | Attachment storage directory and per-file size limit |
+| `UPLOAD_EXTRA_EXTENSIONS` / `UPLOAD_EXTRA_MIME_TYPES` | _(unset)_ | Paired comma-separated overrides for custom evidence formats; setting only one fails commercial preflight |
+| `NET_GUARD_ALLOW_PRIVATE_HOSTS` | _(unset)_ | Development-only broad bypass for private webhook/integration targets; never enable in production |
 | `DEMO_MODE` | _(unset)_ | Live-run demo simulation with fabricated results (demos only — **never in production**) |
 | `ANTHROPIC_API_KEY` | _(unset)_ | Enables AI assistant (BYOK). No-op if absent |
 | `AI_PROVIDER` | `anthropic` | AI backend: `anthropic` or `openai` (any OpenAI-compatible API, incl. local LLMs) |
 | `AI_MODEL` | `claude-sonnet-4-6` | Model ID. Required when `AI_PROVIDER=openai` |
 | `AI_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible endpoint (e.g. `http://localhost:11434/v1` for Ollama). Setting it implies `AI_PROVIDER=openai` |
 | `AI_API_KEY` | _(unset)_ | API key for the OpenAI-compatible endpoint (any value for local servers) |
+| `AI_ALLOW_PRIVATE_BASE_URL` | _(unset)_ | Required explicit opt-in for a private/local `AI_BASE_URL`; does not disable guards for other outbound clients |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | _(unset)_ | GitHub OAuth login (optional) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | _(unset)_ | Google OAuth login (optional) |
 | `JIRA_AUTOSYNC_MINUTES` | `0` | Auto-sync all Jira integrations every N minutes (`0` = disabled). Requires outbound reachability to Jira Cloud |
@@ -85,6 +88,24 @@ DATABASE_URL=sqlite:///./testhub.db
 # MySQL / MariaDB
 DATABASE_URL=mysql+pymysql://user:pass@localhost:3306/thorotest
 ```
+
+### Commercial production preflight
+
+Run the static gate in the exact environment used by the application before
+bootstrap or deployment:
+
+```bash
+make preflight
+# or machine-readable output
+python -m backend.preflight --strict --json
+```
+
+The gate never connects to a service and never emits configured secret values.
+It requires the supported commercial profile (production mode, PostgreSQL,
+required Redis, explicit migration step, HTTPS/CORS, no demo simulation, and a
+consistent upload policy). In strict mode it also requires the recommended
+support surface: JSON logs, metrics, SMTP, closed registration, and at least
+one durable provider worker.
 
 ### SECRET_KEY
 
@@ -171,11 +192,13 @@ AI_API_KEY=sk-...
 # Local example (Ollama)
 AI_BASE_URL=http://localhost:11434/v1
 AI_MODEL=llama3.1
+AI_ALLOW_PRIVATE_BASE_URL=1
 ```
 
 Setting `AI_BASE_URL` alone selects the OpenAI-compatible provider. Small local models (<8B)
 sometimes return malformed JSON — the API responds 500 in that case; prefer instruction-tuned
-8B+ models.
+8B+ models. Private and loopback endpoints are rejected unless
+`AI_ALLOW_PRIVATE_BASE_URL=1` is set explicitly.
 
 ## Theming
 

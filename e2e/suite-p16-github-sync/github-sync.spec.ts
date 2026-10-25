@@ -147,10 +147,23 @@ test.describe('Suite P16 — Tests as Code (GitHub sync)', () => {
     });
 
     const resp = await page.request.post(`${BASE}/api/integrations/${id}/sync`, { headers: { Authorization: `Bearer ${token}` } });
-    // 502 only if GitHub rate-limited/unreachable — skip rather than flake.
-    test.skip(resp.status() === 502, 'GitHub unreachable or rate-limited');
-    expect(resp.status()).toBe(200);
-    const body = await resp.json();
+    expect(resp.status()).toBe(202);
+    const queued = await resp.json();
+    let body: any = null;
+    for (let attempt = 0; attempt < 60; attempt++) {
+      await page.waitForTimeout(1000);
+      const status = await page.request.get(
+        `${BASE}/api/integrations/${id}/ci/jobs/${queued.job_id}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      expect(status.status()).toBe(200);
+      const job = await status.json();
+      if (job.queue_status === 'error') {
+        test.skip(true, `GitHub unreachable or rate-limited: ${job.error}`);
+      }
+      if (job.queue_status === 'done') { body = job.result; break; }
+    }
+    expect(body).not.toBeNull();
     expect(typeof body.commit).toBe('string');
     expect(body.commit.length).toBeGreaterThan(0);
     expect(typeof body.created).toBe('number');

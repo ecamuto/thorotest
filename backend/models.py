@@ -153,9 +153,14 @@ class Pipeline(Base):
 
 
 class CIJob(Base):
-    """Durable provider orchestration job shared by every application worker."""
+    """Durable provider job shared by every application worker.
+
+    ``ci_run`` jobs dispatch and collect a provider pipeline; ``integration_sync``
+    jobs pull tests or requirements. Both use the same leased, recoverable queue.
+    """
     __tablename__ = "ci_jobs"
     id = Column(String(64), primary_key=True)
+    job_type = Column(String(32), nullable=False, default="ci_run")
     integration_id = Column(String(255), nullable=False, index=True)
     provider = Column(String(32), nullable=False)
     workflow = Column(String(255), nullable=False)
