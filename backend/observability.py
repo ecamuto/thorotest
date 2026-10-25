@@ -20,7 +20,13 @@ request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(
 _REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 _JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b")
 _BEARER_RE = re.compile(r"(?i)(authorization\s*[:=]\s*bearer\s+)[^\s,;]+")
-_CREDENTIAL_URL_RE = re.compile(r"(?i)\b(redis(?:s)?://)[^\s/@]+@")
+_CREDENTIAL_URL_RE = re.compile(
+    r"(?i)\b([a-z][a-z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@"
+)
+_PROVIDER_TOKEN_RE = re.compile(
+    r"\b(?:gh[pousr]_[A-Za-z0-9]{8,}|github_pat_[A-Za-z0-9_]{8,}|"
+    r"glpat-[A-Za-z0-9_-]{8,}|sk-(?:ant-)?[A-Za-z0-9_-]{8,})\b"
+)
 _QUERY_SECRET_RE = re.compile(
     r"(?i)([?&](?:ticket|token|access_token|api_key)=)[^&\s]+"
 )
@@ -57,7 +63,7 @@ REDIS_RECONNECTS = Counter(
 )
 CI_JOB_OUTCOMES = Counter(
     "thorotest_ci_jobs_total",
-    "CI orchestration outcomes",
+    "Durable provider job outcomes (metric name retained for compatibility)",
     ("provider", "outcome"),
 )
 
@@ -67,6 +73,7 @@ def redact(value: object) -> str:
     text = _JWT_RE.sub("[REDACTED_JWT]", text)
     text = _BEARER_RE.sub(r"\1[REDACTED]", text)
     text = _CREDENTIAL_URL_RE.sub(r"\1[REDACTED]@", text)
+    text = _PROVIDER_TOKEN_RE.sub("[REDACTED_TOKEN]", text)
     return _QUERY_SECRET_RE.sub(r"\1[REDACTED]", text)
 
 

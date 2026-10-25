@@ -4,6 +4,7 @@ integration save (no DNS) and with full resolution in the HTTP clients."""
 import socket
 
 import pytest
+from fastapi import HTTPException
 
 from backend.net_guard import assert_public_http_url, UnsafeURLError
 
@@ -58,6 +59,29 @@ class TestClientConstructorsGuarded:
         from backend.jira_sync import JiraClient
         with pytest.raises(UnsafeURLError):
             JiraClient("https://10.1.2.3", "e@e.com", "tok")
+
+
+class TestAIBaseURLPolicy:
+    def test_private_ai_base_requires_narrow_opt_in(self, monkeypatch):
+        from backend.routers import ai
+
+        monkeypatch.setenv("AI_PROVIDER", "openai")
+        monkeypatch.setenv("AI_MODEL", "local-model")
+        monkeypatch.setenv("AI_BASE_URL", "http://127.0.0.1:11434/v1")
+        monkeypatch.setenv("NET_GUARD_ALLOW_PRIVATE_HOSTS", "1")
+        monkeypatch.delenv("AI_ALLOW_PRIVATE_BASE_URL", raising=False)
+        with pytest.raises(HTTPException) as caught:
+            ai._ensure_configured()
+        assert caught.value.status_code == 503
+
+    def test_private_ai_base_passes_with_explicit_opt_in(self, monkeypatch):
+        from backend.routers import ai
+
+        monkeypatch.setenv("AI_PROVIDER", "openai")
+        monkeypatch.setenv("AI_MODEL", "local-model")
+        monkeypatch.setenv("AI_BASE_URL", "http://127.0.0.1:11434/v1")
+        monkeypatch.setenv("AI_ALLOW_PRIVATE_BASE_URL", "1")
+        ai._ensure_configured()
 
 
 class TestIntegrationSaveValidation:

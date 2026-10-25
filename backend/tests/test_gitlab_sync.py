@@ -106,6 +106,8 @@ def test_gitlab_sync_endpoint(client, db, monkeypatch):
     ))
     db.commit()
     r = client.post("/api/integrations/int-gl-ep/sync")
-    assert r.status_code == 200, r.text
-    assert r.json()["created"] == 2
-    assert db.query(models.Test).filter_by(id="TC-GL1").first() is not None
+    assert r.status_code == 202, r.text
+    job = db.query(models.CIJob).filter_by(id=r.json()["job_id"]).one()
+    assert job.job_type == "integration_sync"
+    assert job.provider == "gitlab"
+    assert job.queue_status == "queued"

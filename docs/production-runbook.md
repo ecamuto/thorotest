@@ -5,17 +5,19 @@ appropriate for evaluation and a small, single-process install only.
 
 ## Deploy or upgrade
 
-1. Back up the database and `uploads/` together using [BACKUP.md](../BACKUP.md).
-2. Pull an immutable release tag or digest. Verify its GitHub attestation with
+1. Run `python -m backend.preflight --strict` in the deployment environment and
+   archive its output with the change record. It is static and secret-safe.
+2. Back up the database and `uploads/` together using [BACKUP.md](../BACKUP.md).
+3. Pull an immutable release tag or digest. Verify its GitHub attestation with
    `gh attestation verify oci://ghcr.io/ecamuto/thorotest:<version> -R ecamuto/thorotest`.
-3. Run `python -m backend.bootstrap` once with the release image and production
+4. Run `python -m backend.bootstrap` once with the release image and production
    `DATABASE_URL`. This applies Alembic migrations and creates the first admin
    only when needed.
-4. Start application replicas only after bootstrap succeeds. Normal workers
+5. Start application replicas only after bootstrap succeeds. Normal workers
    verify the Alembic head and refuse to mutate an old schema.
-5. Wait for `/ready` to return HTTP 200. In the reference topology it verifies
+6. Wait for `/ready` to return HTTP 200. In the reference topology it verifies
    both PostgreSQL and Redis. `/health` is the liveness check.
-6. Smoke-test login, `GET /api/initial-data`, a WebSocket run view, and one
+7. Smoke-test login, `GET /api/initial-data`, a WebSocket run view, and one
    backup restore in a disposable environment.
 
 The Compose files implement steps 3–5 with a one-shot `bootstrap` service.
@@ -54,6 +56,8 @@ endpoints fail closed. Exercise quarterly:
 Provider APIs are not transactional. Recovery is at-least-once, so a provider
 call interrupted at the network boundary can be repeated. Keep workflows and
 result imports idempotent and investigate duplicate provider runs by `job_id`.
+GitHub/GitLab/Jira content synchronization uses this durable queue as well; the
+UI polls its job instead of holding an HTTP worker until provider I/O finishes.
 
 ## Observability
 

@@ -156,11 +156,13 @@ def test_sync_endpoint(client, db, monkeypatch):
     db.commit()
 
     r = client.post("/api/integrations/int-github-1/sync")
-    assert r.status_code == 200, r.text
+    assert r.status_code == 202, r.text
     body = r.json()
-    assert body["created"] == 1
-    assert body["commit"] == "deadbee"
-    assert db.query(models.Test).filter_by(id="TC-9").first() is not None
+    assert body["job_type"] == "integration_sync"
+    job = db.query(models.CIJob).filter_by(id=body["job_id"]).one()
+    assert job.provider == "github"
+    assert job.queue_status == "queued"
+    assert db.query(models.Test).filter_by(id="TC-9").first() is None
 
 
 def test_sync_endpoint_rejects_unknown_provider(client, db):

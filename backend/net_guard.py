@@ -12,9 +12,9 @@ Set NET_GUARD_ALLOW_PRIVATE_HOSTS=1 (or the legacy WEBHOOK_ALLOW_PRIVATE_HOSTS)
 to disable the IP checks — needed for local dev and the e2e suite, which point
 webhooks and a local GitLab at 127.0.0.1. Never set either in production.
 
-Deliberately NOT guarded: AI_BASE_URL. It is operator-set environment config
-(never writable through the API), and pointing it at a private host is the
-supported local-LLM setup (Ollama, LM Studio, vLLM).
+AI_BASE_URL is guarded too. Private local-LLM endpoints require the narrower
+AI_ALLOW_PRIVATE_BASE_URL=1 opt-in rather than disabling protection for every
+webhook and integration target.
 """
 import ipaddress
 import os
@@ -51,7 +51,13 @@ def _ip_is_blocked(ip: str) -> bool:
     )
 
 
-def assert_public_http_url(url: str, *, resolve: bool = True) -> None:
+def assert_public_http_url(
+    url: str,
+    *,
+    resolve: bool = True,
+    allow_private: bool = False,
+    honor_global_bypass: bool = True,
+) -> None:
     """Raise UnsafeURLError unless `url` is an http(s) URL on a public host.
     A no-op when NET_GUARD_ALLOW_PRIVATE_HOSTS is set.
 
@@ -67,7 +73,7 @@ def assert_public_http_url(url: str, *, resolve: bool = True) -> None:
     if not host:
         raise UnsafeURLError("URL has no host")
 
-    if _guard_disabled():
+    if allow_private or (honor_global_bypass and _guard_disabled()):
         return
 
     if host.lower() == "localhost" or host.lower().endswith(".localhost"):

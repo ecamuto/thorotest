@@ -1,4 +1,4 @@
-"""Durable, multi-worker-safe executor for CI provider jobs."""
+"""Durable, multi-worker-safe executor for CI and synchronization jobs."""
 
 from __future__ import annotations
 
@@ -183,7 +183,7 @@ class CIJobWorker:
                     error = work.exception()
                     if error:
                         logger.error(
-                            "CI job %s failed (%s)", job_id, type(error).__name__
+                            "Provider job %s failed (%s)", job_id, type(error).__name__
                         )
                     finish_job(
                         job_id,
@@ -195,7 +195,7 @@ class CIJobWorker:
                     renew_lease, job_id, self.worker_id
                 )
                 if not renewed:
-                    logger.error("Lost lease for CI job %s", job_id)
+                    logger.error("Lost lease for provider job %s", job_id)
                     return
         finally:
             if not work.done():

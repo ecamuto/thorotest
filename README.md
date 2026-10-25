@@ -4,7 +4,7 @@
 
 [![version](https://img.shields.io/badge/version-1.13.0-blue)](package.json)
 [![license](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-757%20unit%20%2B%2039%20e2e%20suites-brightgreen)](#tests)
+[![tests](https://img.shields.io/badge/tests-769%20unit%20%2B%2039%20e2e%20suites-brightgreen)](#tests)
 [![backend](https://img.shields.io/badge/backend-FastAPI-009688)](#stack)
 [![frontend](https://img.shields.io/badge/frontend-React%2018-61DAFB)](#stack)
 [![docker](https://img.shields.io/badge/deploy-Docker-2496ED)](#quickstart)
@@ -219,7 +219,10 @@ Only `title` is required. Malformed files are skipped and reported in the sync r
 
 ### Endpoints
 
-- `POST /api/integrations/{id}/sync` (admin/manager) → `{ created, updated, skipped, commit, files, warnings, last_sync }`. Routes to GitHub or GitLab by the integration's provider.
+- `POST /api/integrations/{id}/sync` (admin/manager) → HTTP 202 with
+  `{ job_id, job_type, status }`. GitHub, GitLab, and Jira sync outside the
+  request path on the recoverable provider queue; poll
+  `GET /api/integrations/{id}/ci/jobs/{job_id}` and read `result` at completion.
 - `POST /api/tests/{id}/push-to-git` (admin/manager) → `{ ok, committed, commit, path, branch }`. **409** when the file diverged on Git; **400** when the test has no Git source or no integration matches its repo.
 
 ---
@@ -361,12 +364,14 @@ lives in one place (the run), never in the YAML.
 | CLI — lint, sync, status from any CI provider | [docs/cli.md](docs/cli.md) |
 | Backup & restore | [BACKUP.md](BACKUP.md) |
 | Full production roadmap | [PRODUCTION_ROADMAP.md](PRODUCTION_ROADMAP.md) |
+| Commercial self-host launch gate | [COMMERCIAL_READINESS.md](COMMERCIAL_READINESS.md) |
+| Support and release policy | [SUPPORT.md](SUPPORT.md) |
 
 ---
 
 ## Tests
 
-**757 backend unit tests** (pytest) + **39 Playwright e2e suites** covering every major flow — CI-gated.
+**769 backend unit tests** (pytest) + **39 Playwright e2e suites** covering every major flow — CI-gated.
 
 ```bash
 make test        # backend unit tests
@@ -407,6 +412,9 @@ All 7 production-readiness items are **done** (v1.0), and post-v1 features shipp
 - 🚧 v1.15 experience foundation: route-level view loading, resilient SPA
   fallbacks, navigation announcements/focus, automated WCAG A/AA gates in both
   themes, and the provider-neutral `thorotest run` workflow.
+- ✅ v1.16 commercial self-host readiness: durable provider-sync jobs,
+  strict attachment MIME policy, complete outbound URL controls, and a
+  secret-safe production preflight gate.
 - ⏳ SSO / SAML / SCIM.
 
 Have a request? [Open an issue](https://github.com/ecamuto/thorotest/issues).

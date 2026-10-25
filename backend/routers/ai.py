@@ -11,6 +11,7 @@ from ..db import get_db
 from .. import models
 from ..rate_limit import RateLimitUnavailable, SharedRateLimiter
 from ..auth_utils import require_role, get_current_user
+from ..net_guard import assert_public_http_url, UnsafeURLError
 
 router = APIRouter(tags=["ai"])
 
@@ -46,6 +47,32 @@ def _ensure_configured() -> None:
     else:
         if not os.getenv("AI_MODEL"):
             raise HTTPException(status_code=503, detail="AI features not configured (AI_MODEL missing)")
+        _validate_openai_base_url(resolve=False)
+
+
+def _private_ai_base_allowed() -> bool:
+    return os.getenv("AI_ALLOW_PRIVATE_BASE_URL", "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+
+
+def _validate_openai_base_url(*, resolve: bool) -> str:
+    base_url = os.getenv("AI_BASE_URL", "https://api.openai.com/v1")
+    try:
+        assert_public_http_url(
+            base_url,
+            resolve=resolve,
+            allow_private=_private_ai_base_allowed(),
+            # The broad integration/webhook escape hatch must not silently
+            # authorize a private AI target carrying an API credential.
+            honor_global_bypass=False,
+        )
+    except UnsafeURLError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"AI_BASE_URL blocked by outbound policy: {exc}",
+        )
+    return base_url
 
 
 def _get_client() -> AsyncAnthropic:
@@ -66,7 +93,7 @@ def _get_openai_client():
         except ImportError:
             raise HTTPException(status_code=503, detail="AI provider 'openai' requires the openai package (pip install openai)")
         _openai_client = AsyncOpenAI(
-            base_url=os.getenv("AI_BASE_URL", "https://api.openai.com/v1"),
+            base_url=_validate_openai_base_url(resolve=True),
             # Local servers (Ollama, LM Studio) accept any non-empty key.
             api_key=os.getenv("AI_API_KEY", "not-needed"),
         )

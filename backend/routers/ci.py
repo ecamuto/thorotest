@@ -281,11 +281,14 @@ def execute_job(job_id: str, worker_id: str | None = None) -> None:
             .first()
         )
         if not intg:
-            raise RuntimeError("CI integration was deleted")
+            raise RuntimeError("provider integration was deleted")
+        job_type = job.job_type
         provider = job.provider
         run_name = job.run_name
         since = datetime.fromisoformat(job.started_at)
-        if provider == "gitlab":
+        if job_type == "integration_sync":
+            cfg = None
+        elif provider == "gitlab":
             cfg = gitlab_ci_config(intg)
         else:
             payload = CIRunRequest(
@@ -298,7 +301,11 @@ def execute_job(job_id: str, worker_id: str | None = None) -> None:
     finally:
         db.close()
 
-    if provider == "gitlab":
+    if job_type == "integration_sync":
+        from .integrations import execute_sync_job
+
+        execute_sync_job(job_id, worker_id)
+    elif provider == "gitlab":
         _orchestrate_gitlab(job_id, cfg, run_name, worker_id)
     else:
         _orchestrate(job_id, cfg, since, run_name, worker_id)
@@ -341,6 +348,7 @@ async def ci_run(intg_id: str, payload: CIRunRequest, db: Session = Depends(get_
         now = since.isoformat()
         db.add(models.CIJob(
             id=job_id,
+            job_type="ci_run",
             integration_id=intg_id,
             provider="gitlab",
             workflow="pipeline",
@@ -374,6 +382,7 @@ async def ci_run(intg_id: str, payload: CIRunRequest, db: Session = Depends(get_
     now = since.isoformat()
     db.add(models.CIJob(
         id=job_id,
+        job_type="ci_run",
         integration_id=intg_id,
         provider="github",
         workflow=cfg["workflow"],
@@ -405,6 +414,7 @@ def ci_job_status(intg_id: str, job_id: str, db: Session = Depends(get_db), _: m
         ).scalar()
     return {
         "id": job.id,
+        "job_type": job.job_type,
         "integration_id": job.integration_id,
         "workflow": job.workflow,
         "ref": job.ref,
@@ -423,6 +433,7 @@ def ci_job_status(intg_id: str, job_id: str, db: Session = Depends(get_db), _: m
         "pipeline_row_id": job.pipeline_row_id,
         "pipeline_status": pipeline_status,
         "imported": job.result,
+        "result": job.result,
         "error": job.error,
     }
 

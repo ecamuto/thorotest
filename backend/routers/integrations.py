@@ -1,3 +1,6 @@
+from datetime import datetime, timezone
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
@@ -89,27 +92,95 @@ def update_integration(intg_id: str, payload: IntegrationUpdate, db: Session = D
     return intg
 
 
-@router.post("/integrations/{intg_id}/sync")
-def sync_integration_now(intg_id: str, db: Session = Depends(get_db), _: models.User = WRITE_ROLES):
-    """Sync an integration. GitHub → pull YAML tests; Jira → pull stories/epics as requirements."""
+def _sync_provider(intg: models.Integration) -> str:
+    if intg.type == "jira":
+        return "jira"
+    return detect_provider(intg.config or {})
+
+
+def enqueue_sync_job(db: Session, intg: models.Integration) -> models.CIJob:
+    """Create, or coalesce onto, one active durable sync per integration."""
+    active = db.query(models.CIJob).filter(
+        models.CIJob.integration_id == intg.id,
+        models.CIJob.job_type == "integration_sync",
+        models.CIJob.queue_status.in_(("queued", "processing")),
+    ).order_by(models.CIJob.started_at.desc()).first()
+    if active:
+        return active
+
+    provider = _sync_provider(intg)
+    now = datetime.now(timezone.utc).isoformat()
+    job = models.CIJob(
+        id=uuid.uuid4().hex[:12],
+        job_type="integration_sync",
+        integration_id=intg.id,
+        provider=provider,
+        workflow="sync",
+        ref="",
+        status="queued",
+        queue_status="queued",
+        started_at=now,
+        updated_at=now,
+    )
+    db.add(job)
+    db.commit()
+    return job
+
+
+def execute_sync_job(job_id: str, worker_id: str | None = None) -> None:
+    """Execute one leased provider-sync job outside the HTTP request path."""
+    from .ci import LostJobLease, _update_job
+    from ..db import SessionLocal
+
+    db = SessionLocal()
+    try:
+        query = db.query(models.CIJob).filter(models.CIJob.id == job_id)
+        if worker_id is not None:
+            query = query.filter(
+                models.CIJob.queue_status == "processing",
+                models.CIJob.worker_id == worker_id,
+            )
+        job = query.first()
+        if not job:
+            raise LostJobLease(f"provider sync job {job_id} lease is no longer owned")
+        intg = db.query(models.Integration).filter(
+            models.Integration.id == job.integration_id
+        ).first()
+        if not intg:
+            raise RuntimeError("integration was deleted")
+
+        _update_job(job_id, worker_id=worker_id, status="syncing")
+        try:
+            if intg.type == "jira":
+                stats = sync_jira_requirements(db, intg)
+            elif job.provider == "gitlab":
+                stats = sync_gitlab_integration(db, intg)
+            else:
+                stats = sync_integration(db, intg)
+        except Exception:
+            intg.status = "error"
+            db.commit()
+            raise
+        intg.status = "active"
+        db.commit()
+        stats = {"last_sync": intg.last_sync, **stats}
+    finally:
+        db.close()
+
+    _update_job(job_id, worker_id=worker_id, status="done", result=stats)
+
+
+@router.post("/integrations/{intg_id}/sync", status_code=202)
+def enqueue_integration_sync(intg_id: str, db: Session = Depends(get_db), _: models.User = WRITE_ROLES):
+    """Queue a recoverable GitHub/GitLab/Jira sync and return immediately."""
     intg = db.query(models.Integration).filter(models.Integration.id == intg_id).first()
     if not intg:
         raise HTTPException(status_code=404, detail="Integration not found")
     try:
-        if intg.type == "jira":
-            stats = sync_jira_requirements(db, intg)
-        elif detect_provider(intg.config or {}) == "gitlab":
-            stats = sync_gitlab_integration(db, intg)
-        else:
-            # sync_integration validates the config points at a github.com repo.
-            stats = sync_integration(db, intg)
+        job = enqueue_sync_job(db, intg)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except RuntimeError as e:
-        intg.status = "error"
-        db.commit()
-        raise HTTPException(status_code=502, detail=str(e))
-    return {"ok": True, "last_sync": intg.last_sync, **stats}
+    return {"job_id": job.id, "job_type": job.job_type, "status": job.status}
 
 
 @router.delete("/integrations/{intg_id}", status_code=204)

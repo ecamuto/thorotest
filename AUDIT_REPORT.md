@@ -47,6 +47,23 @@ Companion deliverables: `EXECUTIVE_SUMMARY.md`, `SECURITY_AUDIT.md`, `PERFORMANC
 > still depends on the separate product decisions noted in §23 (tenancy/SSO,
 > licensing, support and go-to-market), not another foundational rewrite.
 
+> **Phase 3 commercial self-host update — 2026-10-25 (v1.16, unreleased).**
+> The launch target is now explicit: one dedicated installation per customer
+> organization, not a shared multi-customer SaaS. GitHub, GitLab, and Jira sync
+> execute on recoverable database-leased provider jobs instead of holding HTTP
+> workers; scheduled Jira sync uses the same queue. Attachments enforce an
+> extension/MIME matrix and path confinement through deletion, and configurable
+> AI egress is guarded unless a narrow private-target opt-in is set. A secret-safe
+> strict production preflight checks the supported PostgreSQL/Redis/HTTPS
+> topology, and the repository now documents customer handoff, licensing and
+> support boundaries. Multi-tenant authorization, SAML/SCIM, pricing, signed
+> customer agreements and SLA commitments remain explicit later/external gates.
+> Local acceptance: 830 backend tests passed (4 skipped), 69 CLI tests passed,
+> all 265 Playwright cases passed after one corrected documentation-version
+> rerun, the production frontend/container builds succeeded, the fresh-image
+> migration reached `f3a1b2c4d5e6`, strict preflight passed 14/14, and the
+> dependency audit reported no known vulnerabilities.
+
 > **Current-validation update — 2026-08-28 (v1.13.0, branch `fix/audit-findings-v1-13`).** A review against commit `c36badb` confirmed the v1.10 remediation and identified five current gaps. The branch closes all five: category and pipeline-reconciliation RBAC, long-lived session JWTs in WebSocket URLs (replaced by one-minute scoped tickets), a non-blocking dependency audit and ignored `python-jose`/`ecdsa` advisory (migrated to PyJWT and made blocking), and webhook unit tests coupled to live DNS. During the ticket change, an additional Critical scope-confusion flaw was found and fixed: `scope=2fa_pending` tokens were accepted by REST/GraphQL session validation before TOTP completion. Regression coverage now checks REST, WebSocket, role, revocation, and API-token boundaries. The original v1.9 assessment below remains a point-in-time record rather than a current scorecard.
 
 > **Remediation update — 2026-07-17 (v1.10.0).** The Week-1 P0 items are closed:

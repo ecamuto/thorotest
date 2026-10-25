@@ -11,6 +11,11 @@ heading per release, `### <Group>` subsections, `-` bullets.
 ## [Unreleased]
 
 ### Added
+- Add a production preflight command (`python -m backend.preflight --strict`)
+  that validates the commercial self-host profile without connecting to
+  services or printing secret values.
+- Run GitHub, GitLab, and Jira synchronization through the recoverable,
+  database-backed provider-job queue instead of blocking request workers.
 - Add route-level frontend delivery with cache-safe dynamic loading, recovery
   states, render-error containment, route titles, focus transfer, and
   screen-reader navigation announcements. The initial view payload is 89%
@@ -39,6 +44,13 @@ heading per release, `### <Group>` subsections, `-` bullets.
   keyless cosign signature.
 
 ### Security
+- Require attachment filename extensions and declared MIME types to match,
+  confine deletion paths as well as upload/download paths, and require paired
+  explicit overrides for custom evidence types.
+- Guard OpenAI-compatible `AI_BASE_URL` targets against SSRF. Private local
+  models now require the dedicated `AI_ALLOW_PRIVATE_BASE_URL=1` opt-in.
+- Redact credentials embedded in arbitrary provider URLs and common provider
+  token formats from durable job errors.
 - Enforce login, password-reset, 2FA, and AI quotas atomically through Redis
   across every worker and replica. Redis keys hash caller identifiers, and a
   configured or required Redis backend fails closed instead of falling back to

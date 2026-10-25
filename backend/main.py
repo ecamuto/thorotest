@@ -54,23 +54,38 @@ if FRONTEND_DIR == _FRONTEND_SRC:
 
 
 async def _jira_autosync_loop(interval_seconds: int):
-    """Background loop: periodically sync all jira integrations. Opt-in via
-    JIRA_AUTOSYNC_MINUTES > 0. Requires outbound reachability to Jira Cloud;
-    a no-op when no jira integration is configured."""
+    """Periodically enqueue Jira syncs on the durable provider queue."""
     import asyncio
 
     from .db import SessionLocal
-    from .jira_sync import sync_all_jira_integrations
+    from .routers.integrations import enqueue_sync_job
 
     log = logging.getLogger("thorotest.jira")
     log.info("jira auto-sync enabled — every %s min", interval_seconds // 60)
     while True:
         try:
             await asyncio.sleep(interval_seconds)
+            if runtime_state.client is not None:
+                # Every replica runs a scheduler loop. One short Redis lease
+                # elects a single enqueuer per tick; active DB jobs coalesce as
+                # a second line of defence.
+                elected = await runtime_state.client.set(
+                    runtime_state.key("scheduler", "jira"),
+                    "1",
+                    nx=True,
+                    ex=max(60, interval_seconds - 1),
+                )
+                if not elected:
+                    continue
             db = SessionLocal()
             try:
-                # DB + network calls are blocking; run off the event loop.
-                await asyncio.to_thread(sync_all_jira_integrations, db)
+                integrations = db.query(models.Integration).filter(
+                    models.Integration.type == "jira",
+                    models.Integration.status != "disabled",
+                ).all()
+                for integration in integrations:
+                    enqueue_sync_job(db, integration)
+                log.info("jira auto-sync queued %s integration(s)", len(integrations))
             finally:
                 db.close()
         except asyncio.CancelledError:
