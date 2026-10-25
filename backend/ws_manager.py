@@ -6,6 +6,8 @@ from typing import Dict, List
 from fastapi import WebSocket
 from .db import SessionLocal
 from . import models
+from .event_bus import RuntimeEventBus, runtime_event_bus
+from .observability import websocket_connected, websocket_disconnected
 from .notifications import _notify_run_events, _fire_webhooks
 
 logger = logging.getLogger("thorotest.ws")
@@ -24,20 +26,26 @@ if DEMO_MODE and os.getenv("ENVIRONMENT", os.getenv("ENV", "")).strip().lower() 
 
 
 class RunWSManager:
-    def __init__(self):
+    def __init__(self, event_bus: RuntimeEventBus = runtime_event_bus):
         self.connections: Dict[str, List[WebSocket]] = {}
         self.running_tasks: Dict[str, asyncio.Task] = {}
+        self.event_bus = event_bus
+        self.event_bus.register("run", self._receive_remote)
 
     async def connect(self, run_id: str, websocket: WebSocket):
         await websocket.accept()
         self.connections.setdefault(run_id, []).append(websocket)
+        websocket_connected("run")
 
     def disconnect(self, run_id: str, websocket: WebSocket):
         conns = self.connections.get(run_id, [])
         if websocket in conns:
             conns.remove(websocket)
+            websocket_disconnected("run")
+        if not conns:
+            self.connections.pop(run_id, None)
 
-    async def broadcast(self, run_id: str, message: dict):
+    async def _broadcast_local(self, run_id: str, message: dict):
         conns = self.connections.get(run_id, [])
         dead = []
         for ws in conns:
@@ -47,6 +55,21 @@ class RunWSManager:
                 dead.append(ws)
         for ws in dead:
             conns.remove(ws)
+            websocket_disconnected("run")
+        if not conns:
+            self.connections.pop(run_id, None)
+
+    async def _receive_remote(self, payload: dict):
+        run_id = payload.get("run_id")
+        message = payload.get("message")
+        if isinstance(run_id, str) and isinstance(message, dict):
+            await self._broadcast_local(run_id, message)
+
+    async def broadcast(self, run_id: str, message: dict):
+        await self._broadcast_local(run_id, message)
+        await self.event_bus.publish(
+            "run", {"run_id": run_id, "message": message}
+        )
 
     async def start_simulation(self, run_id: str):
         if not DEMO_MODE:

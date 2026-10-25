@@ -152,6 +152,34 @@ class Pipeline(Base):
     integration_id = Column(String(255), nullable=True)  # source integration — lets a reconcile poll re-query the provider after a restart
 
 
+class CIJob(Base):
+    """Durable provider orchestration job shared by every application worker."""
+    __tablename__ = "ci_jobs"
+    id = Column(String(64), primary_key=True)
+    integration_id = Column(String(255), nullable=False, index=True)
+    provider = Column(String(32), nullable=False)
+    workflow = Column(String(255), nullable=False)
+    ref = Column(String(255), nullable=False)
+    artifact = Column(String(255), nullable=True)
+    run_name = Column(String(512), nullable=True)
+    status = Column(String(32), nullable=False, default="queued")
+    queue_status = Column(String(32), nullable=False, default="queued", index=True)
+    external_run_id = Column(String(255), nullable=True)
+    external_url = Column(String(512), nullable=True)
+    pipeline_row_id = Column(String(255), nullable=True)
+    result = Column(JSON, nullable=True)
+    error = Column(Text, nullable=True)
+    started_at = Column(String(64), nullable=False)
+    updated_at = Column(String(64), nullable=False)
+    lease_until = Column(String(64), nullable=True, index=True)
+    worker_id = Column(String(64), nullable=True)
+    attempts = Column(Integer, nullable=False, default=0)
+
+    __table_args__ = (
+        Index("ix_ci_jobs_claim", "queue_status", "lease_until", "started_at"),
+    )
+
+
 class TestPlan(Base):
     __tablename__ = "test_plans"
     id = Column(String(255), primary_key=True)

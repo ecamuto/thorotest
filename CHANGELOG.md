@@ -16,8 +16,23 @@ heading per release, `### <Group>` subsections, `-` bullets.
   internal persistent Redis service in the production Compose topology.
 - Exercise Redis connectivity in CI while preserving Redis-free,
   single-process local development.
+- Deliver run and notification WebSocket events across workers through a
+  reconnecting, namespaced Redis Pub/Sub bus without duplicate local delivery.
+- Persist CI orchestration jobs in the database with atomic claims, renewable
+  leases, crash recovery, terminal retention, and cross-worker status polling.
+- Separate schema/admin bootstrap from worker startup with
+  `python -m backend.bootstrap` and one-shot Compose services.
+- Add request IDs, redacted JSON logging, Prometheus request/WebSocket/Redis/CI
+  metrics, alert examples, and a production deploy/rollback runbook.
+- Gate version tags on all test suites and dependency audit, then publish a
+  multi-architecture GHCR image with SBOM, provenance, attestation, and a
+  keyless cosign signature.
 
 ### Security
+- Enforce login, password-reset, 2FA, and AI quotas atomically through Redis
+  across every worker and replica. Redis keys hash caller identifiers, and a
+  configured or required Redis backend fails closed instead of falling back to
+  weaker per-process counters.
 - Reject `2fa_pending` and WebSocket-scoped JWTs at every REST and GraphQL
   session-authentication path. A user who had passed the password step but not
   TOTP could previously present the partial token as a full bearer session.
@@ -36,6 +51,8 @@ heading per release, `### <Group>` subsections, `-` bullets.
 ### Fixed
 - Preserve application loggers when Alembic configures migration logging, so
   runtime and readiness failures remain visible after schema startup.
+- Keep documented `postgresql://` connection strings on the packaged psycopg2
+  driver after SQLAlchemy 2.1 changed its default PostgreSQL driver.
 
 ## [1.13.0] - 2026-07-29
 

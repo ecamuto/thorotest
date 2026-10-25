@@ -78,10 +78,10 @@ webhooks), and the Docker deployment as shipped in this repository.
 These are documented deliberately rather than reported as new findings. They are
 design trade-offs at the current stage, not oversights:
 
-- **Rate limiting is per process.** Login throttling, the AI request quota, and
-  2FA attempt limits are held in memory, so running multiple workers or replicas
-  multiplies each effective limit. Run a single worker, or enforce limits at a
-  proxy, until shared limits land. See `docs/configuration.md`.
+- **Redis Pub/Sub is best-effort.** Global rate limits are atomic across workers,
+  but realtime events emitted during a Redis outage are not replayed. WebSocket
+  clients must refresh authoritative database state after reconnect. Durable CI
+  jobs and their recovery leases live in the relational database.
 - **No project-level isolation.** Every authenticated user can read all tests,
   runs, defects, and requirements in the instance. Roles restrict what you can
   *change*, not what you can *see*. Do not use one instance as a boundary

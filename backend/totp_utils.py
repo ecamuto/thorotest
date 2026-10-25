@@ -20,7 +20,7 @@ import jwt
 from jwt import PyJWTError
 
 from .auth_utils import SECRET_KEY, ALGORITHM, pwd_context
-from .rate_limit import SlidingWindowLimiter
+from .rate_limit import SharedRateLimiter
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -28,11 +28,15 @@ from .rate_limit import SlidingWindowLimiter
 
 _SAFE_CHARS = "abcdefghjkmnpqrstuvwxyz23456789"  # no 0/O/1/l
 
-# Failed-2FA-attempt counter keyed by user_id. Bounded and per-process — see
-# backend/rate_limit.py. Defaults match the previous inline values.
+# Failed-2FA-attempt counter keyed by user_id. Shared through Redis when
+# configured and bounded in-process otherwise.
 _2FA_MAX_ATTEMPTS = 5
 _2FA_WINDOW_SECONDS = 30
-_2fa_rate_store = SlidingWindowLimiter(_2FA_MAX_ATTEMPTS, _2FA_WINDOW_SECONDS)
+_2fa_rate_store = SharedRateLimiter(
+    "2fa",
+    _2FA_MAX_ATTEMPTS,
+    _2FA_WINDOW_SECONDS,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -180,9 +184,9 @@ def check_2fa_rate(user_id: int) -> tuple[bool, int]:
       - allowed=False: rate limit exceeded; retry_after is seconds until the
         oldest entry leaves the window
     """
-    return _2fa_rate_store.check(str(user_id))
+    return _2fa_rate_store.check_sync(str(user_id))
 
 
-def record_2fa_failure(user_id: int) -> None:
-    """Record a failed 2FA attempt timestamp for rate-limit tracking."""
-    _2fa_rate_store.record(str(user_id))
+def record_2fa_failure(user_id: int) -> tuple[bool, int]:
+    """Atomically record a failure, returning whether capacity was available."""
+    return _2fa_rate_store.record_sync(str(user_id))

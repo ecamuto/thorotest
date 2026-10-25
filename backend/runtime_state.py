@@ -1,9 +1,10 @@
 """Shared-runtime configuration and Redis lifecycle.
 
-V14-0 only establishes the connection contract. Rate limits, cross-worker
-WebSocket delivery, and CI job state are migrated in subsequent milestones.
-Keeping the lifecycle in one module prevents each feature from opening its own
-pool and gives readiness checks one authoritative view of Redis availability.
+Rate limits and cross-worker realtime delivery share this client. Durable CI
+job state lives in the relational database, so provider work survives both
+application and Redis restarts. Keeping Redis lifecycle here prevents each
+feature from opening its own pool and gives readiness checks one authoritative
+view of Redis availability.
 """
 
 from __future__ import annotations

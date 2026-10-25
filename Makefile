@@ -1,4 +1,4 @@
-.PHONY: help setup install lock dev frontend-build frontend-watch db-reset db-revision db-upgrade db-seed demo test test-e2e test-e2e-auth test-e2e-import test-all test-report hooks-install open clean clean-data docker-up docker-up-sqlite docker-down docker-logs
+.PHONY: help setup install lock dev frontend-build frontend-watch db-bootstrap db-reset db-revision db-upgrade db-seed demo test test-e2e test-e2e-auth test-e2e-import test-all test-report hooks-install open clean clean-data docker-up docker-up-sqlite docker-down docker-logs
 
 PYTHON  := python3
 VENV    := venv
@@ -23,8 +23,11 @@ frontend-build: ## Build frontend to frontend/dist (transpile + minify + vendor 
 frontend-watch: ## Rebuild frontend on change (run beside `make dev` when editing UI)
 	npm run watch
 
-dev: frontend-build ## Start backend dev server on http://localhost:8000
+dev: frontend-build db-bootstrap ## Bootstrap DB and start dev server on http://localhost:8000
 	$(UVICORN) backend.main:app --reload
+
+db-bootstrap: ## Migrate schema and create the first admin (safe/idempotent)
+	$(VENV)/bin/python -m backend.bootstrap
 
 db-reset: ## Delete DB — re-seeded automatically on next `make dev`
 	rm -f testhub.db
@@ -36,14 +39,18 @@ db-revision: ## Create an Alembic migration from model changes: make db-revision
 db-upgrade: ## Apply pending Alembic migrations to the local DB
 	$(VENV)/bin/alembic upgrade head
 
-lock: ## Regenerate requirements.lock from the venv (run after changing requirements.txt)
-	$(PIP) install -r requirements.txt
-	$(PIP) freeze --exclude-editable > requirements.lock.tmp
-	@{ echo "# Pinned transitive lock generated from the project venv (DEBT D-8)."; \
+lock: ## Regenerate requirements.lock in an isolated venv
+	@set -eu; \
+	 lock_venv="$$(mktemp -d .lock-venv.XXXXXX)"; \
+	 trap 'rm -rf "$$lock_venv" requirements.lock.tmp' EXIT; \
+	 $(PYTHON) -m venv "$$lock_venv"; \
+	 "$$lock_venv/bin/pip" install --upgrade pip; \
+	 "$$lock_venv/bin/pip" install -r requirements.txt; \
+	 "$$lock_venv/bin/pip" freeze --exclude-editable > requirements.lock.tmp; \
+	 { echo "# Pinned transitive lock generated from an isolated venv (DEBT D-8)."; \
 	   echo "# Regenerate after changing requirements.txt:  make lock"; \
 	   echo "# CI installs from this file; requirements.txt keeps the direct-dep ranges."; \
 	   cat requirements.lock.tmp; } > requirements.lock
-	@rm -f requirements.lock.tmp
 	@echo "requirements.lock regenerated."
 
 db-seed: ## Populate DB with demo data (deletes existing DB first)

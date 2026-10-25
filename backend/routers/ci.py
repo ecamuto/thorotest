@@ -34,10 +34,6 @@ POLL_INTERVAL = 15      # seconds between GitHub polls
 FIND_TIMEOUT = 120      # seconds to locate the dispatched run
 RUN_TIMEOUT = 1800      # seconds to wait for the run to complete
 
-# In-memory registry of dispatch jobs (per-process; lost on restart).
-_JOBS: dict[str, dict] = {}
-
-
 def _fmt_duration(seconds) -> str | None:
     """Seconds → "4m 12s" / "38s" for the pipelines table, or None."""
     if not seconds:
@@ -97,83 +93,113 @@ def _do_dispatch(cfg: dict) -> None:
         client.dispatch(cfg["owner"], cfg["repo"], cfg["workflow"], cfg["ref"])
 
 
-def _orchestrate(job_id: str, cfg: dict, since: datetime, run_name: Optional[str]) -> None:
+class LostJobLease(RuntimeError):
+    """Raised when an obsolete worker tries to mutate a recovered job."""
+
+
+def _update_job(job_id: str, *, worker_id: str | None = None, **fields) -> None:
+    db = SessionLocal()
+    try:
+        query = db.query(models.CIJob).filter(models.CIJob.id == job_id)
+        if worker_id is not None:
+            query = query.filter(
+                models.CIJob.queue_status == "processing",
+                models.CIJob.worker_id == worker_id,
+            )
+        job = query.first()
+        if not job:
+            if worker_id is not None:
+                raise LostJobLease(f"CI job {job_id} lease is no longer owned")
+            raise RuntimeError(f"CI job {job_id} no longer exists")
+        for key, value in fields.items():
+            setattr(job, key, value)
+        job.updated_at = datetime.now(timezone.utc).isoformat()
+        db.commit()
+    finally:
+        db.close()
+
+
+def _orchestrate(
+    job_id: str,
+    cfg: dict,
+    since: datetime,
+    run_name: Optional[str],
+    worker_id: str | None = None,
+) -> None:
     """Blocking: find the dispatched run, wait for completion, import results.
     Runs in a worker thread (httpx client is sync)."""
-    job = _JOBS[job_id]
-    try:
-        with GitHubActionsClient(cfg["token"]) as client:
-            # 1. find the run our dispatch created
-            job["status"] = "finding_run"
-            deadline = time.time() + FIND_TIMEOUT
-            run = None
-            while time.time() < deadline:
-                runs = client.list_runs(cfg["owner"], cfg["repo"], cfg["workflow"], branch=cfg["ref"])
-                run = pick_dispatched_run(runs, since)
-                if run:
-                    break
-                time.sleep(POLL_INTERVAL)
-            if not run:
-                raise RuntimeError("dispatched run not found (check workflow name / ref)")
+    with GitHubActionsClient(cfg["token"]) as client:
+        # 1. find the run our dispatch created
+        _update_job(job_id, worker_id=worker_id, status="finding_run")
+        deadline = time.time() + FIND_TIMEOUT
+        run = None
+        while time.time() < deadline:
+            runs = client.list_runs(
+                cfg["owner"], cfg["repo"], cfg["workflow"], branch=cfg["ref"]
+            )
+            run = pick_dispatched_run(runs, since)
+            if run:
+                break
+            time.sleep(POLL_INTERVAL)
+        if not run:
+            raise RuntimeError("dispatched run not found (check workflow name / ref)")
 
-            job["gh_run_id"] = run["id"]
-            job["gh_run_url"] = run.get("html_url")
-            job["status"] = "running"
+        _update_job(
+            job_id,
+            worker_id=worker_id,
+            external_run_id=str(run["id"]),
+            external_url=run.get("html_url"),
+            status="running",
+        )
 
-            # Record the live run on the pipelines page (running → pass/fail).
-            pipeline_row_id = f"gh-run-{run['id']}"
-            job["pipeline_row_id"] = pipeline_row_id
-            db0 = SessionLocal()
-            try:
-                _upsert_pipeline(
-                    db0, pipeline_row_id,
-                    name=run_name or run.get("name") or cfg["workflow"],
-                    platform="github", status="running",
-                    commit=(run.get("head_sha") or "")[:7] or None,
-                    branch=run.get("head_branch") or cfg["ref"],
-                    author=(run.get("actor") or {}).get("login"),
-                    when="just now",
-                    url=run.get("html_url"),
-                    integration_id=cfg.get("integration_id"),
-                )
-            finally:
-                db0.close()
+        # Record the live run on the pipelines page (running → pass/fail).
+        pipeline_row_id = f"gh-run-{run['id']}"
+        _update_job(job_id, worker_id=worker_id, pipeline_row_id=pipeline_row_id)
+        db0 = SessionLocal()
+        try:
+            _upsert_pipeline(
+                db0, pipeline_row_id,
+                name=run_name or run.get("name") or cfg["workflow"],
+                platform="github", status="running",
+                commit=(run.get("head_sha") or "")[:7] or None,
+                branch=run.get("head_branch") or cfg["ref"],
+                author=(run.get("actor") or {}).get("login"),
+                when="just now",
+                url=run.get("html_url"),
+                integration_id=cfg.get("integration_id"),
+            )
+        finally:
+            db0.close()
 
-            # 2. poll until completed
-            deadline = time.time() + RUN_TIMEOUT
-            while time.time() < deadline:
-                detail = client.get_run(cfg["owner"], cfg["repo"], run["id"])
-                if detail.get("status") == "completed":
-                    job["conclusion"] = detail.get("conclusion")
-                    break
-                time.sleep(POLL_INTERVAL)
-            else:
-                raise RuntimeError("run did not complete within timeout")
+        # 2. poll until completed
+        deadline = time.time() + RUN_TIMEOUT
+        while time.time() < deadline:
+            detail = client.get_run(cfg["owner"], cfg["repo"], run["id"])
+            if detail.get("status") == "completed":
+                conclusion = detail.get("conclusion")
+                break
+            time.sleep(POLL_INTERVAL)
+        else:
+            raise RuntimeError("run did not complete within timeout")
 
-            # 3. collect JUnit artifact → import (own DB session for the thread)
-            job["status"] = "collecting"
-            db = SessionLocal()
-            try:
-                stats = collect_run_results(
-                    db, client, cfg["owner"], cfg["repo"], run["id"],
-                    cfg["artifact"], run_name,
-                )
-                concl = job.get("conclusion")
-                _upsert_pipeline(
-                    db, pipeline_row_id,
-                    status="pass" if concl == "success" else "fail",
-                    duration=_fmt_duration(_gh_run_seconds(detail)),
-                    run_id=(stats.get("run_ids") or [None])[-1],
-                )
-            finally:
-                db.close()
+        # 3. collect JUnit artifact → import (own DB session for the thread)
+        _update_job(job_id, worker_id=worker_id, status="collecting")
+        db = SessionLocal()
+        try:
+            stats = collect_run_results(
+                db, client, cfg["owner"], cfg["repo"], run["id"],
+                cfg["artifact"], run_name,
+            )
+            _upsert_pipeline(
+                db, pipeline_row_id,
+                status="pass" if conclusion == "success" else "fail",
+                duration=_fmt_duration(_gh_run_seconds(detail)),
+                run_id=(stats.get("run_ids") or [None])[-1],
+            )
+        finally:
+            db.close()
 
-            job["status"] = "done"
-            job["imported"] = stats
-    except Exception as e:
-        logger.warning("CI job %s failed: %s", job_id, e)
-        job["status"] = "error"
-        job["error"] = str(e)
+        _update_job(job_id, worker_id=worker_id, status="done", result=stats)
 
 
 def _do_dispatch_gitlab(cfg: dict) -> dict:
@@ -181,46 +207,101 @@ def _do_dispatch_gitlab(cfg: dict) -> dict:
         return client.trigger_pipeline(cfg["project"], cfg["ref"])
 
 
-def _orchestrate_gitlab(job_id: str, cfg: dict, run_name: Optional[str]) -> None:
+def _orchestrate_gitlab(
+    job_id: str,
+    cfg: dict,
+    run_name: Optional[str],
+    worker_id: str | None = None,
+) -> None:
     """Blocking: poll the pipeline until it finishes, then import its test
     report. Runs in a worker thread."""
-    job = _JOBS[job_id]
-    pipeline_id = job["gl_pipeline_id"]
+    db_job = SessionLocal()
     try:
-        with GitLabActionsClient(cfg["api_base"], cfg["token"]) as client:
-            job["status"] = "running"
-            deadline = time.time() + RUN_TIMEOUT
-            while time.time() < deadline:
-                detail = client.get_pipeline(cfg["project"], pipeline_id)
-                if detail.get("status") in GITLAB_TERMINAL:
-                    job["conclusion"] = detail.get("status")
-                    break
-                time.sleep(POLL_INTERVAL)
-            else:
-                raise RuntimeError("pipeline did not complete within timeout")
+        query = db_job.query(models.CIJob).filter(models.CIJob.id == job_id)
+        if worker_id is not None:
+            query = query.filter(
+                models.CIJob.queue_status == "processing",
+                models.CIJob.worker_id == worker_id,
+            )
+        job = query.first()
+        if not job or not job.external_run_id:
+            raise RuntimeError("GitLab pipeline id missing from durable job")
+        pipeline_id = int(job.external_run_id)
+        pipeline_row_id = job.pipeline_row_id
+    finally:
+        db_job.close()
 
-            job["status"] = "collecting"
-            db = SessionLocal()
-            try:
-                stats = collect_pipeline_results(db, client, cfg["project"], pipeline_id, run_name)
-                pid = job.get("pipeline_row_id")
-                if pid:
-                    concl = job.get("conclusion")
-                    _upsert_pipeline(
-                        db, pid,
-                        status="pass" if concl == "success" else "fail",
-                        duration=_fmt_duration(detail.get("duration")),
-                        run_id=(stats.get("run_ids") or [None])[-1],
-                    )
-            finally:
-                db.close()
+    with GitLabActionsClient(cfg["api_base"], cfg["token"]) as client:
+        _update_job(job_id, worker_id=worker_id, status="running")
+        deadline = time.time() + RUN_TIMEOUT
+        while time.time() < deadline:
+            detail = client.get_pipeline(cfg["project"], pipeline_id)
+            if detail.get("status") in GITLAB_TERMINAL:
+                conclusion = detail.get("status")
+                break
+            time.sleep(POLL_INTERVAL)
+        else:
+            raise RuntimeError("pipeline did not complete within timeout")
 
-            job["status"] = "done"
-            job["imported"] = stats
-    except Exception as e:
-        logger.warning("CI job %s failed: %s", job_id, e)
-        job["status"] = "error"
-        job["error"] = str(e)
+        _update_job(job_id, worker_id=worker_id, status="collecting")
+        db = SessionLocal()
+        try:
+            stats = collect_pipeline_results(
+                db, client, cfg["project"], pipeline_id, run_name
+            )
+            if pipeline_row_id:
+                _upsert_pipeline(
+                    db, pipeline_row_id,
+                    status="pass" if conclusion == "success" else "fail",
+                    duration=_fmt_duration(detail.get("duration")),
+                    run_id=(stats.get("run_ids") or [None])[-1],
+                )
+        finally:
+            db.close()
+
+        _update_job(job_id, worker_id=worker_id, status="done", result=stats)
+
+
+def execute_job(job_id: str, worker_id: str | None = None) -> None:
+    """Load credentials at execution time and process one durable job."""
+    db = SessionLocal()
+    try:
+        query = db.query(models.CIJob).filter(models.CIJob.id == job_id)
+        if worker_id is not None:
+            query = query.filter(
+                models.CIJob.queue_status == "processing",
+                models.CIJob.worker_id == worker_id,
+            )
+        job = query.first()
+        if not job:
+            raise RuntimeError("CI job not found")
+        intg = (
+            db.query(models.Integration)
+            .filter(models.Integration.id == job.integration_id)
+            .first()
+        )
+        if not intg:
+            raise RuntimeError("CI integration was deleted")
+        provider = job.provider
+        run_name = job.run_name
+        since = datetime.fromisoformat(job.started_at)
+        if provider == "gitlab":
+            cfg = gitlab_ci_config(intg)
+        else:
+            payload = CIRunRequest(
+                workflow=job.workflow,
+                ref=job.ref,
+                artifact=job.artifact,
+            )
+            cfg = _resolve_cfg(intg, payload)
+            cfg["integration_id"] = job.integration_id
+    finally:
+        db.close()
+
+    if provider == "gitlab":
+        _orchestrate_gitlab(job_id, cfg, run_name, worker_id)
+    else:
+        _orchestrate(job_id, cfg, since, run_name, worker_id)
 
 
 @router.post("/integrations/{intg_id}/ci/run")
@@ -257,18 +338,24 @@ async def ci_run(intg_id: str, payload: CIRunRequest, db: Session = Depends(get_
             url=pipeline.get("web_url"),
             integration_id=intg_id,
         )
-        _JOBS[job_id] = {
-            "id": job_id,
-            "integration_id": intg_id,
-            "workflow": "pipeline",
-            "ref": cfg["ref"],
-            "status": "running",
-            "started_at": since.isoformat(),
-            "gl_pipeline_id": pipeline.get("id"),
-            "gh_run_url": pipeline.get("web_url"),
-            "pipeline_row_id": pipeline_row_id,
-        }
-        asyncio.create_task(asyncio.to_thread(_orchestrate_gitlab, job_id, cfg, payload.run_name))
+        now = since.isoformat()
+        db.add(models.CIJob(
+            id=job_id,
+            integration_id=intg_id,
+            provider="gitlab",
+            workflow="pipeline",
+            ref=cfg["ref"],
+            artifact=None,
+            run_name=payload.run_name,
+            status="queued",
+            queue_status="queued",
+            started_at=now,
+            updated_at=now,
+            external_run_id=str(pipeline.get("id")),
+            external_url=pipeline.get("web_url"),
+            pipeline_row_id=pipeline_row_id,
+        ))
+        db.commit()
         return {"job_id": job_id, "status": "dispatched", "workflow": "pipeline", "ref": cfg["ref"]}
 
     try:
@@ -284,30 +371,55 @@ async def ci_run(intg_id: str, payload: CIRunRequest, db: Session = Depends(get_
         raise HTTPException(status_code=502, detail=f"Dispatch failed: {e}")
 
     job_id = uuid.uuid4().hex[:12]
-    _JOBS[job_id] = {
-        "id": job_id,
-        "integration_id": intg_id,
-        "workflow": cfg["workflow"],
-        "ref": cfg["ref"],
-        "status": "dispatched",
-        "started_at": since.isoformat(),
-    }
-    asyncio.create_task(asyncio.to_thread(_orchestrate, job_id, cfg, since, payload.run_name))
+    now = since.isoformat()
+    db.add(models.CIJob(
+        id=job_id,
+        integration_id=intg_id,
+        provider="github",
+        workflow=cfg["workflow"],
+        ref=cfg["ref"],
+        artifact=cfg["artifact"],
+        run_name=payload.run_name,
+        status="queued",
+        queue_status="queued",
+        started_at=now,
+        updated_at=now,
+    ))
+    db.commit()
 
     return {"job_id": job_id, "status": "dispatched", "workflow": cfg["workflow"], "ref": cfg["ref"]}
 
 
 @router.get("/integrations/{intg_id}/ci/jobs/{job_id}")
-def ci_job_status(intg_id: str, job_id: str, _: models.User = WRITE_ROLES):
-    job = _JOBS.get(job_id)
-    if not job or job.get("integration_id") != intg_id:
+def ci_job_status(intg_id: str, job_id: str, db: Session = Depends(get_db), _: models.User = WRITE_ROLES):
+    job = db.query(models.CIJob).filter(
+        models.CIJob.id == job_id,
+        models.CIJob.integration_id == intg_id,
+    ).first()
+    if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    return job
+    return {
+        "id": job.id,
+        "integration_id": job.integration_id,
+        "workflow": job.workflow,
+        "ref": job.ref,
+        "status": job.status,
+        "queue_status": job.queue_status,
+        "provider": job.provider,
+        "attempts": job.attempts,
+        "started_at": job.started_at,
+        "gh_run_id": job.external_run_id,
+        "gh_run_url": job.external_url,
+        "pipeline_row_id": job.pipeline_row_id,
+        "imported": job.result,
+        "error": job.error,
+    }
 
 
 # ── Reconcile stuck 'running' rows against the provider ─────────
-# The dispatch orchestrator polls in an in-memory worker thread, so a row can be
-# left stuck on 'running' if that thread dies or the process restarts. This
+# The durable worker normally recovers an expired job lease after a process
+# restart. This endpoint remains a manual repair path for historical pipeline
+# rows or provider runs created before durable jobs were introduced: it
 # re-queries the provider for the real status of any 'running' pipeline (keyed by
 # the run id encoded in the row id + the stored integration), imports results
 # when it finds one finished, and flips the row to pass/fail. Idempotent.

@@ -10,6 +10,8 @@ from fastapi import WebSocket
 from . import emailer
 from .db import SessionLocal
 from . import models
+from .event_bus import RuntimeEventBus, runtime_event_bus
+from .observability import websocket_connected, websocket_disconnected
 from .webhook_utils import sign_payload
 from .net_guard import assert_public_http_url, UnsafeURLError
 
@@ -20,19 +22,25 @@ _MENTION_RE = re.compile(r"@([A-Za-z0-9_][A-Za-z0-9_.\-]*)")
 
 
 class NotificationManager:
-    def __init__(self):
+    def __init__(self, event_bus: RuntimeEventBus = runtime_event_bus):
         self.connections: Dict[int, List[WebSocket]] = {}  # user_id → sockets
+        self.event_bus = event_bus
+        self.event_bus.register("notification", self._receive_remote)
 
     async def connect(self, user_id: int, websocket: WebSocket):
         await websocket.accept()
         self.connections.setdefault(user_id, []).append(websocket)
+        websocket_connected("notification")
 
     def disconnect(self, user_id: int, websocket: WebSocket):
         conns = self.connections.get(user_id, [])
         if websocket in conns:
             conns.remove(websocket)
+            websocket_disconnected("notification")
+        if not conns:
+            self.connections.pop(user_id, None)
 
-    async def push(self, user_id: int, payload: dict):
+    async def _push_local(self, user_id: int, payload: dict):
         conns = self.connections.get(user_id, [])
         dead = []
         for ws in conns:
@@ -42,6 +50,21 @@ class NotificationManager:
                 dead.append(ws)
         for ws in dead:
             conns.remove(ws)
+            websocket_disconnected("notification")
+        if not conns:
+            self.connections.pop(user_id, None)
+
+    async def _receive_remote(self, payload: dict):
+        user_id = payload.get("user_id")
+        message = payload.get("message")
+        if isinstance(user_id, int) and isinstance(message, dict):
+            await self._push_local(user_id, message)
+
+    async def push(self, user_id: int, payload: dict):
+        await self._push_local(user_id, payload)
+        await self.event_bus.publish(
+            "notification", {"user_id": user_id, "message": payload}
+        )
 
 
 notif_manager = NotificationManager()

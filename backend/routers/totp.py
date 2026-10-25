@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from .. import models
+from ..rate_limit import RateLimitUnavailable
 from ..schemas import (
     TwoFALoginPayload,
     TwoFAEnablePayload,
@@ -41,6 +42,40 @@ from ..totp_utils import (
 )
 
 router = APIRouter(tags=["totp"])
+
+
+def _raise_rate_limit_unavailable() -> None:
+    raise HTTPException(
+        status_code=503,
+        detail="Rate limiting service unavailable. Try again later.",
+        headers={"Retry-After": "5"},
+    )
+
+
+def _check_2fa_rate_or_raise(user_id: int) -> None:
+    try:
+        allowed, retry_after = check_2fa_rate(user_id)
+    except RateLimitUnavailable:
+        _raise_rate_limit_unavailable()
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many attempts. Try again in {retry_after}s",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+
+def _record_2fa_failure_or_raise(user_id: int) -> None:
+    try:
+        allowed, retry_after = record_2fa_failure(user_id)
+    except RateLimitUnavailable:
+        _raise_rate_limit_unavailable()
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many attempts. Try again in {retry_after}s",
+            headers={"Retry-After": str(retry_after)},
+        )
 
 
 def _user_dict(user: models.User) -> dict:
@@ -82,12 +117,7 @@ def complete_2fa_login(
         raise HTTPException(status_code=401, detail="Invalid session")
 
     # Rate limit check (read only — failure recorded below on bad code)
-    allowed, retry_after = check_2fa_rate(user_id)
-    if not allowed:
-        raise HTTPException(
-            status_code=429,
-            detail=f"Too many attempts. Try again in {retry_after}s",
-        )
+    _check_2fa_rate_or_raise(user_id)
 
     code = payload.code.strip()
 
@@ -102,7 +132,7 @@ def complete_2fa_login(
         )
         matched = verify_recovery_code(code, recovery_rows)
         if not matched:
-            record_2fa_failure(user_id)
+            _record_2fa_failure_or_raise(user_id)
             log_event(
                 EVT_2FA_FAIL,
                 actor_id=user.id,
@@ -125,7 +155,7 @@ def complete_2fa_login(
     else:
         # TOTP branch
         if not verify_totp_code(user.totp_secret, code):
-            record_2fa_failure(user_id)
+            _record_2fa_failure_or_raise(user_id)
             log_event(
                 EVT_2FA_FAIL,
                 actor_id=user.id,

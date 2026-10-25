@@ -1,4 +1,16 @@
 services:
+  bootstrap:
+    build: .
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: sqlite:///./testhub.db
+    command: ["python", "-m", "backend.bootstrap"]
+    volumes:
+      - ./testhub.db:/app/testhub.db
+      - ./uploads:/app/uploads
+    restart: "no"
+
   app:
     build: .
     ports:
@@ -7,6 +19,9 @@ services:
       - .env
     environment:
       DATABASE_URL: sqlite:///./testhub.db
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
     security_opt:
       - no-new-privileges:true
     volumes:

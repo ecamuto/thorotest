@@ -201,7 +201,7 @@ class TestPrompt:
 
 class TestRateLimit:
     def test_rate_limit_enforced(self, client, monkeypatch):
-        from backend.rate_limit import SlidingWindowLimiter
+        from backend.rate_limit import SharedRateLimiter
         return_data = [
             {"title": "Test", "steps": [{"action": "Step 1", "expected_result": "Result"}]}
         ]
@@ -212,7 +212,12 @@ class TestRateLimit:
         monkeypatch.setattr(
             ai_module,
             "_rate_store",
-            SlidingWindowLimiter(ai_module.RATE_LIMIT, ai_module.RATE_WINDOW),
+            SharedRateLimiter(
+                "ai-test",
+                ai_module.RATE_LIMIT,
+                ai_module.RATE_WINDOW,
+                force_memory=True,
+            ),
         )
 
         for i in range(20):

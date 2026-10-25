@@ -10,6 +10,7 @@ from alembic import context
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend import models  # noqa: E402
+from backend.db import normalize_database_url  # noqa: E402
 
 config = context.config
 if config.config_file_name is not None:
@@ -25,9 +26,9 @@ def _database_url() -> str:
     # Priority: -x dburl / programmatic option, then DATABASE_URL env, then
     # the app default (local SQLite).
     url = config.get_main_option("sqlalchemy.url")
-    if url:
-        return url
-    return os.getenv("DATABASE_URL", "sqlite:///./testhub.db")
+    if not url:
+        url = os.getenv("DATABASE_URL", "sqlite:///./testhub.db")
+    return normalize_database_url(url)
 
 
 def run_migrations_offline() -> None:

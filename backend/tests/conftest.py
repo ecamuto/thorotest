@@ -3,6 +3,11 @@ import os
 # Must be set before backend.auth_utils is imported: it refuses to load without a
 # real signing key. setdefault so an explicit value from the environment wins.
 os.environ.setdefault("SECRET_KEY", "pytest-fixed-key-" + "0" * 32)
+# Production workers verify rather than mutate the schema. Tests deliberately
+# exercise the documented one-release compatibility path because TestClient
+# starts many isolated application lifespans against the local test database.
+os.environ.setdefault("AUTO_BOOTSTRAP", "1")
+os.environ.setdefault("CI_WORKER_ENABLED", "0")
 
 import pytest
 from fastapi.testclient import TestClient

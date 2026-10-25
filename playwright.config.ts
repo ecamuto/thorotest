@@ -42,6 +42,9 @@ export default defineConfig({
       // The suite exercises the self-registration endpoint, which ships closed.
       ALLOW_OPEN_REGISTRATION: '1',
       LOGIN_RATELIMIT_DISABLED: '1',
+      // Request observability is covered by backend tests; keep the browser
+      // gate readable instead of emitting one INFO line for every API fetch.
+      LOG_LEVEL: 'WARNING',
       // e2e webhook tests point at a local target; allow private hosts for the
       // SSRF guard in this environment only (never in production).
       WEBHOOK_ALLOW_PRIVATE_HOSTS: '1',

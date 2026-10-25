@@ -7,7 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..rate_limit import SlidingWindowLimiter
+from ..rate_limit import RateLimitUnavailable, SharedRateLimiter
 from .. import models
 from ..schemas import UserCreate, UserLogin, UserOut, UserListItem, UserUpdate, PasswordChange, ForgotPasswordIn, ResetPasswordIn
 from ..auth_utils import (
@@ -42,10 +42,13 @@ _LOGIN_WINDOW_SECONDS = int(os.getenv("LOGIN_WINDOW_SECONDS", "300"))
 # Never set this in production.
 _LOGIN_RATELIMIT_DISABLED = os.getenv("LOGIN_RATELIMIT_DISABLED", "").strip().lower() in ("1", "true", "yes")
 
-# Bounded: the key is ip|email, so an attacker rotating either dimension would
-# otherwise grow this without limit (SECURITY H-7). Per-process — see
-# backend/rate_limit.py.
-_login_failures = SlidingWindowLimiter(_LOGIN_MAX_FAILURES, _LOGIN_WINDOW_SECONDS)
+# Redis-backed across workers when configured; otherwise bounded in-process.
+# Caller identifiers are hashed before they are used in Redis keys.
+_login_failures = SharedRateLimiter(
+    "auth",
+    _LOGIN_MAX_FAILURES,
+    _LOGIN_WINDOW_SECONDS,
+)
 
 
 def _login_key(ip, email):
@@ -55,21 +58,48 @@ def _login_key(ip, email):
 def _check_login_rate(key: str) -> None:
     if _LOGIN_RATELIMIT_DISABLED:
         return
-    allowed, retry_after = _login_failures.check(key)
+    try:
+        allowed, retry_after = _login_failures.check_sync(key)
+    except RateLimitUnavailable:
+        _raise_rate_limit_unavailable()
     if not allowed:
-        raise HTTPException(
-            status_code=429,
-            detail="Too many failed login attempts. Try again later.",
-            headers={"Retry-After": str(retry_after)},
-        )
+        _raise_login_rate_limited(retry_after)
 
 
 def _record_login_failure(key: str) -> None:
-    _login_failures.record(key)
+    if _LOGIN_RATELIMIT_DISABLED:
+        return
+    try:
+        allowed, retry_after = _login_failures.record_sync(key)
+    except RateLimitUnavailable:
+        _raise_rate_limit_unavailable()
+    if not allowed:
+        _raise_login_rate_limited(retry_after)
 
 
 def _clear_login_failures(key: str) -> None:
-    _login_failures.clear(key)
+    if _LOGIN_RATELIMIT_DISABLED:
+        return
+    try:
+        _login_failures.clear_sync(key)
+    except RateLimitUnavailable:
+        _raise_rate_limit_unavailable()
+
+
+def _raise_login_rate_limited(retry_after: int) -> None:
+    raise HTTPException(
+        status_code=429,
+        detail="Too many failed login attempts. Try again later.",
+        headers={"Retry-After": str(retry_after)},
+    )
+
+
+def _raise_rate_limit_unavailable() -> None:
+    raise HTTPException(
+        status_code=503,
+        detail="Rate limiting service unavailable. Try again later.",
+        headers={"Retry-After": "5"},
+    )
 
 
 # ── Self-registration ────────────────────────────────────────────────────────
@@ -272,7 +302,6 @@ def forgot_password(
     """
     ip = request.client.host if request.client else None
     key = "pwreset|" + _login_key(ip, payload.email)
-    _check_login_rate(key)
     _record_login_failure(key)  # every request counts toward the window
 
     user = db.query(models.User).filter(models.User.email == payload.email).first()

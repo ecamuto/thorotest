@@ -108,10 +108,11 @@ S3 attachment storage remains a v1.1 item.
 
 ## Lower-priority notes (not blocking v1)
 
-- WS notifications JWT passed as query param (`main.py`) — lands in access
-  logs. Consider ticket-based WS auth.
-- Single-process state: login rate limiter + WS managers are in-memory —
-  one uvicorn worker only. Document the limit; Redis backing is v1.1.
+- WebSocket auth now exchanges the browser session for a one-minute,
+  WebSocket-only ticket, limiting query-string exposure and scope.
+- Shared state migration is complete: Redis provides atomic global limits and
+  cross-worker realtime delivery; durable CI execution/status uses database
+  leases and survives worker or Redis restarts.
 - No multi-tenancy — fine for self-host per-instance licensing; blocks SaaS.
 - License is MIT + Commons Clause = **source-available**, not open source.
   Branding fixed: UI title is "ThoroTest — Test management", README/TERMS
@@ -121,6 +122,10 @@ S3 attachment storage remains a v1.1 item.
 - SSO/SAML/SCIM: v1.1 pricing tier.
 
 ## Scaling baseline (measured 2026-07-10)
+
+The v1.14 PostgreSQL/Redis one-vs-two-worker baseline is published in
+`PERFORMANCE_REPORT.md`; the table below remains the historical SQLite
+single-worker comparison.
 
 Single uvicorn worker, SQLite (default), read load, localhost (no network
 RTT), presentation dataset (818 tests / 17 runs). Async httpx driver,
@@ -154,9 +159,9 @@ loaded. A 1–2 vCPU prod VM lands similar per-core (core-bound).
 
 1. Cache/trim `/api/initial-data` (the 30 rps ceiling) — biggest win, no new infra.
 2. Bump `QueuePool` size (esp. Postgres, one line) — helps once not one-core-bound.
-3. Multi-worker = real throughput multiplier (+1 core each), but **needs the
-   Redis item above first** (in-memory rate limiter + WS state break across
-   workers). This is what gates horizontal scale.
+3. Multi-worker is now a real throughput multiplier (+1 core each): global
+   limits, WebSocket delivery, and CI job execution no longer rely on one
+   process. PostgreSQL remains the required production database.
 4. ~~Latent wart: `/health` runs a **sync** `engine.connect()` inside an
    `async def` — blocks the event loop per call; move to the threadpool.~~
    Fixed: the DB ping now runs via `asyncio.to_thread`.
