@@ -11,6 +11,16 @@ heading per release, `### <Group>` subsections, `-` bullets.
 ## [Unreleased]
 
 ### Added
+- Add route-level frontend delivery with cache-safe dynamic loading, recovery
+  states, render-error containment, route titles, focus transfer, and
+  screen-reader navigation announcements. The initial view payload is 89%
+  smaller while direct links and browser history remain supported.
+- Add automated axe WCAG A/AA gates for core flows in dark and light themes,
+  together with accessible status controls, form/control names, live toasts,
+  and design-system contrast tokens.
+- Add `thorotest run`: dispatch GitHub Actions or GitLab CI, follow the durable
+  orchestration job, import JUnit results, emit stable JSON, and return a
+  failing exit code when the provider pipeline fails.
 - Add the v1.14 shared-runtime foundation: one lifecycle-managed Redis client,
   validated and secret-safe configuration, a traffic-readiness probe, and an
   internal persistent Redis service in the production Compose topology.

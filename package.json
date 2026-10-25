@@ -1,7 +1,7 @@
 {
   "name": "thorotest",
   "version": "1.13.0",
-  "description": "Source-available test management platform. Organize, run, and track tests across manual and automated suites \u2014 one timeline for both.",
+  "description": "Source-available test management platform. Organize, run, and track tests across manual and automated suites — one timeline for both.",
   "main": "index.js",
   "scripts": {
     "build": "node scripts/build-frontend.mjs",
@@ -35,6 +35,7 @@
   },
   "homepage": "https://github.com/ecamuto/thorotest#readme",
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.62.1",
     "esbuild": "^0.28.2",
     "react": "^18.3.1",

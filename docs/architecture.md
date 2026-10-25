@@ -5,7 +5,8 @@
 ```
 thorotest/
 ├── frontend/
-│   ├── index.html              # Entry point — loads all scripts
+│   ├── index.html              # Entry point — loads the shell and initial views
+│   ├── route-loader.js         # Cache-safe route → view script loader
 │   ├── styles.css              # All styles (CSS variables, components)
 │   ├── data.js                 # Static fallback data (TH_DATA)
 │   ├── api.js                  # HTTP + WebSocket client helpers (TH_API)
@@ -99,16 +100,18 @@ thorotest/
 **Adding a new view:**
 
 1. Create `frontend/views/view-myview.jsx`, register component on `window`
-2. Add `<script src="views/view-myview.js"></script>` to `frontend/index.html` (note `.js` — the build transpiles `.jsx` → `.js` into `frontend/dist/`)
+2. Add `myview: ["views/view-myview.js"]` to the route manifest in
+   `frontend/route-loader.js` (the build transpiles `.jsx` → `.js` into
+   `frontend/dist/`; only login and overview are loaded by `index.html`)
 3. Add a case in `frontend/app.jsx`'s hash router switch
 4. Add nav item to the `NAV` array in `frontend/components/app-shell.jsx` if needed
 5. Rebuild with `npm run build`, or keep `make frontend-watch` running while you edit
 
 **Database migrations (Alembic):**
 
-Schema is Alembic-managed. On boot the app upgrades the DB to the latest revision automatically
-(pre-Alembic databases are detected and stamped at the baseline). When you change
-`backend/models.py`:
+Schema is Alembic-managed. Production runs `python -m backend.bootstrap` before
+starting workers; workers validate rather than mutate the schema. When you
+change `backend/models.py`:
 
 ```bash
 make db-revision m="add foo column to tests"   # autogenerate from model diff

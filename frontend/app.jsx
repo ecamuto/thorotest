@@ -24,7 +24,7 @@ function Toast({ msg, severity, onDone }) {
   if (!msg) return null;
   const isError = severity === "error";
   return (
-    <div style={{
+    <div role={isError ? "alert" : "status"} aria-live={isError ? "assertive" : "polite"} style={{
       position: "fixed", bottom: 24, right: 24, zIndex: 9999,
       background: "var(--card-bg, #1e1e2e)",
       border: `1px solid ${isError ? "var(--fail)" : "var(--border, #3f3f5a)"}`,
@@ -34,6 +34,61 @@ function Toast({ msg, severity, onDone }) {
       color: isError ? "var(--fail)" : "var(--text, #e0e0f0)"
     }}>{msg}</div>
   );
+}
+
+const ROUTE_LABELS = {
+  overview: "Overview", library: "Test library", "test-detail": "Test details",
+  runs: "Runs & plans", "run-detail": "Run details", pipelines: "CI pipelines",
+  defects: "Defects", requirements: "Requirements", insights: "Insights",
+  ai: "AI assistant", integrations: "Integrations", docs: "Docs & API",
+  import: "Import", settings: "Settings", admin: "User management", "my-work": "My work",
+};
+
+function RouteLoading({ label }) {
+  return (
+    <div className="route-state route-loading" role="status" aria-live="polite">
+      <div className="route-spinner" aria-hidden="true" />
+      <div>
+        <div className="route-state-title">Loading {label}…</div>
+        <div className="route-state-sub">Preparing this workspace view.</div>
+      </div>
+    </div>
+  );
+}
+
+function RouteError({ label, error, onRetry }) {
+  return (
+    <div className="route-state route-error" role="alert">
+      <div>
+        <div className="route-state-title">Could not open {label}</div>
+        <div className="route-state-sub">{error?.message || "The view asset could not be loaded."}</div>
+        <button type="button" className="btn primary" onClick={onRetry}>Try again</button>
+      </div>
+    </div>
+  );
+}
+
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) {
+    console.error("ThoroTest UI render failed", error, info?.componentStack || "");
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <main className="fatal-error" role="alert">
+        <div className="card fatal-error-card">
+          <h1>ThoroTest needs to reload</h1>
+          <p>This view encountered an unexpected error. Your saved data is unaffected.</p>
+          <button type="button" className="btn primary" onClick={() => window.location.reload()}>Reload application</button>
+        </div>
+      </main>
+    );
+  }
 }
 
 function parseHash(hash) {
@@ -77,6 +132,40 @@ function App({ currentUser: initialUser, onLogout, onProfileUpdate }) {
   const [toastSeverity, setToastSeverity] = React.useState(null);
   // Off-canvas nav drawer, only reachable below the 900px breakpoint.
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [routeAttempt, setRouteAttempt] = useState(0);
+  const [routeLoad, setRouteLoad] = useState({ key: null, status: "loading", error: null });
+  const [routeAnnouncement, setRouteAnnouncement] = useState("");
+  const hasPresentedRoute = React.useRef(false);
+  const routeKey = ROUTE_LABELS[view] ? view : "overview";
+
+  // Load only the selected view. Each route module publishes its component on
+  // window, preserving the current architecture while avoiding an all-view
+  // bundle on first paint.
+  useEffect(() => {
+    let active = true;
+    setRouteLoad({ key: routeKey, status: "loading", error: null });
+    window.TH_ROUTE_LOADER.load(routeKey).then(() => {
+      if (active) setRouteLoad({ key: routeKey, status: "ready", error: null });
+    }).catch((error) => {
+      if (active) setRouteLoad({ key: routeKey, status: "error", error });
+    });
+    return () => { active = false; };
+  }, [routeKey, routeAttempt]);
+
+  // Announce client-side navigation and move focus for keyboard/screen-reader
+  // users after subsequent route changes. Keep the initial tab order intact so
+  // the skip link remains the first keyboard stop on page load.
+  useEffect(() => {
+    if (routeLoad.key !== routeKey || routeLoad.status !== "ready") return;
+    const label = ROUTE_LABELS[routeKey] || "Overview";
+    document.title = `${label} — ThoroTest`;
+    setRouteAnnouncement(`${label} loaded`);
+    if (hasPresentedRoute.current) {
+      window.requestAnimationFrame(() => document.getElementById("main-content")?.focus());
+    } else {
+      hasPresentedRoute.current = true;
+    }
+  }, [routeKey, routeLoad]);
 
   // Show toast if initial hash was #/admin but user is not admin
   useEffect(() => {
@@ -141,7 +230,17 @@ function App({ currentUser: initialUser, onLogout, onProfileUpdate }) {
   let body = null;
   let hideTopbar = false;
 
-  switch (view) {
+  if (routeLoad.key !== routeKey || routeLoad.status === "loading") {
+    body = <RouteLoading label={ROUTE_LABELS[routeKey] || "Overview"} />;
+  } else if (routeLoad.status === "error") {
+    body = (
+      <RouteError
+        label={ROUTE_LABELS[routeKey] || "Overview"}
+        error={routeLoad.error}
+        onRetry={() => setRouteAttempt(n => n + 1)}
+      />
+    );
+  } else switch (view) {
     case "overview":
       crumbs = [W, "Overview"];
       body = <Overview onNav={nav} onOpenTest={openTest} onOpenRun={openRun} onOpenDefect={openDefect} currentUser={currentUser} />;
@@ -221,6 +320,7 @@ function App({ currentUser: initialUser, onLogout, onProfileUpdate }) {
   return (
     <div className="app" data-screen-label={view}>
       <a className="skip-link" href="#main-content">Skip to content</a>
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{routeAnnouncement}</div>
       <Sidebar
         current={view === "test-detail" ? "library" : view === "run-detail" ? "runs" : view}
         onNav={(v) => { setSidebarOpen(false); nav(v); }}
@@ -251,7 +351,8 @@ function App({ currentUser: initialUser, onLogout, onProfileUpdate }) {
             sidebarOpen={sidebarOpen}
           />
         )}
-        <main className="content" id="main-content" tabIndex={-1}>
+        <main className="content" id="main-content" tabIndex={-1}
+              aria-busy={routeLoad.status === "loading" ? "true" : "false"}>
           {body}
         </main>
       </div>
@@ -408,10 +509,12 @@ function AuthRoot() {
 
 async function boot() {
   root.render(
-    <I18nProvider>
-      <AuthRoot />
-      <DemoRibbon />
-    </I18nProvider>
+    <AppErrorBoundary>
+      <I18nProvider>
+        <AuthRoot />
+        <DemoRibbon />
+      </I18nProvider>
+    </AppErrorBoundary>
   );
 }
 boot();

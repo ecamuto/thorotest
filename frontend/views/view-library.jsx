@@ -227,7 +227,7 @@ function Library({ onNav, onOpenTest, currentUser }) {
           <div style={{fontSize:12, fontWeight:600}}>Folders</div>
           <div className="card-sub" style={{fontSize:10.5}}>{totalCount} tests</div>
           {window.can && window.can(currentUser, "write") && (
-            <button className="btn ghost icon" style={{marginLeft:"auto"}} onClick={() => setShowNewTest(true)}><Icon name="plus" /></button>
+            <button className="btn ghost icon" style={{marginLeft:"auto"}} onClick={() => setShowNewTest(true)} aria-label="Create test"><Icon name="plus" /></button>
           )}
         </div>
         <div className="tree" style={{padding:"8px 8px", overflowY:"auto", flex:1}}>
@@ -339,14 +339,14 @@ function Library({ onNav, onOpenTest, currentUser }) {
 
           <div className="chip">Owner: <b style={{color:"var(--text)", marginLeft:2}}>any</b></div>
 
-          <button className="btn sm" style={{marginLeft:8, background:"var(--purple)", borderColor:"var(--purple)", color:"oklch(0.16 0 0)", display:"flex", alignItems:"center", gap:5}}
+          <button className="btn sm" style={{marginLeft:8, background:"var(--purple-action)", borderColor:"var(--purple-action)", color:"var(--on-purple)", display:"flex", alignItems:"center", gap:5}}
             onClick={() => setAiOpen(true)} title={activeFolder ? "Suggest edge cases for this folder" : "Suggest edge cases (pick a folder)"}>
             <Icon name="sparkle" /> AI
           </button>
 
           <div style={{display:"flex", border:"1px solid var(--border)", borderRadius:"var(--radius)", overflow:"hidden", marginLeft:8}}>
-            <button className={"btn ghost icon"} style={{background: view==="list" ? "var(--surface-2)" : "transparent", borderRadius:0}} onClick={() => setView("list")}><Icon name="list" /></button>
-            <button className={"btn ghost icon"} style={{background: view==="grid" ? "var(--surface-2)" : "transparent", borderRadius:0, borderLeft:"1px solid var(--border)"}} onClick={() => setView("grid")}><Icon name="grid" /></button>
+            <button className={"btn ghost icon"} style={{background: view==="list" ? "var(--surface-2)" : "transparent", borderRadius:0}} onClick={() => setView("list")} aria-label="List view" aria-pressed={view === "list"}><Icon name="list" /></button>
+            <button className={"btn ghost icon"} style={{background: view==="grid" ? "var(--surface-2)" : "transparent", borderRadius:0, borderLeft:"1px solid var(--border)"}} onClick={() => setView("grid")} aria-label="Grid view" aria-pressed={view === "grid"}><Icon name="grid" /></button>
           </div>
 
           {window.can && window.can(currentUser, "write") && (
@@ -434,7 +434,7 @@ function Library({ onNav, onOpenTest, currentUser }) {
                 {filtered.map(t => (
                   <tr key={t.id} className={selected.has(t.id) ? "selected" : ""} style={{cursor:"pointer"}} onClick={() => onOpenTest(t.id)}>
                     <td onClick={(e) => { e.stopPropagation(); toggleSel(t.id); }}>
-                      <input type="checkbox" checked={selected.has(t.id)} readOnly />
+                      <input type="checkbox" checked={selected.has(t.id)} readOnly aria-label={`Select ${t.id}: ${t.title}`} />
                     </td>
                     <td className="mono">{t.id}</td>
                     <td>
@@ -480,7 +480,7 @@ function Library({ onNav, onOpenTest, currentUser }) {
                       <StatusSelect s={t.status} testId={t.id} onChanged={refresh} />
                     </div>
                     {window.can && window.can(currentUser, "delete") && (
-                      <button className="btn ghost icon sm" style={{opacity:0.5}} onClick={(e) => handleDeleteRow(t, e)}>
+                      <button className="btn ghost icon sm" style={{opacity:0.5}} onClick={(e) => handleDeleteRow(t, e)} aria-label={`Delete ${t.id}`}>
                         <Icon name="x" />
                       </button>
                     )}

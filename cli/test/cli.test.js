@@ -17,7 +17,8 @@ const BIN = path.join(__dirname, "..", "bin", "thorotest.js");
 const TOKEN = "tt_test_token";
 
 let server, baseUrl, tmpHome, fixtures;
-const captured = { syncBodies: [], tokenBodies: [] };
+const captured = { syncBodies: [], tokenBodies: [], runBodies: [] };
+const jobPolls = new Map();
 
 function startMockServer() {
   return new Promise((resolve) => {
@@ -33,6 +34,29 @@ function startMockServer() {
 
       if (req.url === "/api/me") return json(200, { username: "enzo", role: "admin" });
       if (req.url.startsWith("/api/tests")) return json(200, [], { "X-Total-Count": "42" });
+      const jobMatch = req.url.match(/^\/api\/integrations\/([^/]+)\/ci\/jobs\/([^/]+)$/);
+      if (req.method === "GET" && jobMatch) {
+        const integrationId = decodeURIComponent(jobMatch[1]);
+        const jobId = decodeURIComponent(jobMatch[2]);
+        const polls = (jobPolls.get(jobId) || 0) + 1;
+        jobPolls.set(jobId, polls);
+        if (integrationId === "int-error") {
+          return json(200, {
+            id: jobId, integration_id: integrationId, provider: "github",
+            workflow: "ci.yml", ref: "main", status: "error",
+            error: "artifact missing", imported: null, pipeline_status: null,
+          });
+        }
+        const done = polls > 1;
+        const failed = integrationId === "int-fail";
+        return json(200, {
+          id: jobId, integration_id: integrationId, provider: "github",
+          workflow: "ci.yml", ref: "release", status: done ? "done" : "running",
+          error: null, pipeline_status: done ? (failed ? "fail" : "pass") : "running",
+          external_run_id: "991", external_url: "https://ci.example/runs/991",
+          imported: done ? { tests: 12, runs: 1, skipped: 0 } : null,
+        });
+      }
       if (req.url.startsWith("/api/runs")) {
         return json(200, [
           { id: "R-1", name: "Nightly", status: "completed", passed: 10, failed: 2, blocked: 0, total: 12, started: "2026-07-01T02:00:00Z" },
@@ -58,6 +82,17 @@ function startMockServer() {
         if (req.method === "POST" && req.url === "/api/tokens") {
           captured.tokenBodies.push(data);
           return json(201, { id: 7, name: data.name, scope: data.scope, token: "tt_new_secret" });
+        }
+        const runMatch = req.url.match(/^\/api\/integrations\/([^/]+)\/ci\/run$/);
+        if (req.method === "POST" && runMatch) {
+          const integrationId = decodeURIComponent(runMatch[1]);
+          captured.runBodies.push({ integrationId, data });
+          const jobId = `job-${integrationId}`;
+          jobPolls.set(jobId, 0);
+          return json(200, {
+            job_id: jobId, status: "dispatched",
+            workflow: data.workflow || "ci.yml", ref: data.ref || "main",
+          });
         }
         json(404, { detail: "not found" });
       });
@@ -240,6 +275,61 @@ test("sync --json emits server stats", async () => {
   const data = JSON.parse(r.stdout);
   assert.equal(data.created, 2);
   assert.equal(data.skipped, 0);
+});
+
+// ── run ────────────────────────────────────────────────────────
+
+test("run dispatches CI, waits for import, and reports success", async () => {
+  captured.runBodies.length = 0;
+  const r = await runCli([
+    "run", "int-ci", "--ref", "release", "--workflow", "checks.yml",
+    "--artifact", "results", "--name", "Release checks", "--interval", "0",
+  ]);
+  assert.equal(r.code, 0);
+  assert.match(r.stdout, /passed 12 tests · 1 runs imported/);
+  assert.match(r.stdout, /https:\/\/ci\.example\/runs\/991/);
+  assert.deepEqual(captured.runBodies[0], {
+    integrationId: "int-ci",
+    data: { ref: "release", workflow: "checks.yml", artifact: "results", run_name: "Release checks" },
+  });
+});
+
+test("run --json emits one machine-readable final result", async () => {
+  const r = await runCli(["run", "int-ci", "--interval", "0", "--json"]);
+  assert.equal(r.code, 0);
+  const data = JSON.parse(r.stdout);
+  assert.equal(data.status, "done");
+  assert.equal(data.pipeline_status, "pass");
+  assert.equal(data.imported.tests, 12);
+  assert.equal(data.external_run_id, "991");
+});
+
+test("run exits 1 when the provider pipeline fails", async () => {
+  const r = await runCli(["run", "int-fail", "--interval", "0"]);
+  assert.equal(r.code, 1);
+  assert.match(r.stdout, /failed 12 tests · 1 runs imported/);
+});
+
+test("run exits 3 when durable orchestration errors", async () => {
+  const r = await runCli(["run", "int-error", "--interval", "0"]);
+  assert.equal(r.code, 3);
+  assert.match(r.stderr, /artifact missing/);
+});
+
+test("run --no-wait returns the durable job id without polling", async () => {
+  const r = await runCli(["run", "int-ci", "--no-wait", "--json"]);
+  assert.equal(r.code, 0);
+  assert.equal(JSON.parse(r.stdout).job_id, "job-int-ci");
+  assert.equal(jobPolls.get("job-int-ci"), 0);
+});
+
+test("run validates its integration id and timing flags", async () => {
+  const missing = await runCli(["run"]);
+  assert.equal(missing.code, 2);
+  assert.match(missing.stderr, /usage: thorotest run/);
+  const badTimeout = await runCli(["run", "int-ci", "--timeout", "never"]);
+  assert.equal(badTimeout.code, 2);
+  assert.match(badTimeout.stderr, /--timeout must be a positive number/);
 });
 
 // ── token ───────────────────────────────────────────────────────

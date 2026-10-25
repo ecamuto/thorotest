@@ -299,11 +299,11 @@ function AiSuggestBox({ D, folderId: fixedFolderId, onClose }) {
                 {(folderPaths[folderId] || folderNames[folderId] || folderId) + ` (${folderCounts[folderId] || 0})`}
               </div>
             ) : (
-              <select className="input" style={{flex:1, minWidth:0}} value={folderId} onChange={e => setFolderId(e.target.value)} disabled={loading}>
+              <select className="input" aria-label="Folder to analyze" style={{flex:1, minWidth:0}} value={folderId} onChange={e => setFolderId(e.target.value)} disabled={loading}>
                 {folderIds.map(id => <option key={id} value={id}>{(folderPaths[id] || folderNames[id] || id) + ` (${folderCounts[id] || 0})`}</option>)}
               </select>
             )}
-            <button className="btn sm" style={{background:"var(--purple)", borderColor:"var(--purple)", color:"oklch(0.16 0 0)"}}
+            <button className="btn sm" style={{background:"var(--purple-action)", borderColor:"var(--purple-action)", color:"var(--on-purple)"}}
               onClick={analyze} disabled={loading || !folderId}>
               {loading ? "Analyzing…" : "Analyze"}
             </button>
@@ -340,7 +340,7 @@ function AiSuggestBox({ D, folderId: fixedFolderId, onClose }) {
           </div>
           <div style={{display:"flex", gap:6}}>
             {suggestions.length > 0 && createdCount === 0 && (
-              <button className="btn sm" style={{background:"var(--purple)", borderColor:"var(--purple)", color:"oklch(0.16 0 0)"}}
+              <button className="btn sm" style={{background:"var(--purple-action)", borderColor:"var(--purple-action)", color:"var(--on-purple)"}}
                 onClick={generateDrafts} disabled={creating || selected.size === 0}>
                 {creating ? "Creating…" : `Create ${selected.size} selected`}
               </button>
@@ -473,6 +473,7 @@ function StatusSelect({ s, testId, onChanged }) {
   const [current, setCurrent] = useState(s);
 
   React.useEffect(() => { setCurrent(s); }, [s]);
+  useEscapeKey(open, () => setOpen(false));
 
   const handleSelect = async (st) => {
     setOpen(false);
@@ -491,18 +492,22 @@ function StatusSelect({ s, testId, onChanged }) {
 
   return (
     <div style={{ position: "relative", display: "inline-flex" }}>
-      <div style={{ cursor: "pointer" }} onClick={(e) => { e.stopPropagation(); setOpen(o => !o); }}>
+      <button type="button" className="status-select-trigger"
+        aria-label={`Change status for ${testId || "test"}; current status ${current}`}
+        aria-haspopup="menu" aria-expanded={open}
+        onClick={(e) => { e.stopPropagation(); setOpen(o => !o); }}>
         <StatusBadge s={current} />
-      </div>
+      </button>
       {open && (
         <>
-          <div style={{ position: "fixed", inset: 0, zIndex: 99 }} onClick={(e) => { e.stopPropagation(); setOpen(false); }} />
-          <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 100, background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: "var(--radius)", minWidth: 110, marginTop: 4, boxShadow: "0 4px 12px rgba(0,0,0,0.3)", overflow: "hidden" }}>
+          <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: 99 }} onClick={(e) => { e.stopPropagation(); setOpen(false); }} />
+          <div role="menu" style={{ position: "absolute", top: "100%", left: 0, zIndex: 100, background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: "var(--radius)", minWidth: 110, marginTop: 4, boxShadow: "0 4px 12px rgba(0,0,0,0.3)", overflow: "hidden" }}>
             {STATUS_OPTIONS.map(st => (
-              <div key={st} style={{ padding: "7px 12px", cursor: "pointer", background: st === current ? "var(--accent-soft)" : "transparent" }}
+              <button type="button" role="menuitem" key={st}
+                style={{ width:"100%", textAlign:"left", padding: "7px 12px", cursor: "pointer", background: st === current ? "var(--accent-soft)" : "transparent" }}
                 onClick={(e) => { e.stopPropagation(); handleSelect(st); }}>
                 <StatusBadge s={st} />
-              </div>
+              </button>
             ))}
           </div>
         </>

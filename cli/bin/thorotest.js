@@ -20,11 +20,15 @@ const COMMANDS = {
   status: () => require("../lib/commands/status"),
   lint: () => require("../lib/commands/lint"),
   sync: () => require("../lib/commands/sync"),
+  run: () => require("../lib/commands/run"),
   token: () => require("../lib/commands/token"),
 };
 
 // Flags that take a value; everything else is boolean.
-const VALUE_FLAGS = new Set(["url", "token", "name", "scope", "ref", "source"]);
+const VALUE_FLAGS = new Set([
+  "url", "token", "name", "scope", "ref", "source",
+  "workflow", "artifact", "timeout", "interval",
+]);
 
 const HELP = `thorotest ${VERSION} — command-line client for ThoroTest
 
@@ -35,6 +39,7 @@ Commands
   status                      Server health, current user, test & run counts
   lint <file|dir> [...]       Validate YAML test files locally (offline)
   sync <file|dir> [...]       Push YAML test definitions to the server
+  run <integration-id>        Trigger CI, wait, and import its test results
   token create --name <name>  Mint a long-lived API token (admin only)
 
 Global options
@@ -49,6 +54,15 @@ Sync options
   --ref <label>     Label recorded as source_ref (default: cli)
   --source <src>    Source identity, must start with cli:// (default: cli://local)
   --force           Push even when local lint finds errors (server skips bad files)
+
+Run options
+  --ref <ref>             Override the configured branch/ref
+  --workflow <file>       Override the configured GitHub workflow
+  --artifact <name>       Override the configured JUnit artifact
+  --name <label>          Name for the imported ThoroTest run
+  --timeout <seconds>     Stop waiting after this time (default: 2100)
+  --interval <seconds>    Poll interval (default: 5)
+  --no-wait               Dispatch and return the durable job ID immediately
 
 Config resolution: flags > env > ./.thorotest.json > ~/.config/thorotest/config.json
 Docs: docs/cli.md`;

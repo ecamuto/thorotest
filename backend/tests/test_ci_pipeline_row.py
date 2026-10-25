@@ -71,6 +71,29 @@ def test_ci_run_creates_running_pipeline_row(client, db, monkeypatch):
     assert p.url == "http://x/99"   # links to the run on GitLab
 
 
+def test_ci_job_status_exposes_provider_neutral_result(client, db):
+    db.add(models.Pipeline(
+        id="gh-run-991", name="CI", platform="github", status="fail",
+    ))
+    db.add(models.CIJob(
+        id="job-cli", integration_id="int-cli", provider="github",
+        workflow="ci.yml", ref="main", status="done", queue_status="done",
+        started_at="2026-10-25T10:00:00+00:00",
+        updated_at="2026-10-25T10:01:00+00:00",
+        external_run_id="991", external_url="https://ci.example/runs/991",
+        pipeline_row_id="gh-run-991", result={"tests": 12, "runs": 1},
+    ))
+    db.commit()
+
+    r = client.get("/api/integrations/int-cli/ci/jobs/job-cli")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["pipeline_status"] == "fail"
+    assert body["external_run_id"] == body["gh_run_id"] == "991"
+    assert body["external_url"] == body["gh_run_url"]
+    assert body["imported"] == {"tests": 12, "runs": 1}
+
+
 def test_ci_run_unknown_integration_404(client, db):
     r = client.post("/api/integrations/nope/ci/run", json={})
     assert r.status_code == 404

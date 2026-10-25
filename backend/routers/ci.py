@@ -398,6 +398,11 @@ def ci_job_status(intg_id: str, job_id: str, db: Session = Depends(get_db), _: m
     ).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    pipeline_status = None
+    if job.pipeline_row_id:
+        pipeline_status = db.query(models.Pipeline.status).filter(
+            models.Pipeline.id == job.pipeline_row_id,
+        ).scalar()
     return {
         "id": job.id,
         "integration_id": job.integration_id,
@@ -410,7 +415,13 @@ def ci_job_status(intg_id: str, job_id: str, db: Session = Depends(get_db), _: m
         "started_at": job.started_at,
         "gh_run_id": job.external_run_id,
         "gh_run_url": job.external_url,
+        # Provider-neutral aliases for clients such as the CLI.  Keep the
+        # historical gh_* keys above for backwards compatibility with callers
+        # written before GitLab orchestration was added.
+        "external_run_id": job.external_run_id,
+        "external_url": job.external_url,
         "pipeline_row_id": job.pipeline_row_id,
+        "pipeline_status": pipeline_status,
         "imported": job.result,
         "error": job.error,
     }

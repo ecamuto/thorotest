@@ -35,6 +35,17 @@ Companion deliverables: `EXECUTIVE_SUMMARY.md`, `SECURITY_AUDIT.md`, `PERFORMANC
 > DevOps 9, Performance 9, and Scalability 9. UX and Innovation remain 8 because
 > Phase 1 did not target them. Later phases must close those two dimensions to
 > satisfy the ≥9/10 objective across the entire scorecard.
+>
+> **Phase 2 experience update — 2026-10-25 (v1.15, unreleased).** UX and
+> Innovation now reach the provisional 9/10 target. Route-level delivery
+> defers approximately 266 KB of minified view JavaScript (89% of view code),
+> navigation has loading/error recovery, focus and live announcements, and axe
+> gates the core product flows against WCAG A/AA in dark and light themes.
+> `thorotest run` now dispatches GitHub/GitLab CI through the durable job engine,
+> waits through result collection, and returns provider-aware exit codes and
+> JSON. The full scorecard is therefore provisionally ≥9/10; commercial launch
+> still depends on the separate product decisions noted in §23 (tenancy/SSO,
+> licensing, support and go-to-market), not another foundational rewrite.
 
 > **Current-validation update — 2026-08-28 (v1.13.0, branch `fix/audit-findings-v1-13`).** A review against commit `c36badb` confirmed the v1.10 remediation and identified five current gaps. The branch closes all five: category and pipeline-reconciliation RBAC, long-lived session JWTs in WebSocket URLs (replaced by one-minute scoped tickets), a non-blocking dependency audit and ignored `python-jose`/`ecdsa` advisory (migrated to PyJWT and made blocking), and webhook unit tests coupled to live DNS. During the ticket change, an additional Critical scope-confusion flaw was found and fixed: `scope=2fa_pending` tokens were accepted by REST/GraphQL session validation before TOTP completion. Regression coverage now checks REST, WebSocket, role, revocation, and API-token boundaries. The original v1.9 assessment below remains a point-in-time record rather than a current scorecard.
 

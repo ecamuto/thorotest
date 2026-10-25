@@ -38,22 +38,13 @@
 <script src="components/hooks.js"></script>
 <script src="components/change-history.js"></script>
 <script src="components/custom-fields.js"></script>
-<script src="views/view-overview.js"></script>
-<script src="views/view-library.js"></script>
-<script src="views/view-test-detail.js"></script>
-<script src="views/view-runs.js"></script>
-<script src="views/view-defects.js"></script>
-<script src="views/view-requirements.js"></script>
-<script src="views/view-misc.js"></script>
-<script src="views/view-config.js"></script>
-<script src="views/view-login.js"></script>
-<script src="views/view-settings.js"></script>
-<script src="views/view-docs.js"></script>
-<script src="views/view-import.js"></script>
-<script src="views/view-admin.js"></script>
-<script src="views/view-audit-log.js"></script>
-<script src="views/view-my-work.js"></script>
 <script src="components/notification-bell.js"></script>
+
+<!-- Login and the overview are the small application shell. Other views are
+     fetched on navigation by route-loader.js. -->
+<script src="views/view-overview.js"></script>
+<script src="views/view-login.js"></script>
+<script src="route-loader.js"></script>
 
 <!-- Main app -->
 <script src="app.js"></script>

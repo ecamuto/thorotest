@@ -504,7 +504,7 @@ function HistoryTab({test}) {
             {!flakyResult && (
               <button
                 className="btn sm"
-                style={{background:"var(--purple)", color:"oklch(0.16 0 0)", borderColor:"var(--purple)"}}
+                style={{background:"var(--purple-action)", color:"var(--on-purple)", borderColor:"var(--purple-action)"}}
                 disabled={flakyLoading}
                 onClick={() => {
                   setFlakyLoading(true);

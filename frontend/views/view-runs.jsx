@@ -758,9 +758,9 @@ function RunDetail({ runId, onBack, currentUser }) {
         <div style={{padding:14, borderBottom:"1px solid var(--border)"}}>
           <div className="card-title" style={{marginBottom:8}}>Environment</div>
           <div style={{display:"flex", flexDirection:"column", gap:6, fontSize:11.5}}>
-            <Detail label="Env" value={run.env ? <span className="tag">{run.env}</span> : <span className="mono dim">—</span>} />
-            <Detail label="Branch" value={<span className="mono">{run.branch || "—"}</span>} />
-            <Detail label="Owner" value={<span className="mono">{run.owner || "—"}</span>} />
+            <RunMetadata label="Env" value={run.env ? <span className="tag">{run.env}</span> : <span className="mono dim">—</span>} />
+            <RunMetadata label="Branch" value={<span className="mono">{run.branch || "—"}</span>} />
+            <RunMetadata label="Owner" value={<span className="mono">{run.owner || "—"}</span>} />
           </div>
         </div>
 
@@ -807,6 +807,15 @@ function RunDetail({ runId, onBack, currentUser }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function RunMetadata({ label, value }) {
+  return (
+    <div style={{display:"grid", gridTemplateColumns:"72px 1fr", gap:8, alignItems:"center"}}>
+      <span className="mono dim" style={{fontSize:10.5}}>{label}</span>
+      <span style={{fontSize:11.5}}>{value}</span>
     </div>
   );
 }
