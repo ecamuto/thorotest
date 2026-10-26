@@ -108,7 +108,7 @@ jobs:
           node-version: '22'
       # The CLI has zero dependencies — no npm ci, just the runtime.
       - name: Run CLI test suite
-        run: node --test test/
+        run: node --test test/*.test.js
         working-directory: cli
 
   e2e:
