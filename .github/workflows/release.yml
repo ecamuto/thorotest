@@ -39,7 +39,7 @@ jobs:
           cache: pip
       - uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
       - name: Require package version to match tag
         run: |
@@ -54,6 +54,8 @@ jobs:
           npm ci
       - name: Dependency CVE gate
         run: pipx run pip-audit -r requirements.lock
+      - name: Release metadata and dependency-lock contract
+        run: ./venv/bin/python -m backend.release_checks --tag "$GITHUB_REF_NAME"
       - name: Backend, Redis integration, CLI, and frontend gates
         run: |
           ./venv/bin/pytest backend/tests/ -q
@@ -72,7 +74,7 @@ jobs:
           cache: pip
       - uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
       - name: Install dependencies
         run: |
@@ -86,9 +88,19 @@ jobs:
         env:
           CI: 'true'
 
+  operational:
+    name: Production upgrade and restore drill
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build and exercise the release image
+        run: bash scripts/operational-drill.sh
+        env:
+          THOROTEST_DRILL_IMAGE: thorotest:${{ github.ref_name }}-drill
+
   publish:
     name: Build, attest, and sign image
-    needs: [verify, e2e]
+    needs: [verify, e2e, operational]
     runs-on: ubuntu-latest
     permissions:
       contents: read

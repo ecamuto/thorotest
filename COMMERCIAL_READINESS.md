@@ -1,6 +1,6 @@
 # Commercial self-host readiness
 
-**Target release:** v1.16
+**Target release:** v1.16.0
 
 **Launch model:** one dedicated ThoroTest installation per customer
 organization, operated by the customer or by an explicitly contracted party.
@@ -8,6 +8,9 @@ organization, operated by the customer or by an explicitly contracted party.
 This is the controlling launch checklist for Phase 3. It deliberately excludes
 a shared multi-customer SaaS: project-level tenant isolation, SAML, and SCIM are
 valuable enterprise work, but are not prerequisites for a dedicated instance.
+
+The executable release gates and current engineering evidence are tracked in
+[RELEASE_SIGNOFF.md](RELEASE_SIGNOFF.md).
 
 ## Product and licensing position
 

@@ -10,6 +10,9 @@ updates:
     groups:
       python-deps:
         patterns: ["*"]
+    # CI validates requirements.txt against requirements.lock. Dependabot PRs
+    # that change only the direct constraints intentionally stay red until a
+    # maintainer runs `make lock` and commits the tested transitive resolution.
 
   - package-ecosystem: npm
     directory: "/"

@@ -1,5 +1,9 @@
 # ThoroTest — Technical Debt Assessment
 
+> **Historical baseline:** item descriptions below originate from v1.9. The
+> dated update records completed infrastructure work, while
+> `RELEASE_SIGNOFF.md` is the current v1.16 scorecard and limitation list.
+
 **Audit date:** 2026-07-16 · **Version:** 1.9.0
 **Codebase:** ~9.4k LOC backend (Python/FastAPI), ~9.4k LOC frontend (React/JSX), Node CLI, 285 tracked files.
 

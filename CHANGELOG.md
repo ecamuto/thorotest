@@ -10,7 +10,18 @@ heading per release, `### <Group>` subsections, `-` bullets.
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-10-26
+
 ### Added
+- Add an executable v1.16 release contract that keeps the package and npm-lock
+  versions, README badge, changelog, security-support policy, Git tag, and
+  Python direct-dependency constraints consistent.
+- Add a black-box production-image probe for readiness, security headers,
+  CORS, anonymous access, registration, traversal, operator login, and release
+  metadata without exposing credentials or response bodies.
+- Add an isolated Docker operational drill covering non-root execution, strict
+  preflight, upgrade from the v1.13 schema, PostgreSQL and required Redis,
+  authenticated smoke checks, and database-plus-uploads backup/restore.
 - Add a production preflight command (`python -m backend.preflight --strict`)
   that validates the commercial self-host profile without connecting to
   services or printing secret values.
@@ -67,6 +78,8 @@ heading per release, `### <Group>` subsections, `-` bullets.
   `cryptography`; dependency auditing now blocks CI and has no ignored finding.
 
 ### Tests
+- Run the release contract and production upgrade/restore drill in pull-request
+  CI and repeat them on version tags before publishing signed images.
 - Stub public DNS resolution in webhook unit tests so restricted/offline test
   runners exercise SSRF decisions deterministically.
 
