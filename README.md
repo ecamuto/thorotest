@@ -2,9 +2,9 @@
 
 > **Self-hosted test management that treats manual and automated tests as one timeline.** Organize, run, and track every test — trace features, stories, and epics to the tests that cover them, and see coverage at a glance.
 
-[![version](https://img.shields.io/badge/version-1.13.0-blue)](package.json)
+[![version](https://img.shields.io/badge/version-1.16.0-blue)](package.json)
 [![license](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-769%20unit%20%2B%2039%20e2e%20suites-brightgreen)](#tests)
+[![tests](https://img.shields.io/badge/tests-775%20unit%20%2B%2039%20e2e%20suites-brightgreen)](#tests)
 [![backend](https://img.shields.io/badge/backend-FastAPI-009688)](#stack)
 [![frontend](https://img.shields.io/badge/frontend-React%2018-61DAFB)](#stack)
 [![docker](https://img.shields.io/badge/deploy-Docker-2496ED)](#quickstart)
@@ -174,6 +174,7 @@ curl -s localhost:8000/graphql -H "Authorization: Bearer $TOKEN" \
 - **Environment variables** (`.env`: database URLs, secrets, SMTP, OAuth, AI provider) — [docs/configuration.md](docs/configuration.md#environment-variables).
 - **Backups** — [BACKUP.md](BACKUP.md).
 - **Production deploy/rollback/alerts** — [docs/production-runbook.md](docs/production-runbook.md).
+- **v1.16 release evidence and limitations** — [RELEASE_SIGNOFF.md](RELEASE_SIGNOFF.md).
 
 ---
 
@@ -365,18 +366,21 @@ lives in one place (the run), never in the YAML.
 | Backup & restore | [BACKUP.md](BACKUP.md) |
 | Full production roadmap | [PRODUCTION_ROADMAP.md](PRODUCTION_ROADMAP.md) |
 | Commercial self-host launch gate | [COMMERCIAL_READINESS.md](COMMERCIAL_READINESS.md) |
+| v1.16 release sign-off and current assessment | [RELEASE_SIGNOFF.md](RELEASE_SIGNOFF.md) |
 | Support and release policy | [SUPPORT.md](SUPPORT.md) |
 
 ---
 
 ## Tests
 
-**769 backend unit tests** (pytest) + **39 Playwright e2e suites** covering every major flow — CI-gated.
+**775 backend unit tests** (pytest) + **39 Playwright e2e suites** covering every major flow — CI-gated.
 
 ```bash
 make test        # backend unit tests
 make test-e2e    # Playwright e2e (needs `make dev` running)
 make test-all    # the full CI gate, locally
+make release-check # version/changelog/npm/Python-lock release contract
+make release-drill # production image upgrade + PostgreSQL/uploads restore
 ```
 
 Suites worth knowing about: `suite9-security` (auth and authorization boundaries)
@@ -409,12 +413,16 @@ All 7 production-readiness items are **done** (v1.0), and post-v1 features shipp
   durable recoverable CI jobs, explicit bootstrap, structured logs, metrics,
   and an automated attested/signed release-image pipeline. PostgreSQL scale,
   Redis failover, failed-migration, and backup-upgrade gates are verified.
-- 🚧 v1.15 experience foundation: route-level view loading, resilient SPA
+- ✅ v1.15 experience foundation: route-level view loading, resilient SPA
   fallbacks, navigation announcements/focus, automated WCAG A/AA gates in both
   themes, and the provider-neutral `thorotest run` workflow.
 - ✅ v1.16 commercial self-host readiness: durable provider-sync jobs,
   strict attachment MIME policy, complete outbound URL controls, and a
   secret-safe production preflight gate.
+- 🚧 v1.16.0 operational sign-off: coherent release metadata and Python lock,
+  black-box production-image checks, v1.13 schema upgrade, and PostgreSQL plus
+  uploads backup/restore are automated release gates. Publication completes
+  when the signed tag image passes GitHub Actions.
 - ⏳ SSO / SAML / SCIM.
 
 Have a request? [Open an issue](https://github.com/ecamuto/thorotest/issues).

@@ -1,5 +1,5 @@
 # Stage 1 — build the frontend (transpile JSX, minify, vendor React + fonts)
-FROM node:20-alpine AS frontend
+FROM node:22-alpine AS frontend
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -13,14 +13,14 @@ WORKDIR /app
 
 # Install from the lock file — the same pinned set CI tests against, so the
 # image is the artifact that was verified rather than a fresh resolve.
-COPY requirements.lock .
+COPY requirements.txt requirements.lock ./
 RUN pip install --no-cache-dir -r requirements.lock
 
 COPY backend/ ./backend/
 COPY alembic.ini ./
 COPY migrations/ ./migrations/
-# Version + changelog for the About page (GET /api/about)
-COPY package.json CHANGELOG.md ./
+# Release-contract metadata; package.json + changelog also feed GET /api/about.
+COPY package.json package-lock.json CHANGELOG.md README.md SECURITY.md ./
 COPY --from=frontend /app/frontend/dist/ ./frontend/dist/
 
 # Run as an unprivileged user. uploads/ is the only path the app writes to.
