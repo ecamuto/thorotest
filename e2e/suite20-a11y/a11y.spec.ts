@@ -143,15 +143,16 @@ test.describe('Suite 20 — Accessibility', () => {
   // A11Y-09 · Skip link is the first stop and reaches the main landmark
   test('A11Y-09: skip link is the first tab stop and targets main content', async ({ page }) => {
     await page.goto('/#/overview');
+    // The suite starts on another hash route. Playwright 1.65 correctly keeps
+    // that as a same-document navigation, where the app intentionally focuses
+    // main content. Reload to exercise a genuine initial page load instead.
+    await page.reload();
     await expect(page.locator('main#main-content')).toBeVisible({ timeout: 10000 });
     await page.keyboard.press('Tab');
 
-    const skip = await page.evaluate(() => {
-      const el = document.activeElement as HTMLElement;
-      return el ? { cls: el.className, href: el.getAttribute('href') } : null;
-    });
-    expect(skip?.cls).toContain('skip-link');
-    expect(skip?.href).toBe('#main-content');
+    const skip = page.locator('.skip-link');
+    await expect(skip).toBeFocused();
+    await expect(skip).toHaveAttribute('href', '#main-content');
     await expect(page.locator('main#main-content')).toHaveCount(1);
   });
 });
