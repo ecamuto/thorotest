@@ -59,7 +59,7 @@ jobs:
       - name: Backend, Redis integration, CLI, and frontend gates
         run: |
           ./venv/bin/pytest backend/tests/ -q
-          node --test cli/test/
+          node --test cli/test/*.test.js
           npm run build
           git diff --exit-code -- frontend/dist
 
