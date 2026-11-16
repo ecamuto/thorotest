@@ -1,6 +1,6 @@
 {
   "name": "thorotest",
-  "version": "1.13.0",
+  "version": "1.16.0",
   "description": "Source-available test management platform. Organize, run, and track tests across manual and automated suites — one timeline for both.",
   "main": "index.js",
   "scripts": {
@@ -29,6 +29,9 @@
   "keywords": [],
   "author": "",
   "license": "SEE LICENSE IN LICENSE",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "type": "commonjs",
   "bugs": {
     "url": "https://github.com/ecamuto/thorotest/issues"

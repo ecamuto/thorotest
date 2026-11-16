@@ -1,5 +1,11 @@
 # ThoroTest — Security Audit
 
+> **Historical baseline:** this is the preserved v1.9 source-review record.
+> Critical and high remediation status is consolidated in `AUDIT_REPORT.md`;
+> the current v1.16 release scope, black-box gate, limitations, and evidence are
+> in `RELEASE_SIGNOFF.md`. Do not treat the original severity table below as a
+> current vulnerability list.
+
 **Audit date:** 2026-07-16
 **Version reviewed:** 1.9.0 (branch `feat/demo-ribbon`, commit `e9040d2`)
 **Method:** Manual OWASP-style source review of the FastAPI backend, static frontend, CLI, and infrastructure. No dynamic/DAST or dependency-CVE scanning was run; findings are from code reading and are marked where they need runtime confirmation.

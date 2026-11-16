@@ -1,5 +1,12 @@
 # ThoroTest — Technical Due Diligence Report
 
+> **Current-status notice (2026-10-26):** this document preserves the detailed
+> v1.9 due-diligence baseline and its remediation addenda. The consolidated
+> v1.16 release assessment, current scorecard, supported scope, limitations,
+> and executable evidence contract live in `RELEASE_SIGNOFF.md`. Findings in
+> the historical body marked open are not current unless that sign-off also
+> lists them.
+
 **Prepared:** 2026-07-16
 **Version reviewed:** 1.9.0 — branch `feat/demo-ribbon`, commit `e9040d2`
 **Reviewer scope:** full-repository source review (backend, frontend, CLI, migrations, infra, CI, docs) + market research.
@@ -63,6 +70,21 @@ Companion deliverables: `EXECUTIVE_SUMMARY.md`, `SECURITY_AUDIT.md`, `PERFORMANC
 > rerun, the production frontend/container builds succeeded, the fresh-image
 > migration reached `f3a1b2c4d5e6`, strict preflight passed 14/14, and the
 > dependency audit reported no known vulnerabilities.
+
+> **Phase 4 release-candidate update — 2026-10-26 (v1.16.0).** Version metadata,
+> changelog, security-support policy, npm lock, and Python direct-dependency
+> constraints are now one executable release contract. The production image
+> has a black-box security/readiness probe and an automated PostgreSQL/Redis
+> drill covering upgrade from the v1.13 schema, non-root execution, strict
+> preflight, and database-plus-uploads backup/restore. Both pull-request CI and
+> the tag workflow enforce these gates; the tag additionally gates publication
+> of the signed multi-architecture image. `RELEASE_SIGNOFF.md` is the current
+> assessment and evidence record.
+> Local candidate evidence: 836 backend tests passed (4 skipped), all 69 CLI
+> and 265 Playwright cases passed, the frontend and Node 22 container builds
+> succeeded, `pip-audit` found no known vulnerabilities, and the operational
+> drill passed strict preflight, both 11-check black-box probes, the v1.13 →
+> v1.16 schema upgrade, and PostgreSQL-plus-uploads restore.
 
 > **Current-validation update — 2026-08-28 (v1.13.0, branch `fix/audit-findings-v1-13`).** A review against commit `c36badb` confirmed the v1.10 remediation and identified five current gaps. The branch closes all five: category and pipeline-reconciliation RBAC, long-lived session JWTs in WebSocket URLs (replaced by one-minute scoped tickets), a non-blocking dependency audit and ignored `python-jose`/`ecdsa` advisory (migrated to PyJWT and made blocking), and webhook unit tests coupled to live DNS. During the ticket change, an additional Critical scope-confusion flaw was found and fixed: `scope=2fa_pending` tokens were accepted by REST/GraphQL session validation before TOTP completion. Regression coverage now checks REST, WebSocket, role, revocation, and API-token boundaries. The original v1.9 assessment below remains a point-in-time record rather than a current scorecard.
 

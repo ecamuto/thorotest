@@ -50,6 +50,9 @@ Useful targets — `make help` lists them all:
 | `make demo` | Reset the database and load demo data |
 | `make db-revision m="…"` | Autogenerate an Alembic migration |
 | `make lock` | Regenerate `requirements.lock` after editing `requirements.txt` |
+| `make lock-check` | Verify direct Python constraints against the installed lock |
+| `make release-check` | Validate release metadata and dependency contracts |
+| `make release-drill` | Exercise the production image upgrade and restore gate |
 
 **Enable the pre-push hook** so you find failures before CI does:
 
@@ -61,8 +64,9 @@ make hooks-install    # `git push` then runs make test-all
 
 ## The bar for a change
 
-Every PR must pass the same four CI jobs: backend pytest, Playwright e2e, CLI
-tests, and a `pip-audit` dependency scan. Beyond green CI:
+Every PR must pass backend pytest, Playwright e2e, CLI tests, the release and
+dependency contracts, a production-image operational drill, and the blocking
+`pip-audit` dependency scan. Beyond green CI:
 
 **Tests are not optional for behaviour changes.** A bug fix needs a test that
 fails before it and passes after. A feature needs tests for the path a user

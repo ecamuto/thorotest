@@ -1,7 +1,7 @@
 # ThoroTest — Master Improvement Roadmap
 
 **Audit date:** 2026-07-16 · **Version:** 1.9.0
-**Last reconciled:** 2026-10-25 · **Current target:** v1.16
+**Last reconciled:** 2026-10-26 · **Current target:** v1.16.0 release
 
 Horizon: 12 months. Priorities are P0 (blocker) → P3 (nice-to-have). Effort in engineer-days is rough. "ROI" weighs business+technical impact against effort.
 
@@ -26,6 +26,7 @@ traceability.
 | v1.14 / S-1, S-4, S-6, S-7 | ✅ Done | Shared runtime, explicit bootstrap, observability, durable CI orchestration, release automation, PostgreSQL scale/failure drills, and backup upgrade are verified. |
 | v1.15 experience foundation / M-3, L-6 | ✅ Done | Route-level view delivery, resilient/accessible SPA navigation, automated WCAG gates, and CLI `run` are verified. The later full ESM migration and npm publication remain separate follow-ons. |
 | v1.16 commercial self-host / S-2, S-5, S-8 | ✅ Done | Durable provider sync, strict attachment and AI egress policies, executable production preflight, commercial/support boundaries, full local tests, clean dependency audit, and production-image bootstrap are verified. |
+| v1.16.0 operational sign-off | 🚧 RC | Version and lock contracts, black-box image checks, v1.13 upgrade, PostgreSQL/uploads restore, and tag publication gates are automated. Final status depends on the tagged release workflow and published immutable digest. |
 | Other M-*, L-* | ⏳ Open | Prioritize enterprise identity/tenancy and long-term product work after the commercial self-host gate. |
 
 ## v1.14 execution plan — shared runtime and observability
@@ -291,6 +292,20 @@ they do not block this deployment model.
 - A complete reference production environment passes strict preflight; common
   insecure profiles fail without revealing any configured secret.
 - Backend, CLI, frontend build, migration, and complete Playwright gates pass.
+
+### Operational release sign-off
+
+The v1.16.0 candidate adds the final delivery layer:
+
+- one static release contract for user-visible versions, changelog, support
+  policy, npm metadata, Git tags, and the installed Python dependency lock;
+- a secret-safe black-box probe against the running production image;
+- an isolated PostgreSQL/Redis drill that upgrades the last public v1.13
+  schema, then backs up and restores both the database and uploads volume;
+- enforcement in pull-request CI and again before a version tag can publish a
+  multi-architecture signed image.
+
+The current scorecard and evidence record are in `RELEASE_SIGNOFF.md`.
 
 ---
 

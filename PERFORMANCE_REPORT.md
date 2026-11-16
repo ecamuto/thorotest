@@ -1,5 +1,10 @@
 # ThoroTest — Performance & Scalability Report
 
+> **Historical baseline:** the detailed analysis below was prepared against
+> v1.9. Current PostgreSQL/Redis, multi-worker, provider-queue, frontend-delivery
+> and release evidence is consolidated in `AUDIT_REPORT.md` and
+> `RELEASE_SIGNOFF.md`; resolved bottlenecks below remain for traceability.
+
 > **v1.14 Phase 1 measured addendum — 2026-10-24.** The original v1.9
 > assessment below is retained as historical evidence. The single-process
 > state findings P-4 are now remediated by Redis-backed quotas/Pub/Sub and

@@ -79,8 +79,16 @@ bootstrap Job; those deployment signals are intentionally not process metrics.
 
 ## Release verification
 
-Every version tag runs the backend suite with a real Redis service, CLI tests,
-the production frontend build, dependency CVE audit, and the full Playwright
-suite. Only then is a multi-architecture GHCR image built with SBOM/provenance,
-attested, and keyless-signed by cosign. The image digest—not a mutable tag—is
-the deployment identity.
+Before creating a tag, run `make release-check`. This fails if the package,
+npm lock, README badge, changelog, supported-security version, prospective tag,
+or Python direct-dependency lock disagree. Run `make release-drill` to build the
+candidate image and exercise strict preflight, the v1.13 schema upgrade,
+black-box HTTP/security checks, and a PostgreSQL-plus-uploads restore.
+
+Pull-request CI runs both contracts. Every version tag repeats them alongside
+the backend suite with a real Redis service, CLI tests, production frontend
+build, dependency CVE audit, and complete Playwright suite. Only then is a
+multi-architecture GHCR image built with SBOM/provenance, attested, and
+keyless-signed by cosign. The image digest—not a mutable tag—is the deployment
+identity. Archive the workflow URL and digest in `RELEASE_SIGNOFF.md` or the
+customer change record.

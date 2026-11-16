@@ -49,8 +49,8 @@ and follows this policy.
 
 | Version | Supported |
 |---|---|
-| 1.13.x | ✅ |
-| < 1.13 | ❌ — upgrade to the latest minor |
+| 1.16.x | ✅ |
+| < 1.16 | ❌ — upgrade to the latest minor |
 
 Only the latest minor receives security fixes. There are no long-term support
 branches.

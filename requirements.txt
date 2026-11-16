@@ -26,6 +26,7 @@ defusedxml>=0.7.1          # entity-expansion-safe XML parsing for untrusted imp
 openpyxl>=3.1.5            # .xlsx test-case imports
 redis>=5.2.1               # shared runtime state and cross-worker coordination
 prometheus-client>=0.26.0  # low-cardinality production metrics endpoint
+opentelemetry-api>=1.45.2  # security floor shared by FastAPI/Anthropic (CVE-2026-126360)
 # Optional DB drivers — install the one matching your DATABASE_URL
 psycopg2-binary>=2.9.12   # PostgreSQL
 pymysql>=1.2.0            # MySQL / MariaDB

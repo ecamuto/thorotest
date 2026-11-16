@@ -1,4 +1,4 @@
-.PHONY: help setup install lock dev frontend-build frontend-watch db-bootstrap db-reset db-revision db-upgrade db-seed demo preflight test test-e2e test-e2e-auth test-e2e-import test-all test-report hooks-install open clean clean-data docker-up docker-up-sqlite docker-down docker-logs
+.PHONY: help setup install lock lock-check release-check release-drill dev frontend-build frontend-watch db-bootstrap db-reset db-revision db-upgrade db-seed demo preflight test test-e2e test-e2e-auth test-e2e-import test-all test-report hooks-install open clean clean-data docker-up docker-up-sqlite docker-down docker-logs
 
 PYTHON  := python3
 VENV    := venv
@@ -52,6 +52,15 @@ lock: ## Regenerate requirements.lock in an isolated venv
 	   echo "# CI installs from this file; requirements.txt keeps the direct-dep ranges."; \
 	   cat requirements.lock.tmp; } > requirements.lock
 	@echo "requirements.lock regenerated."
+
+lock-check: ## Verify requirements.lock satisfies every direct Python requirement
+	$(VENV)/bin/python -m backend.release_checks
+
+release-check: ## Validate version, changelog, npm metadata, support policy, and Python lock
+	$(VENV)/bin/python -m backend.release_checks --tag v$$(node -p "require('./package.json').version")
+
+release-drill: ## Build and exercise the production image upgrade + backup/restore path
+	bash scripts/operational-drill.sh
 
 db-seed: ## Populate DB with demo data (deletes existing DB first)
 	rm -f testhub.db

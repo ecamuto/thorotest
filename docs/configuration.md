@@ -15,6 +15,11 @@
 | `make db-upgrade` | Apply pending Alembic migrations |
 | `make db-seed` | Populate DB with demo data |
 | `make demo` | Alias for `make db-seed` |
+| `make preflight` | Fail unless the current environment satisfies the strict commercial production profile |
+| `make lock` | Regenerate the pinned Python transitive lock after changing direct requirements |
+| `make lock-check` | Verify the Python lock satisfies every direct requirement |
+| `make release-check` | Validate all version, changelog, support-policy, npm-lock, tag, and Python-lock metadata |
+| `make release-drill` | Build and exercise the production image upgrade and database/uploads restore path |
 | `make test` | Run backend unit tests (pytest) |
 | `make test-e2e` | Run all Playwright e2e tests (requires `make dev` running) |
 | `make test-e2e-auth` | Run auth e2e suite only |

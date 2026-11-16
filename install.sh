@@ -51,7 +51,7 @@ if command -v node &>/dev/null; then
     info "Installing Playwright browsers..."
     npx playwright install --with-deps chromium
 else
-    warn "Node not found — cannot build the frontend. Install Node 20+ and run 'npm install && npm run build', or deploy with Docker (builds it for you)."
+    warn "Node not found — cannot build the frontend. Install Node 22.12+ and run 'npm install && npm run build', or deploy with Docker (builds it for you)."
 fi
 
 echo ""
