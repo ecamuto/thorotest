@@ -5,8 +5,19 @@
 **Deployment model:** dedicated self-hosted instance for one trusted customer
 organization
 
-**Current status:** local release-candidate gates passed; pull-request CI and
-the Git tag remain the publication gates
+**Current status:** release candidate prepared; the Git tag and its publication
+workflow remain the final release gates
+
+**Readiness refresh (2026-11-16):** PR #59 is open and mergeable, and all five
+CI jobs passed at `cdc3670`. A fresh dependency audit then identified
+`CVE-2026-126360` in `opentelemetry-api` 1.45.1; the candidate now pins 1.45.2
+and declares that version as a direct security floor. On the refreshed lock,
+the release contract, Python and npm vulnerability audits, 836 backend tests
+(4 skipped), 69 CLI tests, the production frontend build, and strict preflight
+(14/14) pass locally. A fresh production-image drill also passes both 11-check
+black-box probes, the v1.13 schema upgrade, and PostgreSQL-plus-uploads restore.
+PR CI must rerun these gates on the security-fix commit before merge.
+Publication still requires merge, `v1.16.0`, and a green tag workflow.
 
 This is the current technical assessment and release record. The longer audit,
 security, performance, and debt reports are preserved as historical v1.9
@@ -103,7 +114,7 @@ they define when a later enterprise or shared-hosting phase becomes necessary.
 | Multi-architecture image, SBOM, attestation, signature | N/A | Pending |
 
 Local candidate image digest:
-`sha256:c1858382b8e545e7d573e3a6bd03160c08fbd542f261947c8185e2940858cdfa`.
+`sha256:43dba65a82972ee00e037b5b35d03c0fa26e367c5ed6a1ab8cfd38e73ccfeca1`.
 This digest identifies the local single-architecture validation build only; it
 must not be substituted for the digest published by the tag workflow.
 

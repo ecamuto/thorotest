@@ -10,7 +10,7 @@ heading per release, `### <Group>` subsections, `-` bullets.
 
 ## [Unreleased]
 
-## [1.16.0] - 2026-10-26
+## [1.16.0] - 2026-11-16
 
 ### Added
 - Add an executable v1.16 release contract that keeps the package and npm-lock
@@ -55,6 +55,8 @@ heading per release, `### <Group>` subsections, `-` bullets.
   keyless cosign signature.
 
 ### Security
+- Raise the shared OpenTelemetry API floor to 1.45.2 to remediate
+  CVE-2026-126360 before publication.
 - Require attachment filename extensions and declared MIME types to match,
   confine deletion paths as well as upload/download paths, and require paired
   explicit overrides for custom evidence types.
