@@ -5,19 +5,20 @@
 **Deployment model:** dedicated self-hosted instance for one trusted customer
 organization
 
-**Current status:** release candidate prepared; the Git tag and its publication
-workflow remain the final release gates
+**Current status:** v1.16.0 published on 2026-11-16; the tagged release workflow
+and immutable-image verification passed
 
-**Readiness refresh (2026-11-16):** PR #59 is open and mergeable, and all five
-CI jobs passed at `cdc3670`. A fresh dependency audit then identified
+**Readiness refresh (2026-11-16):** before merge, PR #59 was mergeable and all
+five CI jobs passed at `cdc3670`. A fresh dependency audit then identified
 `CVE-2026-126360` in `opentelemetry-api` 1.45.1; the candidate now pins 1.45.2
 and declares that version as a direct security floor. On the refreshed lock,
 the release contract, Python and npm vulnerability audits, 836 backend tests
 (4 skipped), 69 CLI tests, the production frontend build, and strict preflight
 (14/14) pass locally. A fresh production-image drill also passes both 11-check
 black-box probes, the v1.13 schema upgrade, and PostgreSQL-plus-uploads restore.
-PR CI must rerun these gates on the security-fix commit before merge.
-Publication still requires merge, `v1.16.0`, and a green tag workflow.
+PR CI reran these gates on the security-fix commit before merge. The final tag
+workflow repeated them after a one-line Node 22 test-discovery correction and
+published the signed image recorded below.
 
 This is the current technical assessment and release record. The longer audit,
 security, performance, and debt reports are preserved as historical v1.9
@@ -105,18 +106,27 @@ they define when a later enterprise or shared-hosting phase becomes necessary.
 
 | Gate | Local candidate | Tagged release |
 |---|---|---|
-| Release/dependency contract | Passed: 6/6 | Pending |
-| Backend + CLI tests | Passed: 836 + 69; 4 backend skipped | Pending |
-| Production frontend + Playwright | Passed: build + 265 Chromium cases | Pending |
-| Dependency audit | Passed: no known vulnerabilities | Pending |
-| Production image and black-box probe | Passed: 11/11 before and after restore | Pending |
-| v1.13 upgrade + PostgreSQL/uploads restore | Passed: `c1f6b2a34d70` → `f3a1b2c4d5e6` | Pending |
-| Multi-architecture image, SBOM, attestation, signature | N/A | Pending |
+| Release/dependency contract | Passed: 6/6 | Passed: 6/6 |
+| Backend + CLI tests | Passed: 836 + 69; 4 backend skipped | Passed: 839 + 69; 1 backend skipped |
+| Production frontend + Playwright | Passed: build + 265 Chromium cases | Passed: build + 265 Chromium cases |
+| Dependency audit | Passed: no known vulnerabilities | Passed: no known vulnerabilities |
+| Production image and black-box probe | Passed: 11/11 before and after restore | Passed: 11/11 before and after restore |
+| v1.13 upgrade + PostgreSQL/uploads restore | Passed: `c1f6b2a34d70` → `f3a1b2c4d5e6` | Passed: `c1f6b2a34d70` → `f3a1b2c4d5e6` |
+| Multi-architecture image, SBOM, attestation, signature | N/A | Passed: amd64/arm64, SBOM, provenance, GitHub attestation, Cosign |
+
+Published immutable image:
+`ghcr.io/ecamuto/thorotest@sha256:467166129410963ce55f3ec3491d7bffc5a3ec83b9e38ca7e58fc6e77c829916`.
+The [tag workflow](https://github.com/ecamuto/thorotest/actions/runs/43917403304)
+and [GitHub attestation](https://github.com/ecamuto/thorotest/attestations/68239041)
+are the controlling publication evidence. Verification passed against the
+`ecamuto/thorotest` repository, `.github/workflows/release.yml`, and
+`refs/tags/v1.16.0`.
 
 Local candidate image digest:
 `sha256:43dba65a82972ee00e037b5b35d03c0fa26e367c5ed6a1ab8cfd38e73ccfeca1`.
 This digest identifies the local single-architecture validation build only; it
 must not be substituted for the digest published by the tag workflow.
 
-The tagged-release column is filled only from GitHub Actions and the published
-immutable image digest. A local pass cannot substitute for publication evidence.
+The optional demo-deployment workflow did not run because its SSH repository
+secrets are not configured; it exited before contacting a host. No demo VPS
+deployment is claimed as part of this release sign-off.
