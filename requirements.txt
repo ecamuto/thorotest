@@ -7,6 +7,7 @@ graphql-core~=3.3.2       # patched GraphQL.js 16-compatible line
 python-multipart>=0.0.33
 aiofiles>=25.1.0
 pytest>=9.2.0
+pytest-cov>=7.1.0
 httpx>=0.28.1
 anyio>=4.16.0              # security floor shared by FastAPI/httpx SDKs
 urllib3>=2.8.0             # security floor used by requests/provider clients

@@ -29,6 +29,8 @@ jobs:
       TEST_REDIS_URL: redis://localhost:6379/15
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -56,8 +58,23 @@ jobs:
           METRICS_ENABLED: '1'
           SMTP_HOST: smtp.example.test
           CI_WORKER_ENABLED: '1'
-      - name: Run pytest → JUnit XML
-        run: ./venv/bin/pytest backend/tests/ -q --junitxml=junit.xml
+      - name: Run pytest → JUnit + coverage
+        run: >-
+          ./venv/bin/pytest backend/tests/ -q --junitxml=junit.xml
+          --cov=backend
+          --cov-report=term-missing
+          --cov-report=json:coverage.json
+          --cov-report=xml:coverage.xml
+          --cov-report=html:htmlcov
+      - name: Enforce coverage regression gates
+        env:
+          DIFF_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
+        run: |
+          args=(coverage.json)
+          if [ -n "$DIFF_BASE" ]; then
+            args+=(--diff-base "$DIFF_BASE")
+          fi
+          ./venv/bin/python scripts/coverage_gate.py "${args[@]}"
       - name: Upload JUnit artifact
         # `!cancelled()` runs even if pytest failed, so results publish while
         # the job still goes red — the CI gate is preserved.
@@ -66,6 +83,16 @@ jobs:
         with:
           name: junit                     # ThoroTest's default "JUnit artifact" name
           path: junit.xml
+      - name: Upload backend coverage artifact
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-coverage
+          path: |
+            coverage.json
+            coverage.xml
+            htmlcov/
+          retention-days: 14
 
   deps-audit:
     name: Dependency CVE scan (pip-audit)
