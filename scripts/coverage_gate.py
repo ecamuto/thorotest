@@ -12,9 +12,9 @@ import sys
 from collections.abc import Iterable
 
 
-STATEMENTS_MIN = 81.0
-BRANCHES_MIN = 65.0
-COMBINED_MIN = 77.9
+STATEMENTS_MIN = 85.0
+BRANCHES_MIN = 71.0
+COMBINED_MIN = 82.0
 CHANGED_LINES_MIN = 90.0
 
 HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")

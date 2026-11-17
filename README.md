@@ -4,7 +4,7 @@
 
 [![version](https://img.shields.io/badge/version-1.16.0-blue)](package.json)
 [![license](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-780%20unit%20%2B%2039%20e2e%20suites-brightgreen)](#tests)
+[![tests](https://img.shields.io/badge/tests-805%20unit%20%2B%2039%20e2e%20suites-brightgreen)](#tests)
 [![backend](https://img.shields.io/badge/backend-FastAPI-009688)](#stack)
 [![frontend](https://img.shields.io/badge/frontend-React%2018-61DAFB)](#stack)
 [![docker](https://img.shields.io/badge/deploy-Docker-2496ED)](#quickstart)
@@ -373,7 +373,7 @@ lives in one place (the run), never in the YAML.
 
 ## Tests
 
-**780 backend unit tests** (pytest) + **39 Playwright e2e suites** covering every major flow — CI-gated.
+**805 backend unit tests** (pytest) + **39 Playwright e2e suites** covering every major flow — CI-gated.
 
 ```bash
 make test        # backend unit tests
@@ -388,8 +388,8 @@ Suites worth knowing about: `suite9-security` (auth and authorization boundaries
 and `suite20-a11y` (keyboard access, focus management, dialog semantics) — both
 cover behaviour that is invisible in a screenshot and easy to regress silently.
 
-Backend CI also enforces the measured coverage baseline (81% statements, 65%
-branches, 77.9% combined) and requires 90% coverage on changed executable Python
+Backend CI also enforces the measured coverage baseline (85% statements, 71%
+branches, 82% combined) and requires 90% coverage on changed executable Python
 lines. The JSON, XML, and HTML reports are retained as the `backend-coverage`
 artifact on every run.
 

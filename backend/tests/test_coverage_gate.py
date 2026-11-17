@@ -6,14 +6,14 @@ from scripts.coverage_gate import (
 )
 
 
-def _report(*, covered=811, statements=1000, covered_branches=653, branches=1000):
+def _report(*, covered=850, statements=1000, covered_branches=710, branches=1000):
     return {
         "totals": {
             "covered_lines": covered,
             "num_statements": statements,
             "covered_branches": covered_branches,
             "num_branches": branches,
-            "percent_covered": 77.95,
+            "percent_covered": 82.0,
         },
         "files": {},
     }
@@ -25,8 +25,8 @@ def test_baseline_accepts_current_floors():
 
 
 def test_baseline_rejects_each_regression():
-    metrics = baseline_metrics(_report(covered=809, covered_branches=649))
-    metrics["combined"] = 77.8
+    metrics = baseline_metrics(_report(covered=849, covered_branches=709))
+    metrics["combined"] = 81.9
     failures = baseline_failures(metrics)
     assert len(failures) == 3
     assert any("statements" in failure for failure in failures)
