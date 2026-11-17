@@ -134,9 +134,21 @@ jobs:
         with:
           node-version: '22'
       # The CLI has zero dependencies — no npm ci, just the runtime.
-      - name: Run CLI test suite
-        run: node --test test/*.test.js
+      - name: Run CLI test suite with V8 coverage
+        run: npm run test:coverage
         working-directory: cli
+
+  frontend-unit:
+    name: Frontend unit tests (node:test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      # Browser globals are stubbed by the tests; no npm install is required.
+      - name: Run frontend infrastructure tests with V8 coverage
+        run: npm run test:frontend-unit
 
   e2e:
     name: End-to-end tests (Playwright)

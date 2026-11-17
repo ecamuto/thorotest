@@ -10,7 +10,8 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include='lib/**/*.js' --test-coverage-lines=95 --test-coverage-branches=70 --test-coverage-functions=90 test/*.test.js"
   },
   "repository": {
     "type": "git",

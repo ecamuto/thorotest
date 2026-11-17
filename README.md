@@ -378,6 +378,8 @@ lives in one place (the run), never in the YAML.
 ```bash
 make test        # backend unit tests
 venv/bin/pytest backend/tests/ --cov=backend # backend coverage + regression baseline
+npm run test:frontend-unit # i18n + route-loader unit coverage
+npm --prefix cli run test:coverage # CLI unit/integration coverage
 make test-e2e    # Playwright e2e (needs `make dev` running)
 make test-all    # the full CI gate, locally
 make release-check # version/changelog/npm/Python-lock release contract
@@ -392,6 +394,11 @@ Backend CI also enforces the measured coverage baseline (85% statements, 71%
 branches, 82% combined) and requires 90% coverage on changed executable Python
 lines. The JSON, XML, and HTML reports are retained as the `backend-coverage`
 artifact on every run.
+
+Node's native V8 coverage also gates the frontend infrastructure modules at
+95% lines/functions and 85% branches, and the CLI at 95% lines, 70% branches,
+and 90% functions. Browser workflows remain protected by the full Playwright
+suite rather than a synthetic line-coverage target.
 
 Full test layout and the live GitLab integration test → [docs/api.md#tests](docs/api.md#tests).
 

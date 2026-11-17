@@ -6,6 +6,7 @@
   "scripts": {
     "build": "node scripts/build-frontend.mjs",
     "watch": "node scripts/build-frontend.mjs --watch",
+    "test:frontend-unit": "node --test --experimental-test-coverage --test-coverage-include='frontend/i18n.js' --test-coverage-include='frontend/route-loader.js' --test-coverage-lines=95 --test-coverage-branches=85 --test-coverage-functions=95 frontend/test/*.test.js",
     "test": "playwright test",
     "test:auth": "playwright test e2e/suite1-auth/",
     "test:nav": "playwright test e2e/suite2-navigation/",
