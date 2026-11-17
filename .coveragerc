@@ -1,0 +1,18 @@
+[run]
+branch = True
+source = backend
+omit =
+    backend/tests/*
+
+[report]
+precision = 1
+show_missing = True
+
+[html]
+directory = htmlcov
+
+[json]
+output = coverage.json
+
+[xml]
+output = coverage.xml

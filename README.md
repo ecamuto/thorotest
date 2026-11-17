@@ -4,7 +4,7 @@
 
 [![version](https://img.shields.io/badge/version-1.16.0-blue)](package.json)
 [![license](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-775%20unit%20%2B%2039%20e2e%20suites-brightgreen)](#tests)
+[![tests](https://img.shields.io/badge/tests-780%20unit%20%2B%2039%20e2e%20suites-brightgreen)](#tests)
 [![backend](https://img.shields.io/badge/backend-FastAPI-009688)](#stack)
 [![frontend](https://img.shields.io/badge/frontend-React%2018-61DAFB)](#stack)
 [![docker](https://img.shields.io/badge/deploy-Docker-2496ED)](#quickstart)
@@ -373,10 +373,11 @@ lives in one place (the run), never in the YAML.
 
 ## Tests
 
-**775 backend unit tests** (pytest) + **39 Playwright e2e suites** covering every major flow — CI-gated.
+**780 backend unit tests** (pytest) + **39 Playwright e2e suites** covering every major flow — CI-gated.
 
 ```bash
 make test        # backend unit tests
+venv/bin/pytest backend/tests/ --cov=backend # backend coverage + regression baseline
 make test-e2e    # Playwright e2e (needs `make dev` running)
 make test-all    # the full CI gate, locally
 make release-check # version/changelog/npm/Python-lock release contract
@@ -386,6 +387,11 @@ make release-drill # production image upgrade + PostgreSQL/uploads restore
 Suites worth knowing about: `suite9-security` (auth and authorization boundaries)
 and `suite20-a11y` (keyboard access, focus management, dialog semantics) — both
 cover behaviour that is invisible in a screenshot and easy to regress silently.
+
+Backend CI also enforces the measured coverage baseline (81% statements, 65%
+branches, 77.9% combined) and requires 90% coverage on changed executable Python
+lines. The JSON, XML, and HTML reports are retained as the `backend-coverage`
+artifact on every run.
 
 Full test layout and the live GitLab integration test → [docs/api.md#tests](docs/api.md#tests).
 

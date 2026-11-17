@@ -23,6 +23,9 @@ uploads/
 
 # Test / coverage scratch
 .coverage
+coverage.json
+coverage.xml
+htmlcov/
 scratch-junit/
 
 # Node
